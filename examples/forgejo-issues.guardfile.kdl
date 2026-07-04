@@ -1,0 +1,51 @@
+// forgejo-issues.guardfile.kdl - the "hello world" ward-mcp spec.
+//
+// This is a plain cli-guard Guardfile (L2). It has NO relation to the ward
+// codebase: ward-mcp is a driver over cli-guard's specverb/guardfile/codegen
+// engine and the cli-mcp sibling, the MCP analog of cli-guard's own no-code
+// `kdl-specs` CLI driver.
+//
+// The magic is what is NOT here. There are no tool definitions and no input
+// schemas. Each `can` grant IS one MCP tool; the tool's input schema is derived
+// by the engine from the pruned OpenAPI operation - path params, query params,
+// body fields - exactly as the CLI driver derives positionals and flags. You
+// author policy, not plumbing.
+//
+// The SAME file, unchanged, produces a guarded CLI under cli-guard's kdl-specs
+// driver and a guarded MCP image under ward-mcp. The grants that gate the CLI
+// gate the MCP tools: `never delete issue` below means no `delete_issue` tool
+// is ever minted, on either target.
+wrap forgejo-issues ops forgejo {
+    spec forgejo.swagger.v1.json
+    base-url "forgejo.coilysiren.me/api/v1"
+
+    // Secret resolved at RUN time through cli-guard's value-provider registry,
+    // never baked into the image. `env` is a built-in provider.
+    auth header-token {
+        header Authorization
+        prefix "token "
+        value env FORGEJO_TOKEN
+    }
+
+    // Scope gate: every {owner} path leaf must name a coily* owner. Enforced on
+    // the MCP surface exactly as on the CLI.
+    restrict owner matches coily*
+
+    // ---- the exposed surface ----------------------------------------------
+    // verb + resource -> operationId by convention -> one MCP tool.
+    // Tool name is the verb_resource pair; input schema is auto-derived.
+
+    can create issue     // -> tool `create_issue`  (POST /repos/{owner}/{repo}/issues)
+    can get issue        // -> tool `get_issue`     (GET  .../issues/{index})
+    can list issue       // -> tool `list_issues`   (GET  .../issues)
+    can comment issue    // -> tool `comment_issue` (POST .../issues/{index}/comments)
+
+    can close issue {
+        body state=closed   // fixed-body toggle: tool sends exactly {"state":"closed"}
+    }
+
+    // Denied, so the tool is never minted. A deny beats an allow.
+    never delete issue {
+        message "issue deletion is irreversible; close it instead"
+    }
+}
