@@ -1,10 +1,11 @@
 // forgejo-issues.mcp.kdl - the "hello world" ward-mcp spec.
 //
 // The body is cli-guard Guardfile grammar (L2). The `.mcp.kdl` suffix marks it
-// as a ward-mcp target - a long-lived HTTP/SSE MCP server, built to a Docker
-// image and run on k3s - and keeps it out of cli-guard's `*.guardfile.kdl`
-// CLI-discovery glob, the way `.fleet.kdl` partitions the fleet dialect. This
-// file is served over the network, never spawned per-session over stdio.
+// as a ward-mcp target - the interior of a Docker image that serves an HTTP/SSE
+// MCP server - and keeps it out of cli-guard's `*.guardfile.kdl` CLI-discovery
+// glob, the way `.fleet.kdl` partitions the fleet dialect. This spec configures
+// ONLY the image interior. Exposing the container (k3s Service, route, Secret
+// wiring) is the deploy repo's job, never this file's.
 //
 // ward-mcp has NO relation to the ward codebase. It drives cli-guard's
 // specverb/guardfile/codegen engine directly. cli-mcp is read as a CODE
@@ -21,7 +22,8 @@ wrap forgejo-issues ops forgejo {
     base-url "forgejo.coilysiren.me/api/v1"
 
     // Secret resolved at RUN time through cli-guard's value-provider registry,
-    // never baked into the image. On k3s this env is a mounted Secret.
+    // never baked into the image. How the env is supplied to the container is
+    // the deployer's concern, outside this spec.
     auth header-token {
         header Authorization
         prefix "token "
