@@ -1,26 +1,27 @@
-// forgejo-issues.guardfile.kdl - the "hello world" ward-mcp spec.
+// forgejo-issues.mcp.kdl - the "hello world" ward-mcp spec.
 //
-// This is a plain cli-guard Guardfile (L2). It has NO relation to the ward
-// codebase: ward-mcp is a driver over cli-guard's specverb/guardfile/codegen
-// engine and the cli-mcp sibling, the MCP analog of cli-guard's own no-code
-// `kdl-specs` CLI driver.
+// The body is cli-guard Guardfile grammar (L2). The `.mcp.kdl` suffix marks it
+// as a ward-mcp target - a long-lived HTTP/SSE MCP server, built to a Docker
+// image and run on k3s - and keeps it out of cli-guard's `*.guardfile.kdl`
+// CLI-discovery glob, the way `.fleet.kdl` partitions the fleet dialect. This
+// file is served over the network, never spawned per-session over stdio.
 //
-// The magic is what is NOT here. There are no tool definitions and no input
-// schemas. Each `can` grant IS one MCP tool; the tool's input schema is derived
-// by the engine from the pruned OpenAPI operation - path params, query params,
-// body fields - exactly as the CLI driver derives positionals and flags. You
-// author policy, not plumbing.
+// ward-mcp has NO relation to the ward codebase. It drives cli-guard's
+// specverb/guardfile/codegen engine directly. cli-mcp is read as a CODE
+// REFERENCE only; ward-mcp implements its own SSE/HTTP MCP server, it does not
+// depend on cli-mcp.
 //
-// The SAME file, unchanged, produces a guarded CLI under cli-guard's kdl-specs
-// driver and a guarded MCP image under ward-mcp. The grants that gate the CLI
-// gate the MCP tools: `never delete issue` below means no `delete_issue` tool
-// is ever minted, on either target.
+// The magic is what is NOT here: no tool definitions, no input schemas. Each
+// `can` grant IS one MCP tool; its input schema is derived by the engine from
+// the pruned OpenAPI operation (path params, query params, body fields). You
+// author policy, not plumbing. The grants that would gate a CLI gate the MCP
+// tools instead: `never delete issue` means no `delete_issue` tool is minted.
 wrap forgejo-issues ops forgejo {
     spec forgejo.swagger.v1.json
     base-url "forgejo.coilysiren.me/api/v1"
 
     // Secret resolved at RUN time through cli-guard's value-provider registry,
-    // never baked into the image. `env` is a built-in provider.
+    // never baked into the image. On k3s this env is a mounted Secret.
     auth header-token {
         header Authorization
         prefix "token "
@@ -28,7 +29,7 @@ wrap forgejo-issues ops forgejo {
     }
 
     // Scope gate: every {owner} path leaf must name a coily* owner. Enforced on
-    // the MCP surface exactly as on the CLI.
+    // the MCP surface exactly as cli-guard enforces it on a CLI.
     restrict owner matches coily*
 
     // ---- the exposed surface ----------------------------------------------
