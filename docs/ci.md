@@ -9,7 +9,11 @@ keyed by sha. It mirrors the fleet's other MCP source repos (`reddit-mcp`,
 
 ## `gate` job
 
-Runs on `ubuntu-latest`, on every `push` and `pull_request`.
+Runs on the `docker` label, on every `push` and `pull_request`. `docker` is the
+only label this Forgejo instance's runners advertise - `ubuntu-latest` is a
+GitHub-mirror label (the `.github/*` side, executed by GitHub, not Forgejo), so
+a gate pinned to it matches no Forgejo runner. `docker` resolves to
+`node:20-bookworm`, and `setup-go` drops Go 1.25 into it.
 
 * **checkout + setup-go** - `actions/checkout@v4`, `actions/setup-go@v5` pinned to
   Go 1.25.
@@ -44,21 +48,23 @@ runner executing the job cannot reach it, that is an infra reachability fact
 (runner placement / registry route), not a code bug - land the gate green and
 report the publish blocker precisely rather than forcing it.
 
-## Enable the Actions unit before expecting runs (ward-mcp#10)
+## Why CI never ran (ward-mcp#10)
 
-A valid workflow on the default branch does **not**, by itself, produce a run. A
-run is queued only when the repo's **Actions unit is active at the moment a push
-event lands**. If the unit is switched on *after* a batch of pushes, those pushes
-never queued a task and CI reads as "never runs" - `total_count: 0` from
-`GET /repos/{owner}/{repo}/actions/tasks`, even though the workflow parses fine
-and the shared runner is green for peer repos.
+CI showed `total_count: 0` from `GET /repos/{owner}/{repo}/actions/tasks` across
+9+ merges to `main` - zero runs ever - though `.forgejo/workflows/ci.yml` was
+valid on the default branch and the shared runner was green for peer repos. Two
+facts had to line up for a run to queue, and this repo missed one:
 
-The unit's state lives in `has_actions` on the repo:
+* **the Actions unit must be active when the push event lands.** A valid workflow
+  on the default branch does not, by itself, queue a run - the unit has to be on
+  at the moment of the push. Check `has_actions` via
+  `ward ops forgejo repo get coilyco-flight-deck ward-mcp`, toggle it with
+  `ward ops forgejo repo edit coilyco-flight-deck ward-mcp --has_actions true`.
+* **the gate has to name a label the Forgejo runner advertises.** The gate was
+  pinned to `runs-on: ubuntu-latest`, which is a GitHub-mirror label - the
+  Forgejo runners here only advertise `docker`. A gate no runner can match is the
+  concrete difference from the green peers, all of which run on `docker`. The fix
+  was pinning the gate to `docker` (above).
 
-* **check** - `ward ops forgejo repo get coilyco-flight-deck ward-mcp` and read
-  `has_actions`.
-* **toggle** - `ward ops forgejo repo edit coilyco-flight-deck ward-mcp
-  --has_actions true` enables it.
-* **first run** - once the unit is on, CI has still never been given a push to
-  react to. Land a commit to `main` and confirm a task appears in
-  `actions/tasks`. This doc's landing commit is that first push.
+Once both hold, land a commit to `main` and confirm a task appears in
+`actions/tasks`.

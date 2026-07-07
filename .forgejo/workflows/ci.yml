@@ -14,8 +14,14 @@ on:
   pull_request:
 
 jobs:
+  # `docker` is the only label this Forgejo instance's runners advertise - every
+  # green peer workflow (reddit-mcp, node-stats-mcp, ward's .forgejo/*) runs on
+  # it, and it resolves to node:20-bookworm. `ubuntu-latest` is a GitHub-mirror
+  # label (the .github/* side), unknown to the Forgejo runner, so a gate pinned
+  # to it matched no runner and the repo queued zero tasks (ward-mcp#10).
+  # setup-go drops Go 1.25 into bookworm (which ships git + curl + tar).
   gate:
-    runs-on: ubuntu-latest
+    runs-on: docker
     env:
       GOPRIVATE: forgejo.coilysiren.me
     steps:
