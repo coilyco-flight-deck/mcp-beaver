@@ -1,7 +1,13 @@
-# CI gate for ward-mcp: build, vet, and test the generic runtime on every push.
-# This is the repo's gate ("ward vet / ward test or equivalent"). cli-guard is a
-# private forgejo module fetched anonymously, so GOPRIVATE keeps it off the
-# public proxy and sumdb.
+# CI gate for ward-mcp: build, vet, and test the generic runtime on every push,
+# then - on a push to main only - build the ONE runtime image and publish it to
+# the in-cluster registry keyed by sha. This is the source-repo -> in-cluster
+# -registry half of the fleet's publish pattern (lunch-money-k8s#23); the deploy
+# CD resolves that sha into the chart's image.tag (ward-mcp#8's values.yaml) and
+# rolls it (deploy#61 / #46). One generic image, published when the runtime
+# SOURCE changes - not per guardfile (ward-mcp#6, mount-not-bake).
+#
+# cli-guard is a private forgejo module fetched anonymously, so GOPRIVATE keeps
+# it off the public proxy and sumdb (the go gate here and the Dockerfile build).
 name: ci
 on:
   push:
@@ -23,3 +29,59 @@ jobs:
         run: go vet ./...
       - name: test
         run: go test ./...
+
+  # Build + push the runtime image to the in-cluster registry, tagged by sha.
+  # Mirrors coilyco-flight-deck/reddit-mcp and node-stats-mcp's build-publish:
+  # the DinD sidecar carries --insecure-registry=192.168.0.194:30500, so the
+  # plain-http push round-trips with no registry login or push secret. Runs only
+  # on a push to main (never PRs), after the gate, so a green source commit is
+  # what produces `.../ward-mcp:<sha>`. No :latest - the fleet keys rollouts by
+  # sha (scripts/rollout.sh), and the chart's image.tag is the resolved sha.
+  publish:
+    runs-on: docker
+    needs: [gate]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+      # The `docker` runner label resolves to node:20-bookworm, which ships
+      # git + curl but no docker CLI. Pull it in as a static binary; docker
+      # talks to the DinD sidecar over DOCKER_HOST. Same shape as the other MCPs.
+      - name: Install docker CLI
+        run: |
+          set -euo pipefail
+          docker_cli_ver=$(curl -fsSL https://download.docker.com/linux/static/stable/x86_64/ \
+            | grep -oE 'docker-[0-9]+\.[0-9]+\.[0-9]+\.tgz' | sort -V | tail -1 \
+            | sed -E 's/^docker-(.*)\.tgz$/\1/')
+          curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${docker_cli_ver}.tgz" \
+            | tar -xz -C /tmp
+          install /tmp/docker/docker /usr/local/bin/docker
+      # The DinD sidecar shares the runner pod's netns on :2375, but the job
+      # container sits on a separate per-workflow bridge - so probe candidate
+      # hosts and pin the first that answers. Same shape as the other MCPs.
+      - name: Resolve docker host
+        run: |
+          set -euo pipefail
+          gw=$(node -e "const fs=require('fs');const l=(fs.readFileSync('/proc/net/route','utf8').split('\n').find(x=>x.split('\t')[1]==='00000000'))||'';const h=l.split(/\s+/)[2]||'';if(h){console.log(h.match(/../g).reverse().map(x=>parseInt(x,16)).join('.'))}" || true)
+          for h in "tcp://${gw}:2375" "${DOCKER_HOST:-}" tcp://localhost:2375 unix:///var/run/docker.sock; do
+            [ -z "$h" ] && continue
+            [ "$h" = "tcp://:2375" ] && continue
+            if docker -H "$h" info >/dev/null 2>&1; then
+              echo "docker daemon reachable at $h"
+              echo "DOCKER_HOST=$h" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "no docker daemon at $h"
+          done
+          echo "no reachable docker daemon" >&2
+          exit 1
+      # Build and push to the in-cluster registry. The DinD sidecar carries
+      # --insecure-registry=192.168.0.194:30500, so the plain-http push
+      # round-trips. Legacy builder (no buildx plugin in the static CLI). The
+      # Dockerfile sets GOPRIVATE so its cli-guard fetch stays off the public
+      # proxy/sumdb, matching the go gate above.
+      - name: Build and push
+        run: |
+          set -euo pipefail
+          IMAGE=192.168.0.194:30500/ward-mcp:${{ github.sha }}
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
