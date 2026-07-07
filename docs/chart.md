@@ -65,7 +65,7 @@ The chart is buildable against the pinned runtime contract below, in parallel wi
 - **`route.auth.clientId`** - the statically-registered Authelia OIDC client id (required when `public`).
 - **`route.auth.issuerUrl`** - the Authelia issuer (`https://auth.coilysiren.me`).
 - **`route.auth.extraAudiences`** - added to the default `https://<host>/mcp` and `https://<host>` audiences.
-- **`route.auth.clientSecretRef` / `.cookieSecretRef`** - SSM paths for the oauth2-proxy client-secret and cookie-secret; default to `/<release>/oauth2-proxy/{client,cookie}-secret`.
+- **`route.auth.clientSecretRef`** - SSM path for the oauth2-proxy client-secret; defaults to `/<release>/oauth2-proxy/client-secret`. There is no `cookieSecretRef` - the chart mints the cookie-secret itself (Helm `lookup`-generate) into a `<release>-oauth2-proxy-cookie` Secret and preserves it across `helm upgrade`, so no cookie-secret SSM param exists.
 
 ### Pod
 
@@ -75,7 +75,7 @@ The chart is buildable against the pinned runtime contract below, in parallel wi
 
 The overlay assumes the fleet's shared Authelia gate is already stood up (see [deploy's authelia service](https://forgejo.coilysiren.me/coilyco-bridge/deploy/src/branch/main/services/authelia)). Per public MCP:
 
-- **SSM params** - the app token the guardfile names, plus the oauth2-proxy `client-secret` and `cookie-secret` for the gate. The client-secret reuses the shared Authelia hash; the cookie-secret is any random 32-byte value.
+- **SSM params** - the app token the guardfile names, plus the oauth2-proxy `client-secret` for the gate (it reuses the shared Authelia hash). The cookie-secret is no longer a manual param - the chart generates it on first install and preserves it across upgrades.
 - **Authelia client** - register the `route.auth.clientId` OIDC client in deploy's authelia service and re-roll it.
 - **claude.ai connector** - register `https://<host>/mcp` as a custom connector with the client id + plaintext secret. The irreducible per-service human step.
 

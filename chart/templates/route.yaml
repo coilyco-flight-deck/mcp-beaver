@@ -7,7 +7,14 @@
 {{- $host := .Values.route.host -}}
 {{- $resource := printf "https://%s/mcp" $host -}}
 {{- $clientSecretRef := .Values.route.auth.clientSecretRef | default (printf "/%s/oauth2-proxy/client-secret" $fullname) -}}
-{{- $cookieSecretRef := .Values.route.auth.cookieSecretRef | default (printf "/%s/oauth2-proxy/cookie-secret" $fullname) -}}
+{{- $cookieName := printf "%s-cookie" $oauth -}}
+{{- $existingCookie := (lookup "v1" "Secret" .Release.Namespace $cookieName) -}}
+{{- $cookieSecret := "" -}}
+{{- if and $existingCookie $existingCookie.data (hasKey $existingCookie.data "cookie-secret") -}}
+{{- $cookieSecret = index $existingCookie.data "cookie-secret" -}}
+{{- else -}}
+{{- $cookieSecret = randAlphaNum 32 | b64enc -}}
+{{- end -}}
 {{- $wellKnown := printf "{\"resource\":\"%s\",\"authorization_servers\":[\"%s\"],\"scopes_supported\":[\"openid\",\"offline_access\"],\"bearer_methods_supported\":[\"header\"]}" $resource .Values.route.auth.issuerUrl -}}
 # The deploy#30 fleet auth overlay, generalized: a public Traefik Ingress whose
 # ForwardAuth middleware gates every request through an in-namespace oauth2-proxy
@@ -33,9 +40,24 @@ spec:
     - secretKey: client-secret
       remoteRef:
         key: {{ $clientSecretRef | quote }}
-    - secretKey: cookie-secret
-      remoteRef:
-        key: {{ $cookieSecretRef | quote }}
+---
+# The oauth2-proxy cookie-secret is just a random cookie-signing key with no
+# cross-system meaning, so the chart mints it rather than requiring a
+# hand-created SSM param. lookup reads back the value already on the cluster, so
+# a `helm upgrade` re-roll preserves it - the cookie does not rotate and live
+# sessions are not forced to re-login. On first install lookup finds nothing and
+# a fresh 32-byte key is generated. client-secret stays SSM-backed above (it is
+# the shared Authelia hash the gate still needs).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $cookieName }}
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: oauth2-proxy
+type: Opaque
+data:
+  cookie-secret: {{ $cookieSecret }}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
@@ -99,7 +121,7 @@ spec:
             - name: OAUTH2_PROXY_COOKIE_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ $oauth }}
+                  name: {{ $cookieName }}
                   key: cookie-secret
           ports:
             - containerPort: 4180
