@@ -46,7 +46,14 @@ Supported MCP methods: `initialize`, `notifications/initialized`, `ping`,
 A single [`Dockerfile`](../Dockerfile) builds the one generic runtime image
 (distroless, nonroot). The spec is mounted or COPYed in and named on the command
 line - the same binary drives every `.mcp.kdl`. Building the image is a CI
-consequence of a landed commit.
+consequence of a landed commit: the `publish` job in
+[`.forgejo/workflows/ci.yml`](../.forgejo/workflows/ci.yml) builds the Dockerfile
+on every push to `main` and pushes it to the in-cluster registry as
+`ward-mcp:<sha>` (mount-not-bake, so one image serves every guardfile - published
+when the runtime source changes, not per spec). The deploy CD resolves that sha
+into the chart's `image.tag` and rolls it. Mirrors the fleet's other MCP source
+repos (reddit-mcp / node-stats-mcp); the plain-http push to the insecure
+in-cluster registry needs no registry secret.
 
 ## The generic Helm chart (`chart/`)
 
