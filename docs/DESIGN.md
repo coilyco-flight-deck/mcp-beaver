@@ -54,8 +54,8 @@ A tool call arrives over SSE, is validated against the derived schema, run throu
 A ward-mcp server **cannot exceed its guardfile**, because the guardfile is the only source of the tools.
 
 * Every `can` grant is one tool. There is no way to declare a tool the guardfile does not grant.
-* `never delete issue` means no `delete_issue` tool is minted. A deny beats an allow.
-* `restrict owner matches coily*` bounds every `{owner}` path param.
+* An unwritten `delete issue` grant means no `delete_issue` tool is minted. In the frozen `opcore.ParseInline` grammar this is **deny-by-absence**: the served surface is exactly the `can` grants, so leaving a grant out is the deletion guard (the `never` sugar the earlier draft imagined is not part of the shipped grammar - absence carries the same guarantee, enforced at parse time).
+* `restrict owner matches coilyco-*` bounds every `{owner}` path param.
 * The argv metachar gate runs on inputs that compose into the URL (path + query); body fields (issue titles, markdown) are exempt, as in cli-guard.
 
 Handing a write-capable MCP to an agent (deploy#40's ask) is defensible: the blast radius is one small reviewable file, enforced at the transport, not trusted to the model.
@@ -92,7 +92,7 @@ A push touching a `.mcp.kdl` triggers the image build in CI, the way kai-server 
 
 ## The spec dialect
 
-The body **is** the cli-guard Guardfile - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` / `never` grants; input schemas are derived, not authored. The `.mcp.kdl` suffix marks the ward-mcp target and keeps the file out of cli-guard's CLI-discovery glob.
+The body is the frozen ward-mcp inline grammar parsed by `opcore.ParseInline` - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` grants (each with its `path`/`query`/`body`/`set`); input schemas are derived, not authored. The `.mcp.kdl` suffix marks the ward-mcp target and keeps the file out of cli-guard's CLI-discovery glob.
 
 ### Resolved
 
@@ -103,7 +103,16 @@ The body **is** the cli-guard Guardfile - see [`examples/forgejo-issues.mcp.kdl`
 
 ### Still open
 
-* **Tool naming** - `create_issue` (verb_resource) vs `forgejo_create_issue` (wrap-group-prefixed) when an agent mounts several ward-mcp servers at once. A cross-server concern, so plausibly the client's problem, not the spec's.
+* **Tool naming** - `create_issue` (verb_resource) vs `forgejo_create_issue` (wrap-group-prefixed) when an agent mounts several ward-mcp servers at once. A cross-server concern, so plausibly the client's problem, not the spec's. The shipped runtime projects the bare `verb_resource` (`opcore` Leaf `_` Group). A secondary wrinkle surfaced building the skillsmp example: a resource carrying its own separator (`ai-search`) makes the underscore-joined name lossy (`search_ai-skills` vs the vendor's `ai_search_skills`). Reconciling projection with an arbitrary vendor tool name is a naming follow-up, not a guard concern - the guarded surface is correct either way.
+* **`action` composition** - one tool chaining several ops (e.g. `view issue` = issue + comments). opcore v0.80.0 exposes single-operation `Execute`/`Preview` but no composed chain, so ward-mcp defers this per DESIGN's `collect` follow-up and keeps every floor grant individually reachable. Additive once opcore exposes the chain; no new runtime spine.
+
+### Implemented (ward-mcp#7)
+
+The `ward-mcp serve <spec> --http :addr` runtime ships as a thin shell over cli-guard's `http/opcore` (pinned at `v0.80.0` in [`go.mod`](../go.mod)):
+
+* `internal/mcpserver.New` runs `opcore.ParseInline`, wires the value providers (env/file/literal), and projects each `Descriptor` into one MCP tool (name `verb_resource`, `inputSchema` from `Descriptor.InputSchema().JSONSchema()`, description from the grant sentence).
+* A `tools/call` maps the MCP arguments onto `opcore.Args` by the schema's neutral Location hint (path/query→URL, body→JSON) and fires the self-guarding `opcore.Operation.Execute`; a guard/upstream failure returns as an MCP tool result with `isError` set, not a transport fault.
+* Two MCP HTTP transports are served: streamable-HTTP at `/mcp` (JSON or SSE per the client's `Accept`) and legacy HTTP+SSE at `/sse` + `/messages`. Never stdio.
 
 ## First milestone (matches deploy#40)
 

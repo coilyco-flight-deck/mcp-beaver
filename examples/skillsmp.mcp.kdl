@@ -1,0 +1,38 @@
+// skillsmp.mcp.kdl - the first end-to-end target (ward-mcp#7): skillsmp's two
+// read tools served over SSE against skillsmp.com. This is the narrowest slice
+// that proves parse -> project -> serve -> guarded-execute with no writes.
+//
+// The body is the frozen ward-mcp inline grammar (opcore.ParseInline). Each
+// `can` grant becomes one MCP tool named `verb_resource`; the token is resolved
+// at run time from SKILLSMP_API_KEY via the `env` value provider.
+//
+// NOTE on tool names: the frozen grammar projects `verb_resource`, so the tool
+// names below are `search_skills` and `search_ai-skills`. The vendor's own MCP
+// happens to name the second `ai_search_skills`; reconciling verb-underscore
+// projection with an arbitrary vendor tool name is a naming follow-up (see
+// DESIGN.md "Still open"), not a runtime concern. The guarded surface is
+// correct either way - two read-only GETs, no write grants minted.
+//
+// The exact query fields and paths mirror skillsmp's public search endpoints;
+// adjust them to the vendor's OpenAPI when the write surface (forgejo) lands.
+wrap ward mcp skillsmp {
+    base-url "skillsmp.com/api/v1"
+
+    // Bearer token resolved at RUN time; never baked into the image.
+    auth bearer {
+        value env "SKILLSMP_API_KEY"
+    }
+
+    // ---- the exposed surface (read-only) ----------------------------------
+    can search skills {
+        path "/skills/search"        // GET -> tool `search_skills`
+        query "q" "limit"
+    }
+    can search ai-skills {
+        path "/skills/ai-search"     // GET -> tool `search_ai-skills`
+        query "q" "limit"
+    }
+
+    // No write grants are written, so the served surface is exactly these two
+    // read tools. Deny-by-absence is the guard.
+}

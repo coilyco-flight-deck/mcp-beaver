@@ -6,21 +6,34 @@ ward-mcp renders a [cli-guard](https://github.com/coilysiren/cli-guard) Guardfil
 
 The spec configures **only the image interior**: which upstream, which auth, which grants become which tools. The image serves MCP over SSE/streamable-HTTP (never stdio - these run as remote k3s pods reached by URL). ward-mcp has **no relation to the ward codebase**, and uses [cli-mcp](https://github.com/coilysiren/cli-mcp) as a code reference only, not a dependency.
 
-The exposed MCP surface is exactly the guardfile's grants: `never delete issue` means no `delete_issue` tool can ever be served, and `restrict owner matches coily*` bounds every path. Audit one small file, hand a write-capable MCP to an agent, know the blast radius.
+The exposed MCP surface is exactly the guardfile's grants: an unwritten `delete issue` grant means no `delete_issue` tool can ever be served (**deny-by-absence**), and `restrict owner matches coilyco-*` bounds every path. Audit one small file, hand a write-capable MCP to an agent, know the blast radius.
 
-## Quickstart (drafted, not yet implemented)
+## Quickstart
+
+The generic `ward-mcp serve` runtime renders any `.mcp.kdl` into a guarded MCP
+server. Run it directly:
 
 ```sh
-# lock the granted surface (cli-guard's existing online step), then build the image
-ward mcp build examples/forgejo-issues.mcp.kdl
+# serve a spec over HTTP/SSE; the token is injected at run time via env
+FORGEJO_TOKEN=... go run ./cmd/ward-mcp serve examples/forgejo-issues.mcp.kdl --http :8080
 
-# run the image; it serves MCP over HTTP/SSE, token injected at run time
-docker run -p 8080:8080 -e FORGEJO_TOKEN \
-  forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp-forgejo-issues \
-  serve --http :8080
+# list the derived tools (streamable-HTTP transport at /mcp)
+curl -s -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' localhost:8080/mcp
 ```
 
-The image serves `create_issue`, `get_issue`, `list_issues`, `comment_issue`, `close_issue` - each guarded, each scoped to `coily*` owners.
+Or as the image (one runtime, many specs - the spec is mounted, not baked):
+
+```sh
+docker build -t ward-mcp .
+docker run -p 8080:8080 -e SKILLSMP_API_KEY \
+  -v $PWD/examples/skillsmp.mcp.kdl:/spec/skillsmp.mcp.kdl \
+  ward-mcp serve /spec/skillsmp.mcp.kdl --http :8080
+```
+
+The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_issue`, `close_issue` - each guarded, each scoped to `coilyco-*` / `kai` owners.
+
+The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the spec, each grant projects to one MCP tool, and every call fires through the self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, auth). ward-mcp adds only the grant→tool projection and the MCP SSE/HTTP transport.
 
 ## Distributes as image + chart
 
@@ -37,12 +50,16 @@ The `.mcp.kdl` rides in as chart values (a ConfigMap mounted into the runtime); 
 
 ## Layout
 
-* [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issue creation as an MCP. Its body is a plain cli-guard Guardfile.
-* [`examples/*.values.yaml`](examples/) - reference deploy-side values: `skillsmp` (public, Authelia-gated read) and `forgejo-issues` (tailnet-only write).
+* [`cmd/ward-mcp`](cmd/ward-mcp) - the `serve` entrypoint: parse a spec, project tools, bind the HTTP/SSE listener.
+* [`internal/mcpserver`](internal/mcpserver) - the thin shell: grant→MCP-tool projection, the JSON-RPC dispatch, and the streamable-HTTP + legacy-SSE transports.
+* [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issues as an MCP. Its body is the frozen ward-mcp inline grammar (`opcore.ParseInline`).
+* [`examples/skillsmp.mcp.kdl`](examples/skillsmp.mcp.kdl) - the first end-to-end target: two read tools over SSE against skillsmp.com.
+* [`examples/*.values.yaml`](examples/) - reference deploy-side chart values: `skillsmp` (public, Authelia-gated read) and `forgejo-issues` (tailnet-only write).
 * [`chart/`](chart/) - the generic ward-mcp Helm chart. See [`docs/chart.md`](docs/chart.md).
-* [`docs/DESIGN.md`](docs/DESIGN.md) - the Guardfile -> image pipeline, the interior-only scope, the HTTP/SSE and safety model, and the remaining open question.
+* [`docs/DESIGN.md`](docs/DESIGN.md) - the spec→image pipeline, the interior-only scope, and the HTTP/SSE + safety model.
 * [`docs/chart.md`](docs/chart.md) - the chart's templates, values reference, and the runtime contract it targets.
+* [`docs/FEATURES.md`](docs/FEATURES.md) - the living inventory of what ships today.
 
 ## Status
 
-Draft. Tracking [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/issues/164) (concept) and [coilyco-bridge/deploy#40](https://forgejo.coilysiren.me/coilyco-bridge/deploy/issues/40) (first consumer).
+The `ward-mcp serve` runtime is **implemented** (ward-mcp#7): it parses a `.mcp.kdl`, serves the derived tools over MCP/SSE, and guarded-executes each call through opcore. The generic Helm chart that runs this image is also in (ward-mcp#8). Tracking [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/issues/164) (concept) and [coilyco-bridge/deploy#40](https://forgejo.coilysiren.me/coilyco-bridge/deploy/issues/40) (first consumer).
