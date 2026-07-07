@@ -1,0 +1,26 @@
+ward-mcp release {{ .Release.Name }} deployed to namespace {{ .Release.Namespace }}.
+
+The runtime serves the guardfile mounted at {{ include "ward-mcp.specPath" . }},
+over MCP (streamable-HTTP) at {{ .Values.http.path }} on port {{ .Values.http.port }}.
+
+{{- if and .Values.route.enabled .Values.route.public }}
+
+Public, Authelia-JWT-gated at https://{{ .Values.route.host }}{{ .Values.http.path }}
+(OIDC client {{ .Values.route.auth.clientId }}). Verify once DNS + TLS settle:
+
+  curl -s  https://{{ .Values.route.host }}/.well-known/oauth-protected-resource   # 200, unauthenticated
+  curl -sI https://{{ .Values.route.host }}{{ .Values.http.path }}                 # 401 without a Bearer JWT
+{{- else }}
+
+Not publicly routed (route.public is off). Reach it in-cluster:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ward-mcp.fullname" . }} 8099:{{ .Values.http.port }}
+  curl -sI http://127.0.0.1:8099{{ .Values.http.path }}
+{{- end }}
+{{- if .Values.service.nodePort }}
+
+Tailnet-direct local-harness path (deploy#39): http://kai-server:{{ .Values.service.nodePort }}{{ .Values.http.path }}
+{{- end }}
+
+The guardfile is the whole tool surface: only its `can` grants become MCP tools,
+each `never` denial mints nothing. Audit that one file to know the blast radius.

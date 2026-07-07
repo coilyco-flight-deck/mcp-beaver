@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ward-mcp.fullname" . }}
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      {{- include "ward-mcp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ward-mcp.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Roll the pod whenever the mounted guardfile changes - a ConfigMap
+        # edit alone does not restart a running container.
+        checksum/spec: {{ .Values.spec | sha256sum }}
+        {{- with .Values.commonAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ward-mcp
+          image: {{ include "ward-mcp.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          # Runtime contract: `ward-mcp serve <specPath> --http :<port>`. The
+          # guardfile is read from the mounted path, never baked.
+          args:
+            - serve
+            - {{ include "ward-mcp.specPath" . }}
+            - --http
+            - :{{ .Values.http.port }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.http.port }}
+          env:
+            {{- range $env, $src := .Values.secret }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef:
+                  {{- if kindIs "string" $src }}
+                  name: {{ include "ward-mcp.secretName" $ }}
+                  key: {{ $env }}
+                  {{- else }}
+                  name: {{ $src.secretName }}
+                  key: {{ $src.key }}
+                  {{- end }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: spec
+              mountPath: /spec
+              readOnly: true
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: spec
+          configMap:
+            name: {{ include "ward-mcp.fullname" . }}-spec
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      restartPolicy: Always

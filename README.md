@@ -22,12 +22,26 @@ docker run -p 8080:8080 -e FORGEJO_TOKEN \
 
 The image serves `create_issue`, `get_issue`, `list_issues`, `comment_issue`, `close_issue` - each guarded, each scoped to `coily*` owners.
 
-**Deploying** the image (k3s Service, route, tailnet-vs-public, token Secret) is out of scope here: it is consumed downstream as a [`deploy/services/`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) entry (deploy#40), the same way deploy already hosts `steam-mcp`, `reddit-mcp`, and `node-stats-mcp`.
+## Distributes as image + chart
+
+The product ships two artifacts (ward-mcp#6): the generic runtime **image** above, and a generic **Helm chart** (`chart/`) that templates the k3s exposure. **Deploying** an MCP is then a values file plus `helm upgrade` - no per-guardfile image build, no per-service manifest fork:
+
+```sh
+helm upgrade --install skillsmp ward-mcp \
+  -f skillsmp.values.yaml \
+  --set-file spec=skillsmp.mcp.kdl \
+  --set image.tag=<built-runtime-sha>
+```
+
+The `.mcp.kdl` rides in as chart values (a ConfigMap mounted into the runtime); the chart templates the Deployment, Service, token Secret wiring, and - for a public MCP - the Authelia-JWT route. The chart stays generic and **spec-opaque** (it never parses the guardfile), so the interior-only scope of the spec holds: the spec never reaches down into the chart, the chart never reaches up into the spec. [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) consumes the chart per-MCP with one values file (deploy#61 skillsmp, deploy#46 forgejo) and owns the rollout, the same way it already hosts `steam-mcp`, `reddit-mcp`, and `node-stats-mcp`.
 
 ## Layout
 
 * [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issue creation as an MCP. Its body is a plain cli-guard Guardfile.
+* [`examples/*.values.yaml`](examples/) - reference deploy-side values: `skillsmp` (public, Authelia-gated read) and `forgejo-issues` (tailnet-only write).
+* [`chart/`](chart/) - the generic ward-mcp Helm chart. See [`docs/chart.md`](docs/chart.md).
 * [`docs/DESIGN.md`](docs/DESIGN.md) - the Guardfile -> image pipeline, the interior-only scope, the HTTP/SSE and safety model, and the remaining open question.
+* [`docs/chart.md`](docs/chart.md) - the chart's templates, values reference, and the runtime contract it targets.
 
 ## Status
 

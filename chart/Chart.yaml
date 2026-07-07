@@ -1,0 +1,20 @@
+apiVersion: v2
+name: ward-mcp
+description: The generic ward-mcp distribution chart - one runtime image, the .mcp.kdl guardfile mounted as a ConfigMap, and the k3s exposure (Deployment, Service, optional Authelia-gated public route) templated. Adding an MCP is a values file plus `helm upgrade`, no per-guardfile image build.
+type: application
+version: 0.1.0
+# The generic ward-mcp runtime image tag this chart defaults to. A release
+# overrides image.tag with the built runtime sha; the guardfile it serves rides
+# in as chart values, not as a per-server image.
+appVersion: "0.1.0"
+home: https://forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
+sources:
+  - https://forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
+keywords:
+  - mcp
+  - cli-guard
+  - guardfile
+  - authelia
+maintainers:
+  - name: coilysiren
+    url: https://github.com/coilysiren

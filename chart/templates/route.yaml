@@ -1,0 +1,292 @@
+{{- if and .Values.route.enabled .Values.route.public }}
+{{- if not .Values.route.host }}{{ fail "ward-mcp: route.public is true but route.host is empty" }}{{- end }}
+{{- if not .Values.route.auth.clientId }}{{ fail "ward-mcp: route.public is true but route.auth.clientId is empty" }}{{- end }}
+{{- $fullname := include "ward-mcp.fullname" . -}}
+{{- $oauth := include "ward-mcp.oauth2ProxyName" . -}}
+{{- $meta := include "ward-mcp.metaName" . -}}
+{{- $host := .Values.route.host -}}
+{{- $resource := printf "https://%s/mcp" $host -}}
+{{- $clientSecretRef := .Values.route.auth.clientSecretRef | default (printf "/%s/oauth2-proxy/client-secret" $fullname) -}}
+{{- $cookieSecretRef := .Values.route.auth.cookieSecretRef | default (printf "/%s/oauth2-proxy/cookie-secret" $fullname) -}}
+{{- $wellKnown := printf "{\"resource\":\"%s\",\"authorization_servers\":[\"%s\"],\"scopes_supported\":[\"openid\",\"offline_access\"],\"bearer_methods_supported\":[\"header\"]}" $resource .Values.route.auth.issuerUrl -}}
+# The deploy#30 fleet auth overlay, generalized: a public Traefik Ingress whose
+# ForwardAuth middleware gates every request through an in-namespace oauth2-proxy
+# validating Authelia's RFC 9068 at+jwt statelessly, plus an unauthenticated
+# RFC 9728 metadata sidecar so claude.ai can discover Authelia as the AS. The
+# runtime pod is unchanged - it stays a dumb backend behind the gate.
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $oauth }}
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+spec:
+  refreshInterval: {{ .Values.externalSecret.refreshInterval }}
+  secretStoreRef:
+    name: {{ .Values.externalSecret.secretStoreRef.name }}
+    kind: {{ .Values.externalSecret.secretStoreRef.kind }}
+  target:
+    name: {{ $oauth }}
+    creationPolicy: Owner
+  data:
+    - secretKey: client-secret
+      remoteRef:
+        key: {{ $clientSecretRef | quote }}
+    - secretKey: cookie-secret
+      remoteRef:
+        key: {{ $cookieSecretRef | quote }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ $fullname }}-jwt
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+spec:
+  forwardAuth:
+    address: 'http://{{ $oauth }}.{{ .Release.Namespace }}.svc.cluster.local:4180/oauth2/auth'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $oauth }}
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: oauth2-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ward-mcp.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        {{- include "ward-mcp.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: oauth2-proxy
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: oauth2-proxy
+          image: {{ .Values.route.auth.image | quote }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - '--http-address=0.0.0.0:4180'
+            - '--provider=oidc'
+            - '--oidc-issuer-url={{ .Values.route.auth.issuerUrl }}'
+            - '--client-id={{ .Values.route.auth.clientId }}'
+            - '--skip-jwt-bearer-tokens=true'
+            - '--oidc-extra-audience={{ $resource }}'
+            - '--oidc-extra-audience=https://{{ $host }}'
+            {{- range .Values.route.auth.extraAudiences }}
+            - '--oidc-extra-audience={{ . }}'
+            {{- end }}
+            - '--email-domain=*'
+            - '--reverse-proxy=true'
+            - '--upstream=static://202'
+            - '--skip-provider-button=true'
+          env:
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oauth }}
+                  key: client-secret
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oauth }}
+                  key: cookie-secret
+          ports:
+            - containerPort: 4180
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 4180
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 4180
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.route.auth.resources | nindent 12 }}
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $oauth }}
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: oauth2-proxy
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "ward-mcp.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: oauth2-proxy
+  ports:
+    - port: 4180
+      targetPort: 4180
+      protocol: TCP
+      name: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $meta }}
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: meta
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      location = /.well-known/oauth-protected-resource {
+        default_type application/json;
+        return 200 '{{ $wellKnown }}';
+      }
+      location = /.well-known/oauth-protected-resource/mcp {
+        default_type application/json;
+        return 200 '{{ $wellKnown }}';
+      }
+      location / { return 404; }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $meta }}
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: meta
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ward-mcp.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: meta
+  template:
+    metadata:
+      labels:
+        {{- include "ward-mcp.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: meta
+      annotations:
+        # Roll the nginx when its served metadata changes - a ConfigMap edit
+        # alone does not restart the pod that read it at boot.
+        checksum/config: {{ $wellKnown | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: nginx
+          image: {{ .Values.route.meta.image | quote }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: conf
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /.well-known/oauth-protected-resource
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.route.meta.resources | nindent 12 }}
+      volumes:
+        - name: conf
+          configMap:
+            name: {{ $meta }}
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $meta }}
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: meta
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "ward-mcp.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: meta
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+    external-dns.coilysiren.me/managed: "true"
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.route.clusterIssuer }}
+    kubernetes.io/tls-acme: "true"
+    external-dns.alpha.kubernetes.io/hostname: {{ $host }}
+    {{- with .Values.route.externalDnsTarget }}
+    external-dns.alpha.kubernetes.io/target: {{ . | quote }}
+    {{- end }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-{{ $fullname }}-jwt@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - {{ $host }}
+      secretName: {{ $fullname }}-tls
+  rules:
+    - host: {{ $host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}
+                port:
+                  number: {{ .Values.http.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $meta }}
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: meta
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - {{ $host }}
+      secretName: {{ $fullname }}-tls
+  rules:
+    - host: {{ $host }}
+      http:
+        paths:
+          # The longer well-known path out-specifies "/", so discovery reaches
+          # the meta sidecar unauthenticated and everything else hits the gate.
+          - path: /.well-known/oauth-protected-resource
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $meta }}
+                port:
+                  number: 8080
+{{- end }}
