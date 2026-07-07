@@ -53,7 +53,8 @@ on every push to `main` and pushes it to the in-cluster registry as
 when the runtime source changes, not per spec). The deploy CD resolves that sha
 into the chart's `image.tag` and rolls it. Mirrors the fleet's other MCP source
 repos (reddit-mcp / node-stats-mcp); the plain-http push to the insecure
-in-cluster registry needs no registry secret.
+in-cluster registry needs no registry secret. See [ci.md](ci.md) for the gate +
+publish walkthrough and the Actions-unit enablement gotcha (ward-mcp#10).
 
 ## The generic Helm chart (`chart/`)
 
@@ -99,3 +100,4 @@ one values file. ward-mcp ships the generic chart; deploy owns the values.
 - [README.md](../README.md) - the pitch and the image + chart distribution.
 - [DESIGN.md](DESIGN.md) - the spec → image pipeline, the interior-only scope, the safety model.
 - [chart.md](chart.md) - the chart's templates, values reference, and runtime contract.
+- [ci.md](ci.md) - the CI gate + publish pipeline and the Actions-unit enablement gotcha.
