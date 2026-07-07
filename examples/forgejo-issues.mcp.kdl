@@ -1,54 +1,61 @@
-// forgejo-issues.mcp.kdl - the "hello world" ward-mcp spec.
+// forgejo-issues.mcp.kdl - the worked "hello world" ward-mcp spec.
 //
-// The body is cli-guard Guardfile grammar (L2). The `.mcp.kdl` suffix marks it
-// as a ward-mcp target - the interior of a Docker image that serves an HTTP/SSE
-// MCP server - and keeps it out of cli-guard's `*.guardfile.kdl` CLI-discovery
-// glob, the way `.fleet.kdl` partitions the fleet dialect. This spec configures
-// ONLY the image interior. Exposing the container (k3s Service, route, Secret
-// wiring) is the deploy repo's job, never this file's.
+// The body is the FROZEN ward-mcp inline grammar (ward-mcp#6), parsed by
+// cli-guard's `opcore.ParseInline` - the same []Descriptor the OpenAPI source
+// feeds, stated directly from KDL. The `.mcp.kdl` suffix marks this as a
+// ward-mcp target - the interior of a Docker image that serves an HTTP/SSE MCP
+// server - and keeps it out of cli-guard's CLI-discovery glob. This spec
+// configures ONLY the image interior. Exposing the container (k3s Service,
+// route, Secret wiring) is the deploy repo's job, never this file's.
 //
-// ward-mcp has NO relation to the ward codebase. It drives cli-guard's
-// specverb/guardfile/codegen engine directly. cli-mcp is read as a CODE
-// REFERENCE only; ward-mcp implements its own SSE/HTTP MCP server, it does not
-// depend on cli-mcp.
+// ward-mcp has NO relation to the ward codebase. It drives cli-guard's opcore
+// engine directly. cli-mcp is read as a CODE REFERENCE only; ward-mcp
+// implements its own SSE/HTTP MCP server and does not depend on cli-mcp.
 //
 // The magic is what is NOT here: no tool definitions, no input schemas. Each
-// `can` grant IS one MCP tool; its input schema is derived by the engine from
-// the pruned OpenAPI operation (path params, query params, body fields). You
-// author policy, not plumbing. The grants that would gate a CLI gate the MCP
-// tools instead: `never delete issue` means no `delete_issue` tool is minted.
-wrap forgejo-issues ops forgejo {
-    spec forgejo.swagger.v1.json
+// `can` grant IS one MCP tool named `verb_resource`; its input schema is
+// derived by opcore from the grant's `path`/`query`/`body`.
+wrap ward mcp forgejo {
     base-url "forgejo.coilysiren.me/api/v1"
 
-    // Secret resolved at RUN time through cli-guard's value-provider registry,
-    // never baked into the image. How the env is supplied to the container is
-    // the deployer's concern, outside this spec.
+    // Secret resolved at RUN time through cli-guard's value-provider registry
+    // (the `env` builtin), never baked into the image. How the env reaches the
+    // container is the deployer's concern, outside this spec.
     auth header-token {
-        header Authorization
+        header "Authorization"
         prefix "token "
-        value env FORGEJO_TOKEN
+        value env "FORGEJO_TOKEN"
     }
 
-    // Scope gate: every {owner} path leaf must name a coily* owner. Enforced on
-    // the MCP surface exactly as cli-guard enforces it on a CLI.
-    restrict owner matches coily*
+    // Scope gate: every {owner} path leaf must match a coilyco-* / kai owner.
+    // Enforced on the MCP surface exactly as cli-guard enforces it on a CLI.
+    restrict owner matches "coilyco-*" "kai"
 
     // ---- the exposed surface ----------------------------------------------
-    // verb + resource -> operationId by convention -> one MCP tool.
-    // Tool name is the verb_resource pair; input schema is auto-derived.
+    // verb + resource -> HTTP method by convention -> one MCP tool.
+    // Tool name is verb_resource; input schema is derived from path/query/body.
 
-    can create issue     // -> tool `create_issue`  (POST /repos/{owner}/{repo}/issues)
-    can get issue        // -> tool `get_issue`     (GET  .../issues/{index})
-    can list issue       // -> tool `list_issues`   (GET  .../issues)
-    can comment issue    // -> tool `comment_issue` (POST .../issues/{index}/comments)
-
+    can create issue {
+        path "/repos/{owner}/{repo}/issues"   // POST -> tool `create_issue`
+        body "title" "body"
+    }
+    can get issue {
+        path "/repos/{owner}/{repo}/issues/{index}"   // GET -> tool `get_issue`
+    }
+    can list issue {
+        path "/repos/{owner}/{repo}/issues"   // GET -> tool `list_issue`
+        query "state"
+    }
+    can comment issue {
+        path "/repos/{owner}/{repo}/issues/{index}/comments"   // POST -> `comment_issue`
+        body "body"
+    }
     can close issue {
-        body state=closed   // fixed-body toggle: tool sends exactly {"state":"closed"}
+        path "/repos/{owner}/{repo}/issues/{index}"   // PATCH -> `close_issue`
+        set state="closed"   // fixed-body toggle: tool sends exactly {"state":"closed"}
     }
 
-    // Denied, so the tool is never minted. A deny beats an allow.
-    never delete issue {
-        message "issue deletion is irreversible; close it instead"
-    }
+    // No `delete issue` grant is written, so no `delete_issue` tool is ever
+    // minted. Deny-by-absence IS the deletion guard in the frozen grammar: the
+    // surface is exactly the grants, and an unwritten grant is an absent tool.
 }

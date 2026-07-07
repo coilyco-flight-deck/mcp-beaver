@@ -1,0 +1,112 @@
+// Command ward-mcp is the generic runtime that renders one `.mcp.kdl` spec into
+// a guarded MCP server over HTTP/SSE. It is the single static binary baked into
+// every ward-mcp image; the spec is the only thing that varies. There is no
+// per-guardfile Go and no per-server handler.
+//
+//	ward-mcp serve /spec/<name>.mcp.kdl --http :8080
+//
+// It parses the spec through cli-guard's opcore engine, projects one MCP tool
+// per grant, and binds an HTTP listener that speaks MCP over streamable HTTP and
+// legacy SSE. It never binds stdio: these run as remote pods reached by URL.
+package main
+
+import (
+	"flag"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp/internal/mcpserver"
+)
+
+func main() {
+	if err := run(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, "ward-mcp:", err)
+		os.Exit(1)
+	}
+}
+
+// run dispatches the subcommand. Only `serve` exists today; the pipeline's
+// build/lock steps are cli-guard's and deploy's, not this runtime's.
+func run(argv []string) error {
+	if len(argv) == 0 {
+		return fmt.Errorf("usage: ward-mcp serve <spec.mcp.kdl> [--http :8080]")
+	}
+	switch argv[0] {
+	case "serve":
+		return runServe(argv[1:])
+	default:
+		return fmt.Errorf("unknown command %q (want: serve)", argv[0])
+	}
+}
+
+// runServe parses the spec and binds the HTTP listener. The spec path is the one
+// positional; --http sets the bind address (default :8080).
+func runServe(argv []string) error {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (SSE / streamable-HTTP)")
+	// The documented entrypoint writes the spec before --http
+	// (`serve /spec/x.mcp.kdl --http :8080`), so reorder the flags ahead of the
+	// positional - flag.Parse stops at the first non-flag argument otherwise.
+	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("serve needs exactly one spec path, e.g. `serve /spec/forgejo.mcp.kdl --http :8080`")
+	}
+	specPath := fs.Arg(0)
+
+	src, err := os.ReadFile(specPath) //nolint:gosec // operator-supplied trusted policy path
+	if err != nil {
+		return fmt.Errorf("read spec %q: %w", specPath, err)
+	}
+	srv, err := mcpserver.New(serverName(specPath), src)
+	if err != nil {
+		return fmt.Errorf("parse spec %q: %w", specPath, err)
+	}
+
+	fmt.Fprintf(os.Stderr, "ward-mcp: serving %s on %s (MCP over /mcp streamable-HTTP and /sse)\n", specPath, *addr)
+	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
+	return server.ListenAndServe()
+}
+
+// reorderFlagsFirst moves flag tokens (and the value of the one known
+// value-taking flag, --http) ahead of positional arguments, so `serve <spec>
+// --http :8080` parses the same as `serve --http :8080 <spec>`. A bare `--`
+// terminator passes through untouched.
+func reorderFlagsFirst(argv []string) []string {
+	var flags, positional []string
+	for i := 0; i < len(argv); i++ {
+		a := argv[i]
+		if a == "--" {
+			positional = append(positional, argv[i:]...)
+			break
+		}
+		if strings.HasPrefix(a, "-") {
+			flags = append(flags, a)
+			// A separated value (`--http :8080`) rides along with its flag;
+			// the `--http=:8080` form already carries its value inline.
+			if !strings.Contains(a, "=") && i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "-") {
+				flags = append(flags, argv[i+1])
+				i++
+			}
+			continue
+		}
+		positional = append(positional, a)
+	}
+	return append(flags, positional...)
+}
+
+// serverName derives the MCP serverInfo name from the spec filename, stripping
+// the `.mcp.kdl` (or `.kdl`) suffix: `/spec/forgejo-issues.mcp.kdl` -> `forgejo-issues`.
+func serverName(specPath string) string {
+	base := filepath.Base(specPath)
+	base = strings.TrimSuffix(base, ".kdl")
+	base = strings.TrimSuffix(base, ".mcp")
+	if base == "" {
+		return "ward-mcp"
+	}
+	return base
+}

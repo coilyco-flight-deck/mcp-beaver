@@ -1,0 +1,25 @@
+# CI gate for ward-mcp: build, vet, and test the generic runtime on every push.
+# This is the repo's gate ("ward vet / ward test or equivalent"). cli-guard is a
+# private forgejo module fetched anonymously, so GOPRIVATE keeps it off the
+# public proxy and sumdb.
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      GOPRIVATE: forgejo.coilysiren.me
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: build
+        run: go build ./...
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test ./...
