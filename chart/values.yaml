@@ -1,0 +1,156 @@
+# Default values for the generic ward-mcp chart. One chart, one runtime image,
+# many releases: the .mcp.kdl guardfile rides in as `spec` (a ConfigMap), and
+# the chart templates the k3s exposure. A deploy consumes this per-MCP with a
+# single values file (deploy#61 skillsmp, deploy#46 forgejo).
+#
+# The full reference lives in docs/chart.md; this header only summarizes the
+# non-obvious knobs so the keys below stay uncluttered.
+#
+# - spec / specName: `spec` is the .mcp.kdl body, supplied with
+#   `--set-file spec=<name>.mcp.kdl`. It is written to a ConfigMap and mounted
+#   at /spec/<specName>.mcp.kdl; the runtime ENTRYPOINT reads it from there,
+#   never baked. specName defaults to the release name.
+# - image.tag defaults to .Chart.appVersion; a rollout sets it to the built
+#   ward-mcp runtime sha. image.repository defaults to the public Forgejo path;
+#   a deploy overrides it to the in-cluster registry mirror k3s pulls without
+#   auth (kept out of this public-safe repo).
+# - secret: map of ENV_VAR -> source, one entry per `value env <VAR>` the
+#   guardfile names. A STRING value is an SSM parameter path - the chart mints
+#   an ExternalSecret pulling it into a Secret and injects it as that env var. A
+#   MAP value {secretName, key} references an already-existing Secret instead.
+# - route.public: true mounts the deploy#30 Authelia-JWT public overlay
+#   (Ingress + ForwardAuth + oauth2-proxy + RFC 9728 metadata sidecar); false is
+#   tailnet-only (NodePort, no public Ingress). A write-capable surface stays
+#   tailnet-only; a read surface can go public-gated - the Authelia gate is the
+#   boundary, not the read/write split.
+# - service.nodePort: the tailnet-direct local-harness port (deploy#39). Set it
+#   per-MCP to a non-colliding value; unset leaves the Service ClusterIP-only.
+
+# The .mcp.kdl guardfile body. Supplied at install time with
+# `--set-file spec=<name>.mcp.kdl`; empty here so a bare `helm template` fails
+# loud rather than shipping an MCP with no surface.
+spec: ""
+# The <name> in /spec/<name>.mcp.kdl. Defaults to the release name.
+specName: ""
+
+replicaCount: 1
+
+image:
+  repository: forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
+  tag: ""
+  pullPolicy: Always
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+revisionHistoryLimit: 3
+commonLabels: {}
+commonAnnotations: {}
+podAnnotations: {}
+
+# The single-node homelab; every workload pins to kai-server. Cleared for a
+# generic (non-kai-server) render.
+nodeSelector:
+  kubernetes.io/hostname: kai-server
+tolerations: []
+affinity: {}
+
+podSecurityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# The interior HTTP listener. The runtime ENTRYPOINT is
+# `ward-mcp serve /spec/<name>.mcp.kdl --http :<port>`, MCP served at /mcp.
+http:
+  port: 8080
+  path: /mcp
+
+# Env-injected secrets the guardfile names via `value env <VAR>`. See the header.
+# Example (SSM-backed):   FORGEJO_TOKEN: /forgejo-mcp/token
+# Example (existing Secret): FORGEJO_TOKEN: {secretName: forgejo-mcp, key: token}
+secret: {}
+
+# The ExternalSecret the string-form `secret` entries are pulled through.
+externalSecret:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-parameter-store
+    kind: ClusterSecretStore
+
+# Extra plain (non-secret) env vars, if a runtime ever needs them.
+extraEnv: []
+
+service:
+  type: ClusterIP
+  # Tailnet-direct local-harness port (deploy#39). Unset -> ClusterIP-only.
+  # Set per-MCP to a non-colliding value; the Service becomes NodePort.
+  nodePort: null
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi
+
+# tcpSocket probes on the HTTP port - the interior binds a listener before it is
+# ready to serve, which is enough for a liveness/readiness gate without assuming
+# a health path on the MCP surface.
+readinessProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 3
+  periodSeconds: 10
+livenessProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 30
+
+# The public, Authelia-JWT-gated route (deploy#30's fleet overlay, generalized).
+route:
+  enabled: true
+  # The public hostname, e.g. skillsmp.coilysiren.me. Required when enabled.
+  host: ""
+  # true -> public Ingress behind the Authelia gate. false -> tailnet-only
+  # (no public Ingress; reach the pod via the NodePort over the tailnet).
+  public: true
+  # cert-manager ClusterIssuer for the public TLS cert.
+  clusterIssuer: letsencrypt-production
+  # ExternalDNS target - the home public IP (opaque). Supplied by the deploy at
+  # rollout; left empty here so nothing host-identifying lands in this repo.
+  externalDnsTarget: ""
+  auth:
+    # The statically-registered Authelia OIDC client id, e.g. claude-skillsmp.
+    clientId: ""
+    issuerUrl: https://auth.coilysiren.me
+    # Audiences default to https://<host>/mcp and https://<host>; add more here.
+    extraAudiences: []
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    # oauth2-proxy client-secret and cookie-secret, pulled from SSM through the
+    # gate's own ExternalSecret. Default paths derive from the release name.
+    clientSecretRef: ""
+    cookieSecretRef: ""
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  # The RFC 9728 protected-resource-metadata sidecar (unauthenticated), pointing
+  # claude.ai at Authelia as the authorization server before a token exists.
+  meta:
+    image: docker.io/nginxinc/nginx-unprivileged:alpine
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 50m
+        memory: 32Mi

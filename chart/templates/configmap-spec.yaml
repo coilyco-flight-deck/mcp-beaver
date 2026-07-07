@@ -1,0 +1,18 @@
+{{- if not .Values.spec }}
+{{- fail "ward-mcp: .Values.spec is empty - supply the guardfile with `--set-file spec=<name>.mcp.kdl`" }}
+{{- end }}
+# The .mcp.kdl guardfile, mounted into the runtime at {{ include "ward-mcp.specPath" . }}.
+# This is the ONLY per-MCP artifact; the runtime image is shared across releases.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ward-mcp.fullname" . }}-spec
+  labels:
+    {{- include "ward-mcp.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  {{ include "ward-mcp.specName" . }}.mcp.kdl: |
+    {{- .Values.spec | nindent 4 }}

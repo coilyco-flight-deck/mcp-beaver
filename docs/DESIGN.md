@@ -18,7 +18,7 @@ Everything about **exposing** that image is out of scope for the spec and for wa
 * the ingress or tailnet route and public-vs-tailnet decision,
 * injecting `FORGEJO_TOKEN` as a mounted Secret,
 
-all live in [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) (deploy#40's domain), which consumes the published image as a `deploy/services/<name>/` entry. This keeps the dependency direction clean, the same rule deploy already follows: **the image stays unaware of how it is deployed.** The spec never reaches down into a chart, and the chart never reaches up into the spec.
+are templated by the generic **chart** ward-mcp ships (see [Distribution](#distribution-image--chart) below), which [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) consumes per-MCP with one values file and rolls out. This keeps the dependency direction clean, the same rule deploy already follows: **the image stays unaware of how it is deployed.** The spec never reaches down into a chart, and the chart never reaches up into the spec - the chart is generic and treats the `.mcp.kdl` as opaque values it mounts, never parses.
 
 ## Why HTTP/SSE (interior) and never stdio
 
@@ -44,7 +44,8 @@ The engine carries zero upstream knowledge, so **one engine drives every spec, n
 | **grant -> MCP tool projection** (op descriptor -> JSON-schema + handler) | **ward-mcp** |
 | **SSE / streamable-HTTP transport** (the MCP wire protocol, interior) | **ward-mcp** (cli-mcp as reference) |
 | **image build** (guardfile + locks + runtime -> OCI image) | **ward-mcp** |
-| k3s exposure (Service, route, Secret) | `deploy` (out of scope here) |
+| **generic chart** (spec ConfigMap + Deployment + Service + Authelia route) | **ward-mcp** (`chart/`, spec-opaque) |
+| per-MCP values + rollout (which host, which SSM token, public-vs-tailnet) | `deploy` (consumes the chart) |
 
 A tool call arrives over SSE, is validated against the derived schema, run through cli-guard's guard (restrict gate, argv metachar gate on URL-bound inputs), resolved to an HTTP request, signed with the injected secret, and fired upstream. The response renders back over the MCP channel.
 
@@ -72,7 +73,18 @@ specverb.lock                 ─┘        (CI on push)                        
 2. **Lock** (cli-guard's existing online step) fetches upstream Swagger, prunes it to the granted ops + their transitive `$ref` schemas, writes the two committed locks (`<spec>.lock.json`, `specverb.lock`). Reused verbatim.
 3. **Build** bakes the guardfile + the two locks + the single static `ward-mcp` runtime into an image. The runtime is reused across every guardfile. The image ENTRYPOINT is `ward-mcp serve /spec/<name>.mcp.kdl --http :8080`: it parses the guardfile, registers one MCP tool per grant, and binds an HTTP/SSE listener on a default port.
 
-That is the whole of ward-mcp. **Consuming the image** - deploying it to k3s, mapping the port, routing it (tailnet-only for write-capable surfaces), mounting the token Secret - is deploy#40's work, described there, not here.
+**Consuming the chart** - picking the host, the SSM token, and public-vs-tailnet for a given MCP, and rolling it out - is deploy's work (deploy#61, deploy#46), described there. ward-mcp ships the generic chart the values feed; deploy owns the values.
+
+## Distribution: image + chart
+
+ward-mcp distributes as **two generic artifacts** (ward-mcp#6), not a per-server image alone:
+
+1. the **runtime image** above - one static `ward-mcp` binary, shared across every guardfile, and
+2. a **generic Helm chart** (`chart/`) that templates the k3s exposure - the spec as a mounted ConfigMap, the Deployment running the shared runtime, the Service, the token Secret wiring, and (for a public MCP) the Authelia-JWT route generalized from deploy#30's fleet overlay.
+
+Adding an MCP is then a **values file + `helm upgrade`**, no per-guardfile image build and no per-service manifest fork. The chart stays generic and **spec-opaque**: it mounts the `.mcp.kdl` and never parses it, so the interior-only scope holds - the spec still knows nothing about deployment, and the chart knows nothing about any one spec's grants. The full chart reference is in [chart.md](chart.md).
+
+This does not move the deployment **decisions** into ward-mcp. Which host, which SSM token, public-vs-tailnet (a write surface stays tailnet-only; a read surface can go public-gated) - all of that is per-MCP values `deploy` supplies (deploy#61 skillsmp, deploy#46 forgejo), and `deploy` owns the rollout. ward-mcp ships the mechanism; deploy sets the policy.
 
 ### "Automatic" = a CI consequence of a landed guardfile
 

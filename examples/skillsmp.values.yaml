@@ -1,0 +1,26 @@
+# Example deploy-side values for a PUBLIC, Authelia-gated read-only MCP.
+# Mirrors deploy#61 (skillsmp): a provably read-only surface, so the public
+# gated path fits directly (the Authelia gate is the boundary, not the
+# read/write split). Consume as:
+#
+#   helm upgrade --install skillsmp ward-mcp \
+#     -f skillsmp.values.yaml \
+#     --set-file spec=skillsmp.mcp.kdl \
+#     --set image.tag=<built-runtime-sha>
+#
+# spec rides in via --set-file (the .mcp.kdl body); image.tag is the built
+# ward-mcp runtime sha the rollout resolves. Everything else is here.
+specName: skillsmp
+
+# Pull the run-time token the guardfile names (`value env SKILLSMP_API_KEY`)
+# from SSM into the injected env var. A deploy overrides image.repository to the
+# in-cluster registry mirror.
+secret:
+  SKILLSMP_API_KEY: /skillsmp/api-key
+
+route:
+  host: skillsmp.coilysiren.me
+  public: true
+  externalDnsTarget: ""   # the deploy stamps the home public IP at rollout
+  auth:
+    clientId: claude-skillsmp
