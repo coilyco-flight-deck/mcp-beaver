@@ -14,7 +14,7 @@
 // correct either way - two read-only GETs, no write grants minted.
 //
 // The exact query fields and paths mirror skillsmp's public search endpoints;
-// adjust them to the vendor's OpenAPI when the write surface (forgejo) lands.
+// adjust them to a one-time authoring reference if the vendor surface changes.
 wrap ward mcp skillsmp {
     base-url "skillsmp.com/api/v1"
 

@@ -6,7 +6,7 @@ Tracking: [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/
 
 **A cli-guard Guardfile, no handwritten code, becomes a Docker image that serves a working MCP over HTTP/SSE.**
 
-`ward mcp build forgejo-issues.mcp.kdl` bakes the guardfile plus one generic runtime into an OCI image whose ENTRYPOINT serves the Model Context Protocol over SSE/streamable-HTTP. Every `can` grant becomes one MCP tool. No per-server Go, no per-server Dockerfile, no per-server MCP handler, and - the part that surprises people - **no per-tool input schema**, because the engine derives it.
+`ward mcp build forgejo-issues.mcp.kdl` bakes the guardfile plus one generic runtime into an OCI image whose ENTRYPOINT serves the Model Context Protocol over SSE/streamable-HTTP. The `.mcp.kdl` is the whole contract: every `can` grant becomes one MCP tool, with method, path template, and typed params authored inline. No per-server Go, no per-server Dockerfile, no per-server MCP handler, and - the part that surprises people - **no per-tool input schema**, because the engine derives it from the inline op definition.
 
 ## Scope: the spec configures the image interior, and stops there
 
@@ -30,20 +30,20 @@ ward-mcp has **no relation to the ward codebase.** It is a driver over [cli-guar
 
 cli-guard already turns a Guardfile into a guarded surface, in three layers ([specverb.md](https://github.com/coilysiren/cli-guard/blob/main/docs/specverb.md)):
 
-* **L0 - upstream spec.** The vendor's OpenAPI/Swagger truth, embedded and pruned to the granted operations.
+* **L0 - upstream spec.** In cli-guard generally, the vendor's OpenAPI/Swagger truth, embedded and pruned to the granted operations. In ward-mcp's inline mode, the `.mcp.kdl` itself is the authored source and no fetched OpenAPI is a build input.
 * **L1 - policy IR.** The compiled operation set. verb+resource resolves to an operation by convention; `op` overrides.
 * **L2 - Guardfile.** The human authoring layer, pure KDL data, parsed never evaluated.
 
-The engine carries zero upstream knowledge, so **one engine drives every spec, no code changes.** Its `specverb.Build` mounts each grant as a generic guarded action: path params become positionals, query and body fields become typed flags, all validated before the wire call. cli-guard's own `kdl-specs` driver renders that into a no-code **CLI**. ward-mcp renders the same engine's operation set into **MCP tools** instead, served over HTTP.
+The engine carries zero upstream knowledge, so **one engine drives every spec, no code changes.** Its `specverb.Build` mounts each grant as a generic guarded action: path params become positionals, query and body fields become typed flags, all validated before the wire call. cli-guard's own `kdl-specs` driver renders that into a no-code **CLI**. ward-mcp renders the same engine's inline operation set into **MCP tools** instead, served over HTTP.
 
 ## What ward-mcp adds on top of cli-guard
 
 | layer | who provides it |
 |---|---|
-| spec parse, op resolution, prune, guard, request assembly, auth | cli-guard (unchanged) |
+| inline op parse, guard, request assembly, auth | cli-guard (unchanged) |
 | **grant -> MCP tool projection** (op descriptor -> JSON-schema + handler) | **ward-mcp** |
 | **SSE / streamable-HTTP transport** (the MCP wire protocol, interior) | **ward-mcp** (cli-mcp as reference) |
-| **image build** (guardfile + locks + runtime -> OCI image) | **ward-mcp** |
+| **image build** (guardfile + runtime -> OCI image) | **ward-mcp** |
 | **generic chart** (spec ConfigMap + Deployment + Service + Authelia route) | **ward-mcp** (`chart/`, spec-opaque) |
 | per-MCP values + rollout (which host, which SSM token, public-vs-tailnet) | `deploy` (consumes the chart) |
 
@@ -54,7 +54,7 @@ A tool call arrives over SSE, is validated against the derived schema, run throu
 A ward-mcp server **cannot exceed its guardfile**, because the guardfile is the only source of the tools.
 
 * Every `can` grant is one tool. There is no way to declare a tool the guardfile does not grant.
-* An unwritten `delete issue` grant means no `delete_issue` tool is minted. In the frozen `opcore.ParseInline` grammar this is **deny-by-absence**: the served surface is exactly the `can` grants, so leaving a grant out is the deletion guard (the `never` sugar the earlier draft imagined is not part of the shipped grammar - absence carries the same guarantee, enforced at parse time).
+* An unwritten `delete issue` grant means no `delete_issue` tool is minted. In the frozen `opcore.ParseInline` grammar this is **deny-by-absence**: the served surface is exactly the `can` grants, so leaving a grant out is the deletion guard.
 * `restrict owner matches coilyco-*` bounds every `{owner}` path param.
 * The argv metachar gate runs on inputs that compose into the URL (path + query); body fields (issue titles, markdown) are exempt, as in cli-guard.
 
@@ -63,15 +63,13 @@ Handing a write-capable MCP to an agent (deploy#40's ask) is defensible: the bla
 ## The pipeline (Guardfile -> image; deploy takes it from there)
 
 ```
-forgejo-issues.mcp.kdl        ─┐
-forgejo.swagger.v1.json.lock  ├─► ward mcp build ─► OCI image (serves MCP/HTTP)  │  consumed by deploy ─► k3s ─► SSE URL
-specverb.lock                 ─┘        (CI on push)                             │  (out of ward-mcp scope)
-                                        ward-mcp's boundary ───────────────────► │
+inline `.mcp.kdl` + shared runtime ─► ward mcp build ─► OCI image (serves MCP/HTTP) ─► deploy ─► k3s ─► SSE URL
+                                        (CI on push)                         (out of ward-mcp scope)
 ```
 
-1. **Author** the `*.mcp.kdl` (the only hand-edited artifact).
-2. **Lock** (cli-guard's existing online step) fetches upstream Swagger, prunes it to the granted ops + their transitive `$ref` schemas, writes the two committed locks (`<spec>.lock.json`, `specverb.lock`). Reused verbatim.
-3. **Build** bakes the guardfile + the two locks + the single static `ward-mcp` runtime into an image. The runtime is reused across every guardfile. The image ENTRYPOINT is `ward-mcp serve /spec/<name>.mcp.kdl --http :8080`: it parses the guardfile, registers one MCP tool per grant, and binds an HTTP/SSE listener on a default port.
+1. **Author** the `*.mcp.kdl` inline. The method, path, and typed params are the reviewable surface.
+2. **Build** bakes the guardfile plus the single static `ward-mcp` runtime into an image. There is no vendored OpenAPI JSON, no `.lock.json`, no prune output, and no `op` pin in the build input.
+3. The image ENTRYPOINT is `ward-mcp serve /spec/<name>.mcp.kdl --http :8080`: it parses the guardfile, registers one MCP tool per grant, and binds an HTTP/SSE listener on a default port.
 
 **Consuming the chart** - picking the host, the SSM token, and public-vs-tailnet for a given MCP, and rolling it out - is deploy's work (deploy#61, deploy#46), described there. ward-mcp ships the generic chart the values feed; deploy owns the values.
 
@@ -92,7 +90,7 @@ A push touching a `.mcp.kdl` triggers the image build in CI, the way kai-server 
 
 ## The spec dialect
 
-The body is the frozen ward-mcp inline grammar parsed by `opcore.ParseInline` - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` grants (each with its `path`/`query`/`body`/`set`); input schemas are derived, not authored. The `.mcp.kdl` suffix marks the ward-mcp target and keeps the file out of cli-guard's CLI-discovery glob.
+The body is the frozen ward-mcp inline grammar parsed by `opcore.ParseInline` - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` grants (each with its `path`/`query`/`body`/`set`); input schemas are derived from those inline op definitions, not authored separately. The `.mcp.kdl` suffix marks the ward-mcp target and keeps the file out of cli-guard's CLI-discovery glob.
 
 ### Resolved
 

@@ -1,8 +1,8 @@
 // forgejo-issues.mcp.kdl - the worked "hello world" ward-mcp spec.
 //
 // The body is the FROZEN ward-mcp inline grammar (ward-mcp#6), parsed by
-// cli-guard's `opcore.ParseInline` - the same []Descriptor the OpenAPI source
-// feeds, stated directly from KDL. The `.mcp.kdl` suffix marks this as a
+// cli-guard's `opcore.ParseInline` - stated directly from KDL, with no vendored
+// OpenAPI or lock file in the build. The `.mcp.kdl` suffix marks this as a
 // ward-mcp target - the interior of a Docker image that serves an HTTP/SSE MCP
 // server - and keeps it out of cli-guard's CLI-discovery glob. This spec
 // configures ONLY the image interior. Exposing the container (k3s Service,
