@@ -133,9 +133,9 @@ route:
     extraAudiences: []
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     # oauth2-proxy client-secret, pulled from SSM through the gate's own
-    # ExternalSecret. Default path derives from the release name. The
-    # cookie-secret is not here - the chart mints it (Helm lookup-generate) and
-    # preserves it across upgrades, so no manual SSM param is needed.
+    # ExternalSecret. The default is the shared /authelia/oidc-claude-client-
+    # secret path. The cookie-secret is generated in-cluster by ESO, so no
+    # manual SSM param or chart-owned Secret is needed.
     clientSecretRef: ""
     resources:
       requests:
