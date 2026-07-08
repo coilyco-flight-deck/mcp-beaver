@@ -70,10 +70,10 @@ Spec-opaque, so the interior-only scope of the spec holds. See
   overlay (Ingress + ForwardAuth + oauth2-proxy + RFC 9728 metadata sidecar)
   against a tailnet-only NodePort. A write surface stays tailnet-only; a read
   surface can go public-gated.
-* **self-minted cookie-secret** - the oauth2-proxy cookie-secret is chart-generated
-  (Helm `lookup`-generate) and preserved across `helm upgrade`, so a public deploy
-  needs no hand-created SSM param and re-rolls do not force a re-login. Only the
-  client-secret (the shared Authelia hash) stays SSM-backed.
+* **ESO-generated cookie-secret** - the oauth2-proxy cookie-secret is generated
+  in-cluster and preserved across `helm upgrade`, so a public deploy needs no
+  hand-created SSM param and re-rolls do not force a re-login. Only the
+  client-secret (the shared Authelia hash by default) stays SSM-backed.
 * **secret wiring** - `secret` maps each `value env <VAR>` the guardfile names to
   an SSM parameter path (chart mints an ExternalSecret) or an existing Secret ref.
 
