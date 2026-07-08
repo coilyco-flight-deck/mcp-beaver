@@ -15,7 +15,8 @@ URL.
 * **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`, pinned
   `v0.80.0`) parses the frozen ward-mcp inline grammar: `wrap` header, `base-url`,
   `auth`, `restrict`, and each `can <verb> <resource> { path/query/body/set }`
-  grant. Method is inferred from the verb, path params from the `{template}`.
+  grant. The `.mcp.kdl` is the whole contract. Method is inferred from the verb,
+  path params from the `{template}`.
 * **Grant → MCP tool projection** - each `Descriptor` becomes one tool named
   `verb_resource`, its `inputSchema` derived (draft-07) from the grant's
   path/query/body, its description the grant sentence. `internal/mcpserver`.
