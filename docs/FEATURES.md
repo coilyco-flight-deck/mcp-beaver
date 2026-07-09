@@ -51,11 +51,15 @@ consequence of a landed commit: the `publish` job in
 [`.forgejo/workflows/ci.yml`](../.forgejo/workflows/ci.yml) builds the Dockerfile
 on every push to `main` and pushes it to the in-cluster registry as
 `ward-mcp:<sha>` (mount-not-bake, so one image serves every guardfile - published
-when the runtime source changes, not per spec). The deploy CD resolves that sha
-into the chart's `image.tag` and rolls it. Mirrors the fleet's other MCP source
-repos (reddit-mcp / node-stats-mcp); the plain-http push to the insecure
-in-cluster registry needs no registry secret. See [ci.md](ci.md) for the gate +
-publish walkthrough and the Actions-unit enablement gotcha (ward-mcp#10).
+when the runtime source changes, not per spec). The `gate` and `publish` jobs
+run inside the pinned aos dev-base image
+(`forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:v0.195.0`), so the CI
+surface no longer bootstraps Go or the Docker CLI itself. The deploy CD resolves
+that sha into the chart's `image.tag` and rolls it. Mirrors the fleet's other
+MCP source repos (reddit-mcp / node-stats-mcp); the plain-http push to the
+insecure in-cluster registry needs no registry secret. See [ci.md](ci.md) for
+the gate + publish walkthrough and the Actions-unit enablement gotcha
+(ward-mcp#10).
 
 ## The generic Helm chart (`chart/`)
 

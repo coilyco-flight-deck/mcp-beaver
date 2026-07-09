@@ -12,11 +12,11 @@ keyed by sha. It mirrors the fleet's other MCP source repos (`reddit-mcp`,
 Runs on the `docker` label, on every `push` and `pull_request`. `docker` is the
 only label this Forgejo instance's runners advertise - `ubuntu-latest` is a
 GitHub-mirror label (the `.github/*` side, executed by GitHub, not Forgejo), so
-a gate pinned to it matches no Forgejo runner. `docker` resolves to
-`node:20-bookworm`, and `setup-go` drops Go 1.25 into it.
+a gate pinned to it matches no Forgejo runner. The job now runs inside the
+pinned aos dev-base image, which already ships Go and the Docker CLI.
 
-* **checkout + setup-go** - `actions/checkout@v4`, `actions/setup-go@v5` pinned to
-  Go 1.25.
+* **checkout + dev-base container** - `actions/checkout@v4`, then
+  `container: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:v0.195.0`.
 * **`GOPRIVATE=forgejo.coilysiren.me`** - cli-guard is a private forgejo module
   fetched anonymously, so `GOPRIVATE` keeps it off the public proxy and sumdb.
   The Dockerfile build sets the same var for its own cli-guard fetch.
@@ -30,9 +30,9 @@ Runs on the `docker` label, `needs: [gate]`, guarded by
 pull request, never on a feature branch. A green source commit on `main` is what
 produces `192.168.0.194:30500/ward-mcp:<sha>`.
 
-* **docker CLI** - the `docker` runner resolves to `node:20-bookworm`, which
-  ships no docker CLI, so the job pulls the static binary in and talks to the
-  DinD sidecar over `DOCKER_HOST`.
+* **dev-base container** - the job also runs inside
+  `forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:v0.195.0`, which already
+  ships the Docker CLI.
 * **resolve docker host** - the sidecar shares the runner pod's netns on `:2375`
   but the job container sits on a separate per-workflow bridge, so the step
   probes candidate hosts and pins the first that answers.
