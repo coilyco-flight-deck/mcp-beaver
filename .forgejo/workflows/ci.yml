@@ -19,16 +19,13 @@ jobs:
   # it, and it resolves to node:20-bookworm. `ubuntu-latest` is a GitHub-mirror
   # label (the .github/* side), unknown to the Forgejo runner, so a gate pinned
   # to it matched no runner and the repo queued zero tasks (ward-mcp#10).
-  # setup-go drops Go 1.25 into bookworm (which ships git + curl + tar).
   gate:
     runs-on: docker
+    container: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:v0.195.0
     env:
       GOPRIVATE: forgejo.coilysiren.me
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
       - name: build
         run: go build ./...
       - name: vet
@@ -45,22 +42,11 @@ jobs:
   # sha (scripts/rollout.sh), and the chart's image.tag is the resolved sha.
   publish:
     runs-on: docker
+    container: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:v0.195.0
     needs: [gate]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
-      # The `docker` runner label resolves to node:20-bookworm, which ships
-      # git + curl but no docker CLI. Pull it in as a static binary; docker
-      # talks to the DinD sidecar over DOCKER_HOST. Same shape as the other MCPs.
-      - name: Install docker CLI
-        run: |
-          set -euo pipefail
-          docker_cli_ver=$(curl -fsSL https://download.docker.com/linux/static/stable/x86_64/ \
-            | grep -oE 'docker-[0-9]+\.[0-9]+\.[0-9]+\.tgz' | sort -V | tail -1 \
-            | sed -E 's/^docker-(.*)\.tgz$/\1/')
-          curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${docker_cli_ver}.tgz" \
-            | tar -xz -C /tmp
-          install /tmp/docker/docker /usr/local/bin/docker
       # The DinD sidecar shares the runner pod's netns on :2375, but the job
       # container sits on a separate per-workflow bridge - so probe candidate
       # hosts and pin the first that answers. Same shape as the other MCPs.
