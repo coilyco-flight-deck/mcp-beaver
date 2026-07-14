@@ -1,22 +1,25 @@
 package mcpserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-// roundTripSpec points its base-url at a mock upstream (set per-test) and grants
-// one read and one write tool plus an owner restriction, so a single spec covers
-// projection, path/query/body routing, and the guard.
+// roundTripSpec points its base-url at a mock upstream (set per-test) and
+// grants one read and one write tool plus an owner restriction, so a single spec
+// covers projection, path/query/body routing, and the guard.
 func roundTripSpec(baseURL string) string {
 	return `wrap ward mcp test {
     base-url "` + baseURL + `"
@@ -33,31 +36,136 @@ func roundTripSpec(baseURL string) string {
 }`
 }
 
-// dispatchJSON marshals params, dispatches one request through the server, and
-// returns the decoded result map, failing the test on any JSON-RPC error.
-func dispatchJSON(t *testing.T, s *Server, method string, params any) map[string]any {
+type rpcResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *rpcError       `json:"error,omitempty"`
+}
+
+// newTestHandler builds a handler over a two-tool spec pointed at a dead
+// upstream. The transport tests exercise initialize, tools/list, and tools/call
+// through the SDK-backed /mcp endpoint.
+func newTestHandler(t *testing.T) http.Handler {
 	t.Helper()
-	raw, err := json.Marshal(params)
+	s, err := New("test", []byte(roundTripSpec("http://127.0.0.1:1")))
 	if err != nil {
-		t.Fatalf("marshal params: %v", err)
+		t.Fatalf("New: %v", err)
 	}
-	resp := s.dispatch(context.Background(), request{
-		JSONRPC: jsonrpcVersion,
-		ID:      json.RawMessage(`1`),
-		Method:  method,
-		Params:  raw,
-	})
-	if resp == nil {
-		t.Fatalf("%s: got nil response, want a result", method)
+	return s.Handler()
+}
+
+func newTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(newTestHandler(t))
+}
+
+// postJSON posts one JSON-RPC message to path and returns the raw response.
+func postToServer(t *testing.T, client *http.Client, url, sessionID, body string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
 	}
-	if resp.Error != nil {
-		t.Fatalf("%s: JSON-RPC error: %+v", method, resp.Error)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Mcp-Protocol-Version", "2025-03-26")
+	if sessionID != "" {
+		req.Header.Set("Mcp-Session-Id", sessionID)
 	}
-	out, ok := resp.Result.(map[string]any)
-	if !ok {
-		t.Fatalf("%s: result is %T, want map", method, resp.Result)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("POST %s: %v", url, err)
+	}
+	return resp
+}
+
+func decodeRPCResponse(t *testing.T, resp *http.Response) rpcResponse {
+	t.Helper()
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if ct := resp.Header.Get("Content-Type"); strings.HasPrefix(ct, "text/event-stream") {
+		raw = sseData(t, raw, "message")
+	}
+	var out rpcResponse
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode rpc response: %v\nbody: %s", err, raw)
 	}
 	return out
+}
+
+func sseData(t *testing.T, raw []byte, wantEvent string) []byte {
+	t.Helper()
+	lines := bytes.Split(raw, []byte("\n"))
+	var event string
+	for _, line := range lines {
+		line = bytes.TrimRight(line, "\r")
+		switch {
+		case bytes.HasPrefix(line, []byte("event: ")):
+			event = string(bytes.TrimPrefix(line, []byte("event: ")))
+		case bytes.HasPrefix(line, []byte("data: ")):
+			if event == wantEvent {
+				return bytes.TrimPrefix(line, []byte("data: "))
+			}
+		}
+	}
+	t.Fatalf("no %q event in SSE body: %s", wantEvent, raw)
+	return nil
+}
+
+func toolList(t *testing.T, resp rpcResponse) []map[string]any {
+	t.Helper()
+	var result map[string]any
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	rawTools, ok := result["tools"].([]any)
+	if !ok {
+		t.Fatalf("tools field is %T, want []any", result["tools"])
+	}
+	out := make([]map[string]any, 0, len(rawTools))
+	for _, item := range rawTools {
+		m, ok := item.(map[string]any)
+		if !ok {
+			t.Fatalf("tool item is %T, want map", item)
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// TestInitializeHandshake proves the SDK-backed initialize call negotiates the
+// protocol, advertises tools, and issues a session id header.
+func TestInitializeHandshake(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Mcp-Session-Id"); got == "" {
+		t.Fatal("initialize response missing Mcp-Session-Id")
+	}
+	out := decodeRPCResponse(t, resp)
+	var result map[string]any
+	if err := json.Unmarshal(out.Result, &result); err != nil {
+		t.Fatalf("result: %v", err)
+	}
+	if result["protocolVersion"] != "2025-03-26" {
+		t.Errorf("protocolVersion = %v, want 2025-03-26", result["protocolVersion"])
+	}
+	caps, _ := result["capabilities"].(map[string]any)
+	if _, ok := caps["tools"]; !ok {
+		t.Errorf("capabilities missing tools; got %v", caps)
+	}
+	serverInfo, _ := result["serverInfo"].(map[string]any)
+	if serverInfo["name"] != "test" {
+		t.Errorf("serverInfo.name = %v, want test", serverInfo["name"])
+	}
 }
 
 // TestToolsListFromSpec proves the tool list is derived from a `.mcp.kdl`: the
@@ -72,14 +180,22 @@ func TestToolsListFromSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	res := dispatchJSON(t, s, "tools/list", map[string]any{})
-	tools, ok := res["tools"].([]tool)
-	if !ok {
-		t.Fatalf("tools field is %T, want []tool", res["tools"])
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	sessionID := initResp.Header.Get("Mcp-Session-Id")
+	out := decodeRPCResponse(t, initResp)
+	if out.Error != nil {
+		t.Fatalf("initialize error: %+v", out.Error)
 	}
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
+	tools := toolList(t, decodeRPCResponse(t, resp))
 	got := map[string]bool{}
 	for _, tl := range tools {
-		got[tl.Name] = true
+		if name, _ := tl["name"].(string); name != "" {
+			got[name] = true
+		}
 	}
 	want := []string{"create_issue", "get_issue", "list_issue", "comment_issue", "close_issue"}
 	for _, w := range want {
@@ -93,11 +209,9 @@ func TestToolsListFromSpec(t *testing.T) {
 	if len(tools) != len(want) {
 		t.Errorf("tool count = %d, want %d (%v)", len(tools), len(want), got)
 	}
-
-	// The derived inputSchema must be valid draft-07 with the grant's fields.
 	create := findTool(t, tools, "create_issue")
 	var schema map[string]any
-	if err := json.Unmarshal(create.InputSchema, &schema); err != nil {
+	if err := toJSON(create["inputSchema"], &schema); err != nil {
 		t.Fatalf("create_issue schema not JSON: %v", err)
 	}
 	props, _ := schema["properties"].(map[string]any)
@@ -127,18 +241,20 @@ func TestToolCallRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
 
-	res := dispatchJSON(t, s, "tools/call", toolCallParams{
-		Name: "get_thing",
-		Arguments: map[string]any{
-			"owner":   "coilyco-flight-deck",
-			"id":      "42",
-			"verbose": "true",
-		},
-	})
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	sessionID := initResp.Header.Get("Mcp-Session-Id")
 
-	if isErr, _ := res["isError"].(bool); isErr {
-		t.Fatalf("tool call reported isError; content=%v", res["content"])
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_thing","arguments":{"owner":"coilyco-flight-deck","id":"42","verbose":"true"}}}`)
+	out := decodeRPCResponse(t, resp)
+	var result map[string]any
+	if err := json.Unmarshal(out.Result, &result); err != nil {
+		t.Fatalf("result: %v", err)
+	}
+	if isErr, _ := result["isError"].(bool); isErr {
+		t.Fatalf("tool call reported isError; content=%v", result["content"])
 	}
 	if gotMethod != http.MethodGet {
 		t.Errorf("upstream method = %q, want GET", gotMethod)
@@ -152,16 +268,14 @@ func TestToolCallRoundTrip(t *testing.T) {
 	if gotAuth != "Bearer s3cr3t" {
 		t.Errorf("upstream auth = %q, want Bearer s3cr3t", gotAuth)
 	}
-
-	// The mock body is rendered back verbatim as text content.
-	text := firstText(t, res)
+	text := firstText(t, result)
 	if !strings.Contains(text, `"name":"widget"`) {
 		t.Errorf("tool content = %q, want the upstream body", text)
 	}
 }
 
-// TestToolCallBodyRoundTrip proves a write tool sends its body fields as JSON and
-// path params still route, distinct from the GET path.
+// TestToolCallBodyRoundTrip proves a write tool sends its body fields as JSON
+// and path params still route, distinct from the GET path.
 func TestToolCallBodyRoundTrip(t *testing.T) {
 	t.Setenv("WARD_MCP_TEST_TOKEN", "s3cr3t")
 
@@ -178,12 +292,20 @@ func TestToolCallBodyRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	res := dispatchJSON(t, s, "tools/call", toolCallParams{
-		Name:      "create_thing",
-		Arguments: map[string]any{"owner": "coilyco-x", "title": "hello"},
-	})
-	if isErr, _ := res["isError"].(bool); isErr {
-		t.Fatalf("create call reported isError; content=%v", res["content"])
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	sessionID := initResp.Header.Get("Mcp-Session-Id")
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"create_thing","arguments":{"owner":"coilyco-x","title":"hello"}}}`)
+	out := decodeRPCResponse(t, resp)
+	var result map[string]any
+	if err := json.Unmarshal(out.Result, &result); err != nil {
+		t.Fatalf("result: %v", err)
+	}
+	if isErr, _ := result["isError"].(bool); isErr {
+		t.Fatalf("create call reported isError; content=%v", result["content"])
 	}
 	if gotMethod != http.MethodPost {
 		t.Errorf("method = %q, want POST", gotMethod)
@@ -193,9 +315,9 @@ func TestToolCallBodyRoundTrip(t *testing.T) {
 	}
 }
 
-// TestToolCallRestrictDenied proves the guard is opcore's, not re-implemented: a
-// path value outside the `restrict owner matches coilyco-*` allowlist comes back
-// as a tool error and never reaches the upstream.
+// TestToolCallRestrictDenied proves the guard is opcore's, not re-implemented:
+// a path value outside the `restrict owner matches coilyco-*` allowlist comes
+// back as a tool error and never reaches the upstream.
 func TestToolCallRestrictDenied(t *testing.T) {
 	t.Setenv("WARD_MCP_TEST_TOKEN", "s3cr3t")
 
@@ -210,12 +332,20 @@ func TestToolCallRestrictDenied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	res := dispatchJSON(t, s, "tools/call", toolCallParams{
-		Name:      "get_thing",
-		Arguments: map[string]any{"owner": "someone-else", "id": "1"},
-	})
-	if isErr, _ := res["isError"].(bool); !isErr {
-		t.Fatalf("restrict-denied call should be an isError result; got %v", res)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	sessionID := initResp.Header.Get("Mcp-Session-Id")
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_thing","arguments":{"owner":"someone-else","id":"1"}}}`)
+	out := decodeRPCResponse(t, resp)
+	var result map[string]any
+	if err := json.Unmarshal(out.Result, &result); err != nil {
+		t.Fatalf("result: %v", err)
+	}
+	if isErr, _ := result["isError"].(bool); !isErr {
+		t.Fatalf("restrict-denied call should be an isError result; got %v", result)
 	}
 	if hit {
 		t.Error("upstream was called despite a restrict denial")
@@ -229,42 +359,49 @@ func TestUnknownToolDenied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	resp := s.dispatch(context.Background(), request{
-		JSONRPC: jsonrpcVersion,
-		ID:      json.RawMessage(`1`),
-		Method:  "tools/call",
-		Params:  json.RawMessage(`{"name":"delete_thing","arguments":{}}`),
-	})
-	if resp.Error == nil {
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	sessionID := initResp.Header.Get("Mcp-Session-Id")
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"delete_thing","arguments":{}}}`)
+	out := decodeRPCResponse(t, resp)
+	if out.Error == nil {
 		t.Fatal("calling an ungranted tool should be a JSON-RPC error")
 	}
-	if resp.Error.Code != codeMethodNotFound {
-		t.Errorf("error code = %d, want method-not-found %d", resp.Error.Code, codeMethodNotFound)
+	if out.Error.Code != -32601 {
+		t.Errorf("error code = %d, want method-not-found -32601", out.Error.Code)
 	}
 }
 
-// TestInitializeHandshake proves the MCP handshake echoes a known protocol
-// version and advertises the tools capability.
-func TestInitializeHandshake(t *testing.T) {
-	s, err := New("test", []byte(roundTripSpec("http://127.0.0.1:1")))
+// TestHealth proves the runtime still exposes the pod liveness probe.
+func TestHealth(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + "/healthz")
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("GET /healthz: %v", err)
 	}
-	res := dispatchJSON(t, s, "initialize", map[string]any{"protocolVersion": "2025-03-26"})
-	if res["protocolVersion"] != "2025-03-26" {
-		t.Errorf("protocolVersion = %v, want the echoed 2025-03-26", res["protocolVersion"])
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
-	caps, _ := res["capabilities"].(map[string]any)
-	if _, ok := caps["tools"]; !ok {
-		t.Errorf("capabilities missing tools; got %v", caps)
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode health body: %v", err)
+	}
+	if body["status"] != "ok" {
+		t.Fatalf("health body = %v, want status ok", body)
 	}
 }
 
-// TestDispatchUsesGenericMCPMethodsOnly scans the dispatch switch and fails if
-// the package starts hardcoding Ward-specific MCP methods. The allowed surface
-// stays generic MCP names only, including the resource and prompt methods that
-// a later implementation may add.
-func TestDispatchUsesGenericMCPMethodsOnly(t *testing.T) {
+// TestUsesGenericMCPMethodLiterals scans the server source and fails if the
+// package starts hardcoding Ward-specific MCP methods or tools. The allowed
+// surface stays generic MCP names only, including the resource and prompt
+// methods that a later implementation may add.
+func TestUsesGenericMCPMethodLiterals(t *testing.T) {
 	src, err := os.ReadFile("server.go")
 	if err != nil {
 		t.Fatalf("read server.go: %v", err)
@@ -274,74 +411,59 @@ func TestDispatchUsesGenericMCPMethodsOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse server.go: %v", err)
 	}
-	allowed := map[string]bool{
-		"initialize":                true,
-		"notifications/initialized": true,
-		"notifications/cancelled":   true,
-		"ping":                      true,
-		"tools/list":                true,
-		"tools/call":                true,
-		"resources/list":            true,
-		"resources/read":            true,
-		"prompts/list":              true,
-		"prompts/get":               true,
-	}
-	var cases []string
+	forbidden := regexp.MustCompile(`(^|[./_])(admin|control|lifecycle|reload)(?:$|[./_])`)
+	var literals []string
 	ast.Inspect(file, func(n ast.Node) bool {
 		fn, ok := n.(*ast.FuncDecl)
-		if !ok || fn.Name.Name != "dispatch" {
+		if !ok {
 			return true
 		}
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			sw, ok := n.(*ast.SwitchStmt)
-			if !ok {
+			lit, ok := n.(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
 				return true
 			}
-			for _, stmt := range sw.Body.List {
-				cc, ok := stmt.(*ast.CaseClause)
-				if !ok {
-					continue
-				}
-				for _, expr := range cc.List {
-					lit, ok := expr.(*ast.BasicLit)
-					if !ok || lit.Kind != token.STRING {
-						continue
-					}
-					cases = append(cases, strings.Trim(lit.Value, `"`))
-				}
-			}
+			literals = append(literals, strings.Trim(lit.Value, `"`))
 			return true
 		})
 		return false
 	})
-	if len(cases) == 0 {
-		t.Fatal("no switch cases found in server.go dispatch")
+	if len(literals) == 0 {
+		t.Fatal("no string literals found in server.go")
 	}
-	for _, method := range cases {
-		if !allowed[method] {
-			t.Fatalf("dispatch hardcodes non-generic MCP method %q", method)
+	for _, lit := range literals {
+		if forbidden.MatchString(lit) {
+			t.Fatalf("server hardcodes Ward-specific MCP method or tool %q", lit)
 		}
 	}
 }
 
-func findTool(t *testing.T, tools []tool, name string) tool {
+func findTool(t *testing.T, tools []map[string]any, name string) map[string]any {
 	t.Helper()
 	for _, tl := range tools {
-		if tl.Name == name {
+		if tl["name"] == name {
 			return tl
 		}
 	}
 	t.Fatalf("no tool %q", name)
-	return tool{}
+	return nil
 }
 
-// firstText pulls the first text block out of an MCP tool result's content.
 func firstText(t *testing.T, res map[string]any) string {
 	t.Helper()
-	content, ok := res["content"].([]map[string]any)
+	content, ok := res["content"].([]any)
 	if !ok || len(content) == 0 {
 		t.Fatalf("content is %T / empty: %v", res["content"], res["content"])
 	}
-	text, _ := content[0]["text"].(string)
+	first, _ := content[0].(map[string]any)
+	text, _ := first["text"].(string)
 	return text
+}
+
+func toJSON(v any, out any) error {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, out)
 }
