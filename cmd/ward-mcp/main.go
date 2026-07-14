@@ -1,13 +1,14 @@
 // Command ward-mcp is the generic runtime that renders one `.mcp.kdl` spec into
-// a guarded MCP server over HTTP/SSE. It is the single static binary baked into
+// a guarded MCP server over HTTP. It is the single static binary baked into
 // every ward-mcp image; the spec is the only thing that varies. There is no
 // per-guardfile Go and no per-server handler.
 //
 //	ward-mcp serve /spec/<name>.mcp.kdl --http :8080
 //
 // It parses the spec through cli-guard's opcore engine, projects one MCP tool
-// per grant, and binds an HTTP listener that speaks MCP over streamable HTTP and
-// legacy SSE. It never binds stdio: these run as remote pods reached by URL.
+// per grant, and binds an HTTP listener that speaks MCP over the SDK-backed
+// streamable HTTP transport. It never binds stdio: these run as remote pods
+// reached by URL.
 package main
 
 import (
@@ -46,7 +47,7 @@ func run(argv []string) error {
 // positional; --http sets the bind address (default :8080).
 func runServe(argv []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (SSE / streamable-HTTP)")
+	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
 	// The documented entrypoint writes the spec before --http
 	// (`serve /spec/x.mcp.kdl --http :8080`), so reorder the flags ahead of the
 	// positional - flag.Parse stops at the first non-flag argument otherwise.
@@ -67,7 +68,7 @@ func runServe(argv []string) error {
 		return fmt.Errorf("parse spec %q: %w", specPath, err)
 	}
 
-	fmt.Fprintf(os.Stderr, "ward-mcp: serving %s on %s (MCP over /mcp streamable-HTTP and /sse)\n", specPath, *addr)
+	fmt.Fprintf(os.Stderr, "ward-mcp: serving %s on %s (SDK-backed MCP over /mcp)\n", specPath, *addr)
 	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
 	return server.ListenAndServe()
 }

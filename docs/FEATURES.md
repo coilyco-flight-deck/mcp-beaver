@@ -8,9 +8,9 @@ chart.
 ## `ward-mcp serve <spec.mcp.kdl> --http :addr`
 
 The generic runtime, and the only command. One static binary renders any
-`.mcp.kdl` spec into a guarded MCP server over HTTP/SSE. No per-guardfile Go, no
-per-server handler. It never binds stdio - these run as remote pods reached by
-URL.
+`.mcp.kdl` spec into a guarded MCP server over the official MCP Go SDK's
+streamable HTTP transport at `/mcp`. No per-guardfile Go, no per-server
+handler. It never binds stdio - these run as remote pods reached by URL.
 
 * **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`, pinned
   `v0.80.0`) parses the frozen ward-mcp inline grammar: `wrap` header, `base-url`,
@@ -30,13 +30,11 @@ URL.
 
 ## Transports
 
-Two MCP HTTP transports, both interior to the image:
+The runtime exposes the SDK-backed streamable HTTP transport and a liveness
+probe:
 
-* **Streamable HTTP** (`/mcp`, 2025-03-26+) - one POST carries a JSON-RPC
-  message; the reply is JSON or a single SSE frame per the client's `Accept`.
-* **Legacy HTTP+SSE** (`/sse` + `/messages`, 2024-11-05) - `GET /sse` opens the
-  stream and names the POST-back endpoint; `POST /messages` feeds a message whose
-  reply is pushed back over the stream.
+* **Streamable HTTP** (`/mcp`, SDK-backed) - `initialize`, `tools/list`, and
+  `tools/call` ride the MCP Go SDK's session lifecycle and session IDs.
 * **Health** - `GET /healthz` for a pod liveness probe.
 
 Supported MCP methods: `initialize`, `notifications/initialized`, `ping`,
@@ -91,7 +89,8 @@ one values file. ward-mcp ships the generic chart; deploy owns the values.
 * [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl) - the
   worked "hello world": five guarded issue tools scoped to `coilyco-*` / `kai`.
 * [`examples/skillsmp.mcp.kdl`](../examples/skillsmp.mcp.kdl) - the first
-  end-to-end target: two read tools over SSE against skillsmp.com.
+  end-to-end target: two read tools over the SDK-backed transport against
+  skillsmp.com.
 * [`examples/*.values.yaml`](../examples/) - reference deploy-side chart values: a
   public Authelia-gated read (`skillsmp`) and a tailnet-only write
   (`forgejo-issues`).
