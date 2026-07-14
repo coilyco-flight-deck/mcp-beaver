@@ -4,80 +4,84 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/cli-guard/http/opcore"
 	"forgejo.coilysiren.me/coilyco-flight-deck/cli-guard/pkg/valuesource"
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// defaultProtocolVersion is the MCP revision ward-mcp advertises when a client
-// offers nothing we recognize. Known revisions are echoed back verbatim.
-const defaultProtocolVersion = "2025-06-18"
-
-// knownProtocolVersions are the MCP revisions ward-mcp will speak; a client
-// asking for one gets it echoed, otherwise it is nudged to the default.
-var knownProtocolVersions = map[string]bool{
-	"2024-11-05": true,
-	"2025-03-26": true,
-	"2025-06-18": true,
-}
-
-// Server is a parsed `.mcp.kdl` projected into MCP tools plus the opcore runtime
-// that fires them. It is transport-agnostic: dispatch turns one JSON-RPC request
-// into one response, and the HTTP/SSE transports move the bytes. See serve.go.
+// Server is a parsed `.mcp.kdl` projected into MCP tools plus the official MCP
+// Go SDK runtime that serves them over transport/session plumbing.
 type Server struct {
-	name    string
-	tools   []tool            // projected tools, in a stable order
-	byName  map[string]opTool // tool name -> descriptor + runtime binding
-	runtime *opcore.Runtime
+	name string
+	sdk  *mcp.Server
 }
 
-// tool is the MCP-envelope view of one grant: what tools/list emits.
-type tool struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	InputSchema json.RawMessage `json:"inputSchema"`
-}
-
-// opTool binds a projected tool name to its opcore descriptor and the neutral
-// input schema (whose Location hints route each argument onto path/query/body).
-type opTool struct {
-	desc   opcore.Descriptor
-	schema opcore.Schema
-}
-
-// New parses a `.mcp.kdl` source and builds the server: one MCP tool per grant,
-// an opcore.Runtime wired to the shared value providers (env, file, literal).
-// It fails closed on any parse or projection error, exactly as opcore does.
+// New parses a `.mcp.kdl` source and builds the SDK-backed server: one MCP tool
+// per grant, with opcore still owning the guardfile parse, guard, and upstream
+// request execution.
 func New(name string, src []byte) (*Server, error) {
 	descs, cfg, err := opcore.ParseInline(src)
 	if err != nil {
 		return nil, err
 	}
-	// The KDL states no opaque values; the consumer supplies the providers that
-	// resolve `value env "..."` at request time. Builtins cover env/file/literal.
 	cfg.Providers = valuesource.Builtins()
 	rt := opcore.NewRuntime(cfg)
 
-	s := &Server{name: name, byName: map[string]opTool{}, runtime: rt}
-	for _, d := range descs {
-		name := toolName(d)
-		if _, dup := s.byName[name]; dup {
-			// Two grants projecting to the same tool name is unresolvable; fail
-			// closed rather than silently shadow one.
-			return nil, fmt.Errorf("ward-mcp: duplicate tool name %q from grant %q", name, d.Grant)
-		}
-		schema := d.InputSchema()
-		s.tools = append(s.tools, tool{
-			Name:        name,
-			Description: describe(d),
-			InputSchema: json.RawMessage(schema.JSONSchema()),
-		})
-		s.byName[name] = opTool{desc: d, schema: schema}
+	s := &Server{
+		name: name,
+		sdk:  mcp.NewServer(&mcp.Implementation{Name: name, Version: "0.1.0"}, nil),
 	}
-	sort.Slice(s.tools, func(i, j int) bool { return s.tools[i].Name < s.tools[j].Name })
+
+	seen := map[string]bool{}
+	sort.Slice(descs, func(i, j int) bool { return toolName(descs[i]) < toolName(descs[j]) })
+	for _, d := range descs {
+		desc := d
+		tname := toolName(desc)
+		if seen[tname] {
+			return nil, fmt.Errorf("ward-mcp: duplicate tool name %q from grant %q", tname, desc.Grant)
+		}
+		seen[tname] = true
+		t := &mcp.Tool{
+			Name:        tname,
+			Description: describe(desc),
+			InputSchema: json.RawMessage(desc.InputSchema().JSONSchema()),
+		}
+		s.sdk.AddTool(t, toolHandler(rt, desc))
+	}
+	s.sdk.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			res, err := next(ctx, method, req)
+			if method == "tools/call" {
+				if jerr, ok := err.(*jsonrpc.Error); ok && jerr.Code == jsonrpc.CodeInvalidParams {
+					if strings.HasPrefix(jerr.Message, "unknown tool") {
+						return nil, &jsonrpc.Error{Code: jsonrpc.CodeMethodNotFound, Message: jerr.Message, Data: jerr.Data}
+					}
+				}
+			}
+			return res, err
+		}
+	})
+
 	return s, nil
+}
+
+// Handler exposes the runtime on /mcp using the official SDK streamable HTTP
+// handler, plus the pod health probe.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		return s.sdk
+	}, &mcp.StreamableHTTPOptions{JSONResponse: true}))
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	return mux
 }
 
 // toolName projects a descriptor onto its MCP tool name: `verb_resource`, e.g.
@@ -96,49 +100,20 @@ func describe(d opcore.Descriptor) string {
 	return d.Grant
 }
 
-// dispatch turns one inbound JSON-RPC request into its response, or nil when the
-// message is a notification (which takes no reply). It is the single entry point
-// both transports share.
-func (s *Server) dispatch(ctx context.Context, req request) *response {
-	if req.JSONRPC != jsonrpcVersion {
-		if req.isNotification() {
-			return nil
+func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor) mcp.ToolHandler {
+	schema := desc.InputSchema()
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var rawArgs map[string]any
+		if len(req.Params.Arguments) > 0 {
+			if err := json.Unmarshal(req.Params.Arguments, &rawArgs); err != nil {
+				return toolError(fmt.Errorf("invalid tool arguments: %w", err)), nil
+			}
 		}
-		return errorResponse(req.ID, codeInvalidRequest, "jsonrpc must be "+jsonrpcVersion)
-	}
-	switch req.Method {
-	case "initialize":
-		return s.handleInitialize(req)
-	case "notifications/initialized", "notifications/cancelled":
-		return nil // notifications: acknowledged by the transport, no reply
-	case "ping":
-		return result(req.ID, map[string]any{})
-	case "tools/list":
-		return result(req.ID, map[string]any{"tools": s.tools})
-	case "tools/call":
-		return s.handleToolsCall(ctx, req)
-	default:
-		if req.isNotification() {
-			return nil
+		args := splitArgs(schema, rawArgs)
+		resp, err := (&opcore.Operation{Desc: desc, RT: rt}).Execute(ctx, args)
+		if err != nil {
+			return toolError(err), nil
 		}
-		return errorResponse(req.ID, codeMethodNotFound, "unknown method: "+req.Method)
+		return toolSuccess(resp), nil
 	}
-}
-
-// handleInitialize answers the MCP handshake: echo a protocol version we speak
-// (or nudge to the default), advertise the tools capability, and name ourselves.
-func (s *Server) handleInitialize(req request) *response {
-	var params struct {
-		ProtocolVersion string `json:"protocolVersion"`
-	}
-	_ = json.Unmarshal(req.Params, &params)
-	proto := defaultProtocolVersion
-	if knownProtocolVersions[params.ProtocolVersion] {
-		proto = params.ProtocolVersion
-	}
-	return result(req.ID, map[string]any{
-		"protocolVersion": proto,
-		"capabilities":    map[string]any{"tools": map[string]any{}},
-		"serverInfo":      map[string]any{"name": s.name, "version": "0.1.0"},
-	})
 }
