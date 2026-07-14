@@ -63,7 +63,7 @@ func runServe(argv []string) error {
 	if err != nil {
 		return fmt.Errorf("read spec %q: %w", specPath, err)
 	}
-	srv, err := mcpserver.New(serverName(specPath), src)
+	srv, err := mcpserver.New(serverName(specPath), specPath, src)
 	if err != nil {
 		return fmt.Errorf("parse spec %q: %w", specPath, err)
 	}

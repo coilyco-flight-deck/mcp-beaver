@@ -55,8 +55,23 @@ ward-mcp intentionally exposes only the generic MCP protocol surface. It keeps
 `initialize`, `ping`, `tools/list`, and `tools/call` today, and any future
 resource or prompt support must stay on the generic MCP names (`resources/list`,
 `resources/read`, `prompts/list`, `prompts/get`). Ward-specific admin,
-lifecycle, reload, or control verbs do not belong in this repo or in the future
-agent-guard-mcp surface.
+lifecycle, reload, or control verbs do not belong in the MCP surface.
+
+## Operator HTTP boundary: non-MCP control and inspection
+
+The runtime also serves operator-only HTTP endpoints outside the MCP tool
+surface:
+
+* `GET /healthz` - unactionable liveness and readiness.
+* `GET /admin/describe` - a safe runtime summary with the loaded guardfile,
+  projected tool count, transport mode, upstream presence, and non-secret
+  config facts.
+* `POST /admin/reload` - explicit operator reload, currently restart-only. The
+  runtime cannot safely swap its guarded state in place, so the endpoint says
+  restart required instead of pretending otherwise.
+
+These endpoints sit behind the same deployment/auth assumptions as the other
+operator-only surfaces. The MCP surface stays model-facing only.
 
 ## The safety story - the guardfile IS the tool surface
 

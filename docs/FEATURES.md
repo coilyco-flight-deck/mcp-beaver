@@ -37,6 +37,18 @@ probe:
   `tools/call` ride the MCP Go SDK's session lifecycle and session IDs.
 * **Health** - `GET /healthz` for a pod liveness probe.
 
+## Operator HTTP
+
+Non-MCP endpoints for runtime inspection and control. These are HTTP surfaces
+for operators, not MCP tools:
+
+* **Describe** - `GET /admin/describe` returns the loaded guardfile name/path,
+  projected tool count, transport mode, upstream presence, and safe non-secret
+  config facts.
+* **Reload** - `POST /admin/reload` is explicit but currently restart-only. The
+  runtime cannot safely hot-reload its guarded state in place, so the endpoint
+  reports restart required instead.
+
 Supported MCP methods: `initialize`, `notifications/initialized`,
 `notifications/cancelled`, `ping`, `tools/list`, `tools/call`. Any future
 resource or prompt support must stay on the generic MCP surface

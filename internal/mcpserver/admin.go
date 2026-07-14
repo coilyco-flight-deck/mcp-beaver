@@ -1,0 +1,125 @@
+package mcpserver
+
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+
+	"forgejo.coilysiren.me/coilyco-flight-deck/cli-guard/http/opcore"
+)
+
+const (
+	adminDescribePath = "/admin/describe"
+	adminReloadPath   = "/admin/reload"
+	transportMode     = "streamable-http"
+)
+
+type adminDescribeResponse struct {
+	Server struct {
+		Name     string `json:"name"`
+		Spec     string `json:"spec"`
+		SpecPath string `json:"specPath,omitempty"`
+	} `json:"server"`
+	Transport struct {
+		Mode       string `json:"mode"`
+		MCPPath    string `json:"mcpPath"`
+		HealthPath string `json:"healthPath"`
+		AdminPath  string `json:"adminPath"`
+	} `json:"transport"`
+	Projection struct {
+		ToolCount int      `json:"toolCount"`
+		Tools     []string `json:"tools"`
+	} `json:"projection"`
+	Upstreams []adminUpstreamResponse `json:"upstreams,omitempty"`
+	Config    adminConfigResponse     `json:"config"`
+	Reload    adminReloadResponse     `json:"reload"`
+}
+
+type adminUpstreamResponse struct {
+	Kind string `json:"kind"`
+	Mode string `json:"mode"`
+}
+
+type adminConfigResponse struct {
+	AuthScheme    string `json:"authScheme"`
+	AuthHeader    string `json:"authHeader,omitempty"`
+	AuthPrefix    string `json:"authPrefix,omitempty"`
+	BaseURLMode   string `json:"baseUrlMode"`
+	RestrictCount int    `json:"restrictCount"`
+}
+
+type adminReloadResponse struct {
+	Mode     string `json:"mode"`
+	Endpoint string `json:"endpoint"`
+	Status   string `json:"status"`
+}
+
+func (s *Server) adminDescribe() adminDescribeResponse {
+	out := adminDescribeResponse{}
+	out.Server.Name = s.name
+	out.Server.Spec = s.specName()
+	out.Server.SpecPath = s.specPath
+	out.Transport.Mode = transportMode
+	out.Transport.MCPPath = "/mcp"
+	out.Transport.HealthPath = "/healthz"
+	out.Transport.AdminPath = "/admin"
+	out.Projection.ToolCount = len(s.descs)
+	out.Projection.Tools = projectedToolNames(s.descs)
+	out.Upstreams = adminUpstreams(s.cfg)
+	out.Config.AuthScheme = s.cfg.Auth.Scheme
+	out.Config.AuthHeader = s.cfg.Auth.Header
+	out.Config.AuthPrefix = s.cfg.Auth.Prefix
+	out.Config.BaseURLMode = adminBaseURLMode(s.cfg)
+	out.Config.RestrictCount = len(s.cfg.Restrict)
+	out.Reload = adminReloadResponse{
+		Mode:     "restart-only",
+		Endpoint: adminReloadPath,
+		Status:   "restart-required",
+	}
+	return out
+}
+
+func adminUpstreams(cfg opcore.RuntimeConfig) []adminUpstreamResponse {
+	if strings.TrimSpace(cfg.BaseURL) == "" && cfg.BaseURLValue.IsZero() {
+		return nil
+	}
+	mode := "static"
+	if !cfg.BaseURLValue.IsZero() {
+		mode = "value-chain"
+	}
+	return []adminUpstreamResponse{{Kind: "base-url", Mode: mode}}
+}
+
+func adminBaseURLMode(cfg opcore.RuntimeConfig) string {
+	switch {
+	case !cfg.BaseURLValue.IsZero():
+		return "value-chain"
+	case strings.TrimSpace(cfg.BaseURL) != "":
+		return "static"
+	default:
+		return "unset"
+	}
+}
+
+func projectedToolNames(descs []opcore.Descriptor) []string {
+	out := make([]string, 0, len(descs))
+	for _, desc := range descs {
+		out = append(out, toolName(desc))
+	}
+	return out
+}
+
+func (s *Server) serveAdminDescribe(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(s.adminDescribe())
+}
+
+func (s *Server) serveAdminReload(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	_ = json.NewEncoder(w).Encode(adminReloadResponse{
+		Mode:     "restart-only",
+		Endpoint: adminReloadPath,
+		Status:   "restart-required",
+	})
+}

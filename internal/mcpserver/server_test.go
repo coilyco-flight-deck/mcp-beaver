@@ -4,15 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -48,7 +44,7 @@ type rpcResponse struct {
 // through the SDK-backed /mcp endpoint.
 func newTestHandler(t *testing.T) http.Handler {
 	t.Helper()
-	s, err := New("test", []byte(roundTripSpec("http://127.0.0.1:1")))
+	s, err := New("test", "test.mcp.kdl", []byte(roundTripSpec("http://127.0.0.1:1")))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -176,7 +172,7 @@ func TestToolsListFromSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read example: %v", err)
 	}
-	s, err := New("forgejo-issues", src)
+	s, err := New("forgejo-issues", filepath.Join("..", "..", "examples", "forgejo-issues.mcp.kdl"), src)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -205,6 +201,9 @@ func TestToolsListFromSpec(t *testing.T) {
 	}
 	if got["delete_issue"] {
 		t.Error("delete_issue was minted; deny-by-absence should have withheld it")
+	}
+	if got["admin_describe"] || got["admin_reload"] {
+		t.Fatalf("admin endpoints leaked into tools/list: %v", got)
 	}
 	if len(tools) != len(want) {
 		t.Errorf("tool count = %d, want %d (%v)", len(tools), len(want), got)
@@ -237,7 +236,7 @@ func TestToolCallRoundTrip(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	s, err := New("test", []byte(roundTripSpec(upstream.URL)))
+	s, err := New("test", "test.mcp.kdl", []byte(roundTripSpec(upstream.URL)))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -288,7 +287,7 @@ func TestToolCallBodyRoundTrip(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	s, err := New("test", []byte(roundTripSpec(upstream.URL)))
+	s, err := New("test", "test.mcp.kdl", []byte(roundTripSpec(upstream.URL)))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -328,7 +327,7 @@ func TestToolCallRestrictDenied(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	s, err := New("test", []byte(roundTripSpec(upstream.URL)))
+	s, err := New("test", "test.mcp.kdl", []byte(roundTripSpec(upstream.URL)))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -355,7 +354,7 @@ func TestToolCallRestrictDenied(t *testing.T) {
 // TestUnknownToolDenied proves deny-by-absence at call time: a tool the spec
 // never granted is a method-not-found, not a silent pass.
 func TestUnknownToolDenied(t *testing.T) {
-	s, err := New("test", []byte(roundTripSpec("http://127.0.0.1:1")))
+	s, err := New("test", "test.mcp.kdl", []byte(roundTripSpec("http://127.0.0.1:1")))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -397,44 +396,101 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-// TestUsesGenericMCPMethodLiterals scans the server source and fails if the
-// package starts hardcoding Ward-specific MCP methods or tools. The allowed
-// surface stays generic MCP names only, including the resource and prompt
-// methods that a later implementation may add.
-func TestUsesGenericMCPMethodLiterals(t *testing.T) {
-	src, err := os.ReadFile("server.go")
+// TestAdminDescribe proves the runtime exposes non-MCP operator inspection
+// without leaking the upstream host or secret material.
+func TestAdminDescribe(t *testing.T) {
+	t.Setenv("WARD_MCP_TEST_TOKEN", "s3cr3t")
+
+	ts := httptest.NewServer(newTestHandler(t))
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL + adminDescribePath)
 	if err != nil {
-		t.Fatalf("read server.go: %v", err)
+		t.Fatalf("GET %s: %v", adminDescribePath, err)
 	}
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "server.go", src, 0)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode describe body: %v", err)
+	}
+	server, _ := body["server"].(map[string]any)
+	if server["name"] != "test" {
+		t.Errorf("server.name = %v, want test", server["name"])
+	}
+	if server["spec"] != "test" {
+		t.Errorf("server.spec = %v, want test", server["spec"])
+	}
+	if server["specPath"] != "test.mcp.kdl" {
+		t.Errorf("server.specPath = %v, want test.mcp.kdl", server["specPath"])
+	}
+	projection, _ := body["projection"].(map[string]any)
+	if got, _ := projection["toolCount"].(float64); got != 2 {
+		t.Errorf("toolCount = %v, want 2", got)
+	}
+	transport, _ := body["transport"].(map[string]any)
+	if transport["mode"] != transportMode {
+		t.Errorf("transport.mode = %v, want %s", transport["mode"], transportMode)
+	}
+	config, _ := body["config"].(map[string]any)
+	if config["baseUrlMode"] != "static" {
+		t.Errorf("config.baseUrlMode = %v, want static", config["baseUrlMode"])
+	}
+	if config["restrictCount"] == nil {
+		t.Fatal("config.restrictCount missing")
+	}
+	upstreams, _ := body["upstreams"].([]any)
+	if len(upstreams) != 1 {
+		t.Fatalf("upstreams = %v, want 1 configured upstream", body["upstreams"])
+	}
+	upstream, _ := upstreams[0].(map[string]any)
+	if upstream["kind"] != "base-url" || upstream["mode"] != "static" {
+		t.Fatalf("upstream = %v, want base-url/static", upstream)
+	}
+	reload, _ := body["reload"].(map[string]any)
+	if reload["mode"] != "restart-only" || reload["status"] != "restart-required" {
+		t.Fatalf("reload = %v, want restart-only/restart-required", reload)
+	}
+	raw, err := json.Marshal(body)
 	if err != nil {
-		t.Fatalf("parse server.go: %v", err)
+		t.Fatalf("marshal describe body: %v", err)
 	}
-	forbidden := regexp.MustCompile(`(^|[./_])(admin|control|lifecycle|reload)(?:$|[./_])`)
-	var literals []string
-	ast.Inspect(file, func(n ast.Node) bool {
-		fn, ok := n.(*ast.FuncDecl)
-		if !ok {
-			return true
+	for _, forbidden := range []string{"127.0.0.1", "s3cr3t"} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Fatalf("describe response leaked %q: %s", forbidden, raw)
 		}
-		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			lit, ok := n.(*ast.BasicLit)
-			if !ok || lit.Kind != token.STRING {
-				return true
-			}
-			literals = append(literals, strings.Trim(lit.Value, `"`))
-			return true
-		})
-		return false
-	})
-	if len(literals) == 0 {
-		t.Fatal("no string literals found in server.go")
 	}
-	for _, lit := range literals {
-		if forbidden.MatchString(lit) {
-			t.Fatalf("server hardcodes Ward-specific MCP method or tool %q", lit)
-		}
+}
+
+// TestAdminReloadRestartOnly proves the runtime exposes an explicit operator
+// reload endpoint and says restart-only when the process cannot reload safely.
+func TestAdminReloadRestartOnly(t *testing.T) {
+	ts := httptest.NewServer(newTestHandler(t))
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+adminReloadPath, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("POST %s: %v", adminReloadPath, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", resp.StatusCode)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode reload body: %v", err)
+	}
+	if body["mode"] != "restart-only" {
+		t.Errorf("reload.mode = %v, want restart-only", body["mode"])
+	}
+	if body["status"] != "restart-required" {
+		t.Errorf("reload.status = %v, want restart-required", body["status"])
 	}
 }
 

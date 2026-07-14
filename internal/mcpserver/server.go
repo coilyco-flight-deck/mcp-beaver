@@ -17,14 +17,17 @@ import (
 // Server is a parsed `.mcp.kdl` projected into MCP tools plus the official MCP
 // Go SDK runtime that serves them over transport/session plumbing.
 type Server struct {
-	name string
-	sdk  *mcp.Server
+	name     string
+	specPath string
+	descs    []opcore.Descriptor
+	cfg      opcore.RuntimeConfig
+	sdk      *mcp.Server
 }
 
 // New parses a `.mcp.kdl` source and builds the SDK-backed server: one MCP tool
 // per grant, with opcore still owning the guardfile parse, guard, and upstream
 // request execution.
-func New(name string, src []byte) (*Server, error) {
+func New(name, specPath string, src []byte) (*Server, error) {
 	descs, cfg, err := opcore.ParseInline(src)
 	if err != nil {
 		return nil, err
@@ -33,8 +36,11 @@ func New(name string, src []byte) (*Server, error) {
 	rt := opcore.NewRuntime(cfg)
 
 	s := &Server{
-		name: name,
-		sdk:  mcp.NewServer(&mcp.Implementation{Name: name, Version: "0.1.0"}, nil),
+		name:     name,
+		specPath: specPath,
+		descs:    descs,
+		cfg:      cfg,
+		sdk:      mcp.NewServer(&mcp.Implementation{Name: name, Version: "0.1.0"}, nil),
 	}
 
 	seen := map[string]bool{}
@@ -71,7 +77,7 @@ func New(name string, src []byte) (*Server, error) {
 }
 
 // Handler exposes the runtime on /mcp using the official SDK streamable HTTP
-// handler, plus the pod health probe.
+// handler, plus the pod health probe and the operator admin endpoints.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
@@ -81,6 +87,8 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+	mux.HandleFunc(adminDescribePath, s.serveAdminDescribe)
+	mux.HandleFunc(adminReloadPath, s.serveAdminReload)
 	return mux
 }
 
@@ -98,6 +106,22 @@ func describe(d opcore.Descriptor) string {
 		return d.Describe
 	}
 	return d.Grant
+}
+
+func (s *Server) specName() string {
+	if s.specPath == "" {
+		return s.name
+	}
+	base := s.specPath
+	if i := strings.LastIndex(base, "/"); i >= 0 {
+		base = base[i+1:]
+	}
+	base = strings.TrimSuffix(base, ".kdl")
+	base = strings.TrimSuffix(base, ".mcp")
+	if base == "" {
+		return s.name
+	}
+	return base
 }
 
 func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor) mcp.ToolHandler {

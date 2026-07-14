@@ -51,7 +51,7 @@ The `.mcp.kdl` rides in as chart values (a ConfigMap mounted into the runtime); 
 ## Layout
 
 * [`cmd/ward-mcp`](cmd/ward-mcp) - the `serve` entrypoint: parse a spec, project tools, bind the SDK-backed HTTP listener.
-* [`internal/mcpserver`](internal/mcpserver) - the thin shell: grant→MCP-tool projection and the SDK-backed streamable HTTP/session layer.
+* [`internal/mcpserver`](internal/mcpserver) - the thin shell: grant→MCP-tool projection, the SDK-backed streamable HTTP/session layer, and the non-MCP `/healthz` plus `/admin/*` operator endpoints.
 * [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issues as an MCP. Its body is the frozen ward-mcp inline grammar (`opcore.ParseInline`), and it is the whole contract.
 * [`examples/skillsmp.mcp.kdl`](examples/skillsmp.mcp.kdl) - the first end-to-end target: two read tools over the SDK-backed transport against skillsmp.com.
 * [`examples/*.values.yaml`](examples/) - reference deploy-side chart values: `skillsmp` (public, Authelia-gated read) and `forgejo-issues` (tailnet-only write).
@@ -62,4 +62,4 @@ The `.mcp.kdl` rides in as chart values (a ConfigMap mounted into the runtime); 
 
 ## Status
 
-The `ward-mcp serve` runtime is **implemented** (ward-mcp#7): it parses a `.mcp.kdl`, serves the derived tools over MCP at `/mcp`, and guarded-executes each call through opcore. The generic Helm chart that runs this image is also in (ward-mcp#8). Tracking [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/issues/164) (concept) and [coilyco-bridge/deploy#40](https://forgejo.coilysiren.me/coilyco-bridge/deploy/issues/40) (first consumer).
+The `ward-mcp serve` runtime is **implemented** (ward-mcp#7): it parses a `.mcp.kdl`, serves the derived tools over MCP at `/mcp`, guarded-executes each call through opcore, and exposes operator-only `/healthz` plus `/admin/describe` and `/admin/reload` HTTP endpoints outside the MCP tool surface. The generic Helm chart that runs this image is also in (ward-mcp#8). Tracking [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/issues/164) (concept) and [coilyco-bridge/deploy#40](https://forgejo.coilysiren.me/coilyco-bridge/deploy/issues/40) (first consumer).
