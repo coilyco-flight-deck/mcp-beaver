@@ -49,6 +49,15 @@ The engine carries zero upstream knowledge, so **one engine drives every spec, n
 
 A tool call arrives over SSE, is validated against the derived schema, run through cli-guard's guard (restrict gate, argv metachar gate on URL-bound inputs), resolved to an HTTP request, signed with the injected secret, and fired upstream. The response renders back over the MCP channel.
 
+## MCP boundary: generic surface only
+
+ward-mcp intentionally exposes only the generic MCP protocol surface. It keeps
+`initialize`, `ping`, `tools/list`, and `tools/call` today, and any future
+resource or prompt support must stay on the generic MCP names (`resources/list`,
+`resources/read`, `prompts/list`, `prompts/get`). Ward-specific admin,
+lifecycle, reload, or control verbs do not belong in this repo or in the future
+agent-guard-mcp surface.
+
 ## The safety story - the guardfile IS the tool surface
 
 A ward-mcp server **cannot exceed its guardfile**, because the guardfile is the only source of the tools.

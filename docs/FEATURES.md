@@ -39,8 +39,11 @@ Two MCP HTTP transports, both interior to the image:
   reply is pushed back over the stream.
 * **Health** - `GET /healthz` for a pod liveness probe.
 
-Supported MCP methods: `initialize`, `notifications/initialized`, `ping`,
-`tools/list`, `tools/call`.
+Supported MCP methods: `initialize`, `notifications/initialized`,
+`notifications/cancelled`, `ping`, `tools/list`, `tools/call`. Any future
+resource or prompt support must stay on the generic MCP surface
+(`resources/list`, `resources/read`, `prompts/list`, `prompts/get`) and must not
+grow Ward-specific admin, lifecycle, reload, or control verbs.
 
 ## Image
 

@@ -3,6 +3,9 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -254,6 +257,70 @@ func TestInitializeHandshake(t *testing.T) {
 	caps, _ := res["capabilities"].(map[string]any)
 	if _, ok := caps["tools"]; !ok {
 		t.Errorf("capabilities missing tools; got %v", caps)
+	}
+}
+
+// TestDispatchUsesGenericMCPMethodsOnly scans the dispatch switch and fails if
+// the package starts hardcoding Ward-specific MCP methods. The allowed surface
+// stays generic MCP names only, including the resource and prompt methods that
+// a later implementation may add.
+func TestDispatchUsesGenericMCPMethodsOnly(t *testing.T) {
+	src, err := os.ReadFile("server.go")
+	if err != nil {
+		t.Fatalf("read server.go: %v", err)
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "server.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse server.go: %v", err)
+	}
+	allowed := map[string]bool{
+		"initialize":                true,
+		"notifications/initialized": true,
+		"notifications/cancelled":   true,
+		"ping":                      true,
+		"tools/list":                true,
+		"tools/call":                true,
+		"resources/list":            true,
+		"resources/read":            true,
+		"prompts/list":              true,
+		"prompts/get":               true,
+	}
+	var cases []string
+	ast.Inspect(file, func(n ast.Node) bool {
+		fn, ok := n.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "dispatch" {
+			return true
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			sw, ok := n.(*ast.SwitchStmt)
+			if !ok {
+				return true
+			}
+			for _, stmt := range sw.Body.List {
+				cc, ok := stmt.(*ast.CaseClause)
+				if !ok {
+					continue
+				}
+				for _, expr := range cc.List {
+					lit, ok := expr.(*ast.BasicLit)
+					if !ok || lit.Kind != token.STRING {
+						continue
+					}
+					cases = append(cases, strings.Trim(lit.Value, `"`))
+				}
+			}
+			return true
+		})
+		return false
+	})
+	if len(cases) == 0 {
+		t.Fatal("no switch cases found in server.go dispatch")
+	}
+	for _, method := range cases {
+		if !allowed[method] {
+			t.Fatalf("dispatch hardcodes non-generic MCP method %q", method)
+		}
 	}
 }
 
