@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/cli-guard/http/opcore"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -63,9 +64,13 @@ func (s *Server) adminDescribe() adminDescribeResponse {
 	out.Transport.MCPPath = "/mcp"
 	out.Transport.HealthPath = "/healthz"
 	out.Transport.AdminPath = "/admin"
-	out.Projection.ToolCount = len(s.descs)
-	out.Projection.Tools = projectedToolNames(s.descs)
-	out.Upstreams = adminUpstreams(s.cfg)
+	out.Projection.ToolCount = len(s.tools)
+	out.Projection.Tools = projectedToolNames(s.tools)
+	if len(s.upstreams) > 0 {
+		out.Upstreams = s.upstreams
+	} else {
+		out.Upstreams = adminUpstreams(s.cfg)
+	}
 	out.Config.AuthScheme = s.cfg.Auth.Scheme
 	out.Config.AuthHeader = s.cfg.Auth.Header
 	out.Config.AuthPrefix = s.cfg.Auth.Prefix
@@ -101,10 +106,13 @@ func adminBaseURLMode(cfg opcore.RuntimeConfig) string {
 	}
 }
 
-func projectedToolNames(descs []opcore.Descriptor) []string {
-	out := make([]string, 0, len(descs))
-	for _, desc := range descs {
-		out = append(out, toolName(desc))
+func projectedToolNames(tools []*mcp.Tool) []string {
+	out := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		if tool == nil {
+			continue
+		}
+		out = append(out, tool.Name)
 	}
 	return out
 }

@@ -7,10 +7,10 @@ chart.
 
 ## `ward-mcp serve <spec.mcp.kdl> --http :addr`
 
-The generic runtime, and the only command. One static binary renders any
-`.mcp.kdl` spec into a guarded MCP server over the official MCP Go SDK's
-streamable HTTP transport at `/mcp`. No per-guardfile Go, no per-server
-handler. It never binds stdio - these run as remote pods reached by URL.
+The generic local runtime. One static binary renders any `.mcp.kdl` spec into
+a guarded MCP server over the official MCP Go SDK's streamable HTTP transport
+at `/mcp`. No per-guardfile Go, no per-server handler. It never binds stdio -
+these run as remote pods reached by URL.
 
 * **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`, pinned
   `v0.80.0`) parses the frozen ward-mcp inline grammar: `wrap` header, `base-url`,
@@ -27,6 +27,20 @@ handler. It never binds stdio - these run as remote pods reached by URL.
   call returns as a tool result with `isError` set.
 * **Deny-by-absence** - the served surface is exactly the `can` grants. An
   unwritten grant is an absent tool; that is the deletion guard.
+
+## `ward-mcp serve-upstream --upstream <mcp-url> --tool <name>...`
+
+The guarded passthrough backend. It connects to a private streamable-HTTP MCP
+upstream, snapshots the allowlisted upstream tool contracts, and exposes only
+that subset on the outward MCP surface.
+
+* **Upstream tool projection** - each allowlisted upstream tool becomes one
+  outward MCP tool, preserving the upstream schema and tool metadata where
+  possible.
+* **Fail closed** - unknown upstream tools and schema drift return MCP tool
+  errors instead of silently widening or mutating the surface.
+* **Proxy calls** - allowed `tools/call` requests are forwarded to the upstream
+  MCP session after the guard checks.
 
 ## Transports
 
