@@ -10,7 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // roundTripSpec points its base-url at a mock upstream (set per-test) and
@@ -54,6 +57,26 @@ func newTestHandler(t *testing.T) http.Handler {
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(newTestHandler(t))
+}
+
+func newUpstreamServer(t *testing.T, server *mcp.Server) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		return server
+	}, &mcp.StreamableHTTPOptions{JSONResponse: true}))
+	return httptest.NewServer(mux)
+}
+
+func upstreamTool(t *testing.T, name, description, schema string, handler func(context.Context, *mcp.CallToolRequest, map[string]any) (*mcp.CallToolResult, any, error)) *mcp.Server {
+	t.Helper()
+	srv := mcp.NewServer(&mcp.Implementation{Name: name, Version: "0.1.0"}, nil)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        name,
+		Description: description,
+		InputSchema: json.RawMessage(schema),
+	}, handler)
+	return srv
 }
 
 // postJSON posts one JSON-RPC message to path and returns the raw response.
@@ -491,6 +514,119 @@ func TestAdminReloadRestartOnly(t *testing.T) {
 	}
 	if body["status"] != "restart-required" {
 		t.Errorf("reload.status = %v, want restart-required", body["status"])
+	}
+}
+
+// TestUpstreamProxyRoundTrip proves the new streamable-HTTP backend can proxy a
+// selected upstream tool, preserve its schema, and forward the call.
+func TestUpstreamProxyRoundTrip(t *testing.T) {
+	upstream := upstreamTool(t, "browse", "browse upstream", `{
+		"type":"object",
+		"properties":{"q":{"type":"string"}},
+		"required":["q"]
+	}`, func(_ context.Context, _ *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "upstream:" + args["q"].(string)}}}, nil, nil
+	})
+	upstreamTS := newUpstreamServer(t, upstream)
+	defer upstreamTS.Close()
+
+	s, err := NewProxy(context.Background(), "proxy", "", upstreamTS.URL+"/mcp", []string{"browse"}, upstreamTS.Client())
+	if err != nil {
+		t.Fatalf("NewProxy: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	sessionID := initResp.Header.Get("Mcp-Session-Id")
+	out := decodeRPCResponse(t, initResp)
+	if out.Error != nil {
+		t.Fatalf("initialize error: %+v", out.Error)
+	}
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
+	tools := toolList(t, decodeRPCResponse(t, resp))
+	if len(tools) != 1 {
+		t.Fatalf("tool count = %d, want 1", len(tools))
+	}
+	tool := tools[0]
+	if tool["name"] != "browse" {
+		t.Fatalf("tool = %v, want browse", tool)
+	}
+	schema, _ := tool["inputSchema"].(map[string]any)
+	props, _ := schema["properties"].(map[string]any)
+	if _, ok := props["q"]; !ok {
+		t.Fatalf("browse schema missing q: %v", schema)
+	}
+
+	callResp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"browse","arguments":{"q":"ramen"}}}`)
+	callOut := decodeRPCResponse(t, callResp)
+	var callResult map[string]any
+	if err := json.Unmarshal(callOut.Result, &callResult); err != nil {
+		t.Fatalf("call result: %v", err)
+	}
+	if isErr, _ := callResult["isError"].(bool); isErr {
+		t.Fatalf("browse call reported isError; content=%v", callResult["content"])
+	}
+	if got := firstText(t, callResult); !strings.Contains(got, "upstream:ramen") {
+		t.Fatalf("browse result = %q, want upstream:ramen", got)
+	}
+}
+
+// TestUpstreamProxySchemaDriftFailsClosed proves the proxy compares upstream
+// tool contracts on call and returns an MCP tool error if the upstream schema
+// drifts.
+func TestUpstreamProxySchemaDriftFailsClosed(t *testing.T) {
+	var current atomic.Value
+	current.Store(upstreamTool(t, "browse", "browse upstream", `{
+		"type":"object",
+		"properties":{"q":{"type":"string"}},
+		"required":["q"]
+	}`, func(_ context.Context, _ *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "v1:" + args["q"].(string)}}}, nil, nil
+	}))
+
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		return current.Load().(*mcp.Server)
+	}, &mcp.StreamableHTTPOptions{JSONResponse: true}))
+	upstreamTS := httptest.NewServer(mux)
+	defer upstreamTS.Close()
+
+	s, err := NewProxy(context.Background(), "proxy", "", upstreamTS.URL+"/mcp", []string{"browse"}, upstreamTS.Client())
+	if err != nil {
+		t.Fatalf("NewProxy: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	sessionID := initResp.Header.Get("Mcp-Session-Id")
+	if out := decodeRPCResponse(t, initResp); out.Error != nil {
+		t.Fatalf("initialize error: %+v", out.Error)
+	}
+
+	current.Store(upstreamTool(t, "browse", "browse upstream", `{
+		"type":"object",
+		"properties":{"q":{"type":"integer"}},
+		"required":["q"]
+	}`, func(_ context.Context, _ *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "v2"}}}, nil, nil
+	}))
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"browse","arguments":{"q":"ramen"}}}`)
+	out := decodeRPCResponse(t, resp)
+	var result map[string]any
+	if err := json.Unmarshal(out.Result, &result); err != nil {
+		t.Fatalf("result: %v", err)
+	}
+	if isErr, _ := result["isError"].(bool); !isErr {
+		t.Fatalf("schema drift should return isError; got %v", result)
+	}
+	if got := firstText(t, result); !strings.Contains(got, "schema drift") {
+		t.Fatalf("drift error = %q, want schema drift", got)
 	}
 }
 

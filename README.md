@@ -31,6 +31,15 @@ docker run -p 8080:8080 -e SKILLSMP_API_KEY \
   ward-mcp serve /spec/skillsmp.mcp.kdl --http :8080
 ```
 
+For a passthrough MCP wrapper over a private upstream, use `serve-upstream`
+with an allowlist:
+
+```sh
+ward-mcp serve-upstream --name grubhub-mcp \
+  --upstream http://playwright-mcp.namespace.svc.cluster.local/mcp \
+  --tool browser_navigate --tool browser_click --http :8080
+```
+
 The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_issue`, `close_issue` - each guarded, each scoped to `coilyco-*` / `kai` owners.
 
 The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the inline spec, each grant projects to one MCP tool, and every call fires through the self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, auth). ward-mcp adds only the grant→tool projection and the SDK-backed transport/session layer.
