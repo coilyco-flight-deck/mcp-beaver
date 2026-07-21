@@ -18,7 +18,7 @@ import (
 
 // roundTripSpec points its base-url at a mock upstream (set per-test) and
 // grants one read and one write tool plus an owner restriction, so a single spec
-// covers projection, path/query/body routing, and the guard.
+// covers projection, aliased query routing, typed body routing, and the guard.
 func roundTripSpec(baseURL string) string {
 	return `wrap ward mcp test {
     base-url "` + baseURL + `"
@@ -26,11 +26,13 @@ func roundTripSpec(baseURL string) string {
     restrict owner matches "coilyco-*"
     can get thing {
         path "/owners/{owner}/things/{id}"
-        query "verbose"
+        query "search_query" upstream="query"
     }
     can create thing {
         path "/owners/{owner}/things"
-        body "title"
+        body {
+            field "title" type="string" required=#true
+        }
     }
 }`
 }
@@ -269,7 +271,22 @@ func TestToolCallRoundTrip(t *testing.T) {
 	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 
-	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_thing","arguments":{"owner":"coilyco-flight-deck","id":"42","verbose":"true"}}}`)
+	listResp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
+	tools := toolList(t, decodeRPCResponse(t, listResp))
+	get := findTool(t, tools, "get_thing")
+	var schema map[string]any
+	if err := toJSON(get["inputSchema"], &schema); err != nil {
+		t.Fatalf("get_thing schema not JSON: %v", err)
+	}
+	props, _ := schema["properties"].(map[string]any)
+	if _, ok := props["search_query"]; !ok {
+		t.Fatalf("get_thing schema omitted local query alias: %v", props)
+	}
+	if _, leaked := props["query"]; leaked {
+		t.Fatalf("get_thing schema leaked reserved upstream query name: %v", props)
+	}
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_thing","arguments":{"owner":"coilyco-flight-deck","id":"42","search_query":"platform engineer"}}}`)
 	out := decodeRPCResponse(t, resp)
 	var result map[string]any
 	if err := json.Unmarshal(out.Result, &result); err != nil {
@@ -284,8 +301,8 @@ func TestToolCallRoundTrip(t *testing.T) {
 	if gotPath != "/owners/coilyco-flight-deck/things/42" {
 		t.Errorf("upstream path = %q", gotPath)
 	}
-	if gotQuery != "verbose=true" {
-		t.Errorf("upstream query = %q, want verbose=true", gotQuery)
+	if gotQuery != "query=platform+engineer" {
+		t.Errorf("upstream query = %q, want query=platform+engineer", gotQuery)
 	}
 	if gotAuth != "Bearer s3cr3t" {
 		t.Errorf("upstream auth = %q, want Bearer s3cr3t", gotAuth)

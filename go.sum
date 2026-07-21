@@ -1,5 +1,5 @@
-forgejo.coilysiren.me/coilyco-flight-deck/cli-guard v0.80.0 h1:4QLxc1R2GR7t3trZ5mE9en0CuU884SPhLUmGIfswqVQ=
-forgejo.coilysiren.me/coilyco-flight-deck/cli-guard v0.80.0/go.mod h1:Pzz+QJWnzkoVdkqoq5vFLaVUVezqufl7ieIB9ZGL6kg=
+forgejo.coilysiren.me/coilyco-flight-deck/cli-guard v0.104.0 h1:XGuFQQY5dosd2OByHchVgyk6W0EVDoxQGwi04H5FqkE=
+forgejo.coilysiren.me/coilyco-flight-deck/cli-guard v0.104.0/go.mod h1:Pzz+QJWnzkoVdkqoq5vFLaVUVezqufl7ieIB9ZGL6kg=
 github.com/calico32/kdl-go v0.14.1 h1:aZWwk/tAG3psn2J992KJciUu+0S999L078YiQLa5R9E=
 github.com/calico32/kdl-go v0.14.1/go.mod h1:KXQM2fSZFMRDsjNrmCD/k3QVFhrREPMJhQCNcxEQZIo=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=

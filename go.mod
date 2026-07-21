@@ -2,7 +2,7 @@ module forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
 
 go 1.25.5
 
-require forgejo.coilysiren.me/coilyco-flight-deck/cli-guard v0.80.0
+require forgejo.coilysiren.me/coilyco-flight-deck/cli-guard v0.104.0
 
 require github.com/modelcontextprotocol/go-sdk v1.6.1
 
