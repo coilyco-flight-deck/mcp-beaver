@@ -21,7 +21,7 @@ jobs:
   # to it matched no runner and the repo queued zero tasks (ward-mcp#10).
   gate:
     runs-on: docker
-    container: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:v0.195.0
+    container: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:v0.255.0
     env:
       GOPRIVATE: forgejo.coilysiren.me
     steps:
@@ -102,7 +102,7 @@ jobs:
           PY
   publish:
     runs-on: docker
-    container: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:v0.195.0
+    container: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:v0.255.0
     needs: [gate]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
