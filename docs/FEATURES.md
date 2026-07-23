@@ -44,6 +44,13 @@ that subset on the outward MCP surface.
 * **Proxy calls** - allowed `tools/call` requests are forwarded to the upstream
   MCP session after the guard checks.
 
+## `ward-mcp serve-ssm <spec.mcp.kdl> --http :addr`
+
+The AWS SDK-backed exact-parameter reader. Its KDL policy names one parameter
+and grants exactly `get_parameter(name)` plus `get_forgejo_read_token()`.
+The general tool rejects every other name before AWS receives a request, while
+IAM independently restricts the workload principal to the same parameter ARN.
+
 ## Transports
 
 The runtime exposes the SDK-backed streamable HTTP transport and a liveness
