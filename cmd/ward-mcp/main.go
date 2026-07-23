@@ -34,15 +34,17 @@ func main() {
 // build/lock steps are cli-guard's and deploy's, not this runtime's.
 func run(argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: ward-mcp serve <spec.mcp.kdl> [--http :8080] | ward-mcp serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...]")
+		return fmt.Errorf("usage: ward-mcp serve <spec.mcp.kdl> [--http :8080] | ward-mcp serve-ssm <spec.mcp.kdl> [--http :8080] | ward-mcp serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...]")
 	}
 	switch argv[0] {
 	case "serve":
 		return runServe(argv[1:])
 	case "serve-upstream":
 		return runServeUpstream(argv[1:])
+	case "serve-ssm":
+		return runServeSSM(argv[1:])
 	default:
-		return fmt.Errorf("unknown command %q (want: serve, serve-upstream)", argv[0])
+		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-upstream)", argv[0])
 	}
 }
 
@@ -99,6 +101,31 @@ func runServeUpstream(argv []string) error {
 		return fmt.Errorf("connect upstream %q: %w", *upstream, err)
 	}
 	fmt.Fprintf(os.Stderr, "ward-mcp: serving upstream proxy %s on %s (%d tools)\n", *upstream, *addr, len(tools))
+	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
+	return server.ListenAndServe()
+}
+
+// runServeSSM serves the spec-declared, exact-parameter SSM reader. AWS SDK
+// credential discovery reads the static key injected into the container.
+func runServeSSM(argv []string) error {
+	fs := flag.NewFlagSet("serve-ssm", flag.ContinueOnError)
+	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
+	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("serve-ssm needs exactly one spec path")
+	}
+	specPath := fs.Arg(0)
+	src, err := os.ReadFile(specPath) //nolint:gosec // operator-supplied trusted policy path
+	if err != nil {
+		return fmt.Errorf("read spec %q: %w", specPath, err)
+	}
+	srv, err := mcpserver.NewSSM(context.Background(), serverName(specPath), specPath, src)
+	if err != nil {
+		return fmt.Errorf("parse SSM spec %q: %w", specPath, err)
+	}
+	fmt.Fprintf(os.Stderr, "ward-mcp: serving guarded SSM reader %s on %s\n", specPath, *addr)
 	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
 	return server.ListenAndServe()
 }

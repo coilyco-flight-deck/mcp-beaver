@@ -1,0 +1,10 @@
+commands:
+  test:
+    run: go test ./...
+    description: Run the Go test suite.
+  tidy:
+    run: go mod tidy
+    description: Reconcile Go module dependencies.
+  fmt:
+    run: gofmt -w cmd internal
+    description: Format the Go source tree.
