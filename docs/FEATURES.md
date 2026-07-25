@@ -88,8 +88,8 @@ consequence of a landed commit: the `publish` job in
 on every push to `main` and pushes it to the in-cluster registry as
 `ward-mcp:<sha>` (mount-not-bake, so one image serves every guardfile - published
 when the runtime source changes, not per spec). The `gate` and `publish` jobs
-run inside the pinned aos dev-base image
-(`forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:v0.255.0`), so the CI
+run inside the moving :release aos dev-base image
+(`forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:release`), so the CI
 surface no longer bootstraps Go or the Docker CLI itself. The deploy CD resolves
 that sha into the chart's `image.tag` and rolls it. Mirrors the fleet's other
 MCP source repos (reddit-mcp / node-stats-mcp); the plain-http push to the
