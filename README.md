@@ -65,7 +65,7 @@ helm upgrade --install skillsmp ward-mcp \
   --set image.tag=<built-runtime-sha>
 ```
 
-The `.mcp.kdl` rides in as chart values (a ConfigMap mounted into the runtime); the chart templates the Deployment, Service, token Secret wiring, and - for a public MCP - the Authelia-JWT route. The chart stays generic and **spec-opaque** (it never parses the guardfile), so the interior-only scope of the spec holds: the spec never reaches down into the chart, the chart never reaches up into the spec. [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) consumes the chart per-MCP with one values file (deploy#61 skillsmp, deploy#46 forgejo) and owns the rollout, the same way it already hosts `steam-mcp`, `reddit-mcp`, and `node-stats-mcp`.
+The `.mcp.kdl` rides in as chart values (a ConfigMap mounted into the runtime). The chart templates only the auth-neutral runtime layer: Deployment, Service, optional NodePort, and application Secret wiring. It stays generic and **spec-opaque** (it never parses the guardfile), so the interior-only scope of the spec holds: the spec never reaches down into the chart, and the chart never reaches up into the spec. [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) owns public ingress, authentication, TLS, DNS, and rollout. Its shared `charts/ingress-public-authed` template composes this runtime contract with the CoilyCo fleet gate.
 
 ## Layout
 
@@ -73,7 +73,7 @@ The `.mcp.kdl` rides in as chart values (a ConfigMap mounted into the runtime); 
 * [`internal/mcpserver`](internal/mcpserver) - the thin shell: grant→MCP-tool projection, the SDK-backed streamable HTTP/session layer, and the non-MCP `/healthz` plus `/admin/*` operator endpoints.
 * [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issues as an MCP. Its body is the frozen ward-mcp inline grammar (`opcore.ParseInline`), and it is the whole contract.
 * [`examples/skillsmp.mcp.kdl`](examples/skillsmp.mcp.kdl) - the first end-to-end target: two read tools over the SDK-backed transport against skillsmp.com.
-* [`examples/*.values.yaml`](examples/) - reference deploy-side chart values: `skillsmp` (public, Authelia-gated read) and `forgejo-issues` (tailnet-only write).
+* [`examples/*.values.yaml`](examples/) - reference auth-neutral chart values: `skillsmp` uses the default ClusterIP, and `forgejo-issues` demonstrates the optional NodePort.
 * [`chart/`](chart/) - the generic ward-mcp Helm chart. See [`docs/chart.md`](docs/chart.md).
 * [`docs/DESIGN.md`](docs/DESIGN.md) - the spec→image pipeline, the interior-only scope, and the SDK-backed transport + safety model.
 * [`docs/chart.md`](docs/chart.md) - the chart's templates, values reference, and the runtime contract it targets.

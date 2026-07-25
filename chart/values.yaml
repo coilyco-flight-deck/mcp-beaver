@@ -18,13 +18,9 @@
 #   guardfile names. A STRING value is an SSM parameter path - the chart mints
 #   an ExternalSecret pulling it into a Secret and injects it as that env var. A
 #   MAP value {secretName, key} references an already-existing Secret instead.
-# - route.public: true mounts the deploy#30 Authelia-JWT public overlay
-#   (Ingress + ForwardAuth + oauth2-proxy + RFC 9728 metadata sidecar); false is
-#   tailnet-only (NodePort, no public Ingress). A write-capable surface stays
-#   tailnet-only; a read surface can go public-gated - the Authelia gate is the
-#   boundary, not the read/write split.
-# - service.nodePort: the tailnet-direct local-harness port (deploy#39). Set it
-#   per-MCP to a non-colliding value; unset leaves the Service ClusterIP-only.
+# - service.nodePort: an optional node-local port. Set it to a non-colliding
+#   value when the consuming deployment needs direct node access. Unset leaves
+#   the Service ClusterIP-only.
 
 # The .mcp.kdl guardfile body. Supplied at install time with
 # `--set-file spec=<name>.mcp.kdl`; empty here so a bare `helm template` fails
@@ -49,10 +45,8 @@ commonLabels: {}
 commonAnnotations: {}
 podAnnotations: {}
 
-# The single-node homelab; every workload pins to kai-server. Cleared for a
-# generic (non-kai-server) render.
-nodeSelector:
-  kubernetes.io/hostname: kai-server
+# Scheduling belongs to the consuming deployment.
+nodeSelector: {}
 tolerations: []
 affinity: {}
 
@@ -86,8 +80,8 @@ extraEnv: []
 
 service:
   type: ClusterIP
-  # Tailnet-direct local-harness port (deploy#39). Unset -> ClusterIP-only.
-  # Set per-MCP to a non-colliding value; the Service becomes NodePort.
+  # Optional node-local port. Unset -> ClusterIP-only. Set it to make the
+  # Service a NodePort.
   nodePort: null
 
 resources:
@@ -111,47 +105,3 @@ livenessProbe:
     port: http
   initialDelaySeconds: 10
   periodSeconds: 30
-
-# The public, Authelia-JWT-gated route (deploy#30's fleet overlay, generalized).
-route:
-  enabled: true
-  # The public hostname, e.g. skillsmp.coilysiren.me. Required when enabled.
-  host: ""
-  # true -> public Ingress behind the Authelia gate. false -> tailnet-only
-  # (no public Ingress; reach the pod via the NodePort over the tailnet).
-  public: true
-  # cert-manager ClusterIssuer for the public TLS cert.
-  clusterIssuer: letsencrypt-production
-  # ExternalDNS target - the home public IP (opaque). Supplied by the deploy at
-  # rollout; left empty here so nothing host-identifying lands in this repo.
-  externalDnsTarget: ""
-  auth:
-    # The statically-registered Authelia OIDC client id, e.g. claude-skillsmp.
-    clientId: ""
-    issuerUrl: https://auth.coilysiren.me
-    # Audiences default to https://<host>/mcp and https://<host>; add more here.
-    extraAudiences: []
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
-    # oauth2-proxy client-secret, pulled from SSM through the gate's own
-    # ExternalSecret. The default is the shared /authelia/oidc-claude-client-
-    # secret path. The cookie-secret is generated in-cluster by ESO, so no
-    # manual SSM param or chart-owned Secret is needed.
-    clientSecretRef: ""
-    resources:
-      requests:
-        cpu: 10m
-        memory: 32Mi
-      limits:
-        cpu: 100m
-        memory: 64Mi
-  # The RFC 9728 protected-resource-metadata sidecar (unauthenticated), pointing
-  # claude.ai at Authelia as the authorization server before a token exists.
-  meta:
-    image: docker.io/nginxinc/nginx-unprivileged:alpine
-    resources:
-      requests:
-        cpu: 10m
-        memory: 16Mi
-      limits:
-        cpu: 50m
-        memory: 32Mi

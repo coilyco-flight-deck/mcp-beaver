@@ -1,7 +1,5 @@
-# Example deploy-side values for a TAILNET-ONLY write MCP.
-# Mirrors deploy#46 (forgejo): a write-capable surface, so it stays tailnet-only
-# (no public Ingress) - reached over the tailnet by NodePort, never the public
-# internet. Consume as:
+# Example runtime values for a write MCP with an optional NodePort. The
+# consuming deployment owns network reachability and authentication. Consume as:
 #
 #   helm upgrade --install forgejo-issues ward-mcp \
 #     -f forgejo-issues.values.yaml \
@@ -13,12 +11,7 @@ specName: forgejo-issues
 secret:
   FORGEJO_TOKEN: /forgejo-mcp/token
 
-# Tailnet-direct local-harness path (deploy#39): reach the pod at
-# http://kai-server:30146/mcp with no auth. 30000 + the last three of a chosen
-# port; pick a non-colliding value per MCP.
+# Optional direct node access. The deployment chooses a non-colliding port and
+# protects the reachable node surface.
 service:
   nodePort: 30146
-
-route:
-  # No public route for a write surface: only the tailnet NodePort above.
-  public: false

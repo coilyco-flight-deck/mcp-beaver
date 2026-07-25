@@ -9,9 +9,8 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  # A set nodePort forces NodePort so the tailnet local-harness path (deploy#39)
-  # binds on every node interface while the ClusterIP backend stays for the
-  # gated Ingress. Unset -> plain ClusterIP.
+  # A set nodePort forces NodePort so the optional node-local path binds on
+  # every node interface. Unset -> plain ClusterIP.
   type: {{ if .Values.service.nodePort }}NodePort{{ else }}{{ .Values.service.type }}{{ end }}
   selector:
     {{- include "ward-mcp.selectorLabels" . | nindent 4 }}

@@ -54,16 +54,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s-secret" (include "ward-mcp.fullname" .) -}}
 {{- end -}}
 
-{{/* The oauth2-proxy gate's own resources are suffixed -oauth2-proxy. */}}
-{{- define "ward-mcp.oauth2ProxyName" -}}
-{{- printf "%s-oauth2-proxy" (include "ward-mcp.fullname" .) -}}
-{{- end -}}
-
-{{/* The RFC 9728 metadata sidecar's resources are suffixed -meta. */}}
-{{- define "ward-mcp.metaName" -}}
-{{- printf "%s-meta" (include "ward-mcp.fullname" .) -}}
-{{- end -}}
-
 {{/*
 Do any `secret` entries need a chart-minted ExternalSecret? True when at least
 one value is a bare string (an SSM parameter path) rather than a

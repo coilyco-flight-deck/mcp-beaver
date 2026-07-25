@@ -99,28 +99,25 @@ the gate + publish walkthrough and the Actions-unit enablement gotcha
 
 ## The generic Helm chart (`chart/`)
 
-The distribution vehicle (ward-mcp#8). One chart, one runtime image, many
-releases: the `.mcp.kdl` rides in as values (a ConfigMap), the chart templates
-the k3s exposure (Deployment, Service, token Secret wiring, and the optional
-Authelia-JWT public route). Adding an MCP is a values file + `helm upgrade`.
-Spec-opaque, so the interior-only scope of the spec holds. See
+The auth-neutral distribution vehicle (ward-mcp#8). One chart, one runtime
+image, many releases: the `.mcp.kdl` rides in as values (a ConfigMap), and the
+chart templates the runtime Deployment, ClusterIP or optional NodePort Service,
+and application Secret wiring. Adding an MCP runtime is a values file plus
+`helm upgrade`. Spec-opaque, so the interior-only scope of the spec holds. See
 [chart.md](chart.md).
 
-* **public vs tailnet-only** - `route.public` toggles the full deploy#30 Authelia
-  overlay (Ingress + ForwardAuth + oauth2-proxy + RFC 9728 metadata sidecar)
-  against a tailnet-only NodePort. A write surface stays tailnet-only; a read
-  surface can go public-gated.
-* **ESO-generated cookie-secret** - the oauth2-proxy cookie-secret is generated
-  in-cluster and preserved across `helm upgrade`, so a public deploy needs no
-  hand-created SSM param and re-rolls do not force a re-login. Only the
-  client-secret (the shared Authelia hash by default) stays SSM-backed.
+* **exposure-neutral** - the chart contains no ingress controller, identity
+  provider, authentication proxy, certificate issuer, DNS provider, or
+  protected-resource metadata assumptions. A consuming deployment brings its
+  own exposure layer.
 * **secret wiring** - `secret` maps each `value env <VAR>` the guardfile names to
   an SSM parameter path (chart mints an ExternalSecret) or an existing Secret ref.
 
-Deploying an MCP - picking the host, the SSM token, and public-vs-tailnet, and
-rolling it out - is [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy)'s
-job (deploy#40 / deploy#46 / deploy#61), which consumes the chart per-MCP with
-one values file. ward-mcp ships the generic chart; deploy owns the values.
+Deploying an MCP, including the host, exposure, authentication, TLS, DNS, and
+rollout, is [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy)'s
+job (deploy#40 / deploy#46 / deploy#61). Its shared
+`charts/ingress-public-authed` chart owns the CoilyCo fleet gate. ward-mcp ships
+the auth-neutral runtime chart contract.
 
 ## Examples
 
@@ -129,8 +126,8 @@ one values file. ward-mcp ships the generic chart; deploy owns the values.
 * [`examples/skillsmp.mcp.kdl`](../examples/skillsmp.mcp.kdl) - the first
   end-to-end target: two read tools over the SDK-backed transport against
   skillsmp.com.
-* [`examples/*.values.yaml`](../examples/) - reference deploy-side chart values: a
-  public Authelia-gated read (`skillsmp`) and a tailnet-only write
+* [`examples/*.values.yaml`](../examples/) - auth-neutral chart values: a
+  ClusterIP read surface (`skillsmp`) and an optional NodePort write surface
   (`forgejo-issues`).
 
 ## Not yet built

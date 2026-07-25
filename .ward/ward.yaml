@@ -8,3 +8,12 @@ commands:
   fmt:
     run: gofmt -w cmd internal
     description: Format the Go source tree.
+  helm-lint-chart:
+    run: helm lint chart --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
+    description: Lint the auth-neutral ward-mcp chart.
+  helm-template-clusterip:
+    run: helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
+    description: Render the default ClusterIP chart shape.
+  helm-template-nodeport:
+    run: helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/forgejo-issues.mcp.kdl -f examples/forgejo-issues.values.yaml
+    description: Render the optional NodePort chart shape.
