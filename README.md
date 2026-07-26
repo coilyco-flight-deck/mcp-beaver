@@ -85,7 +85,7 @@ owns public ingress, authentication, TLS, DNS, and rollout.
 * [`examples/upstream.values.yaml`](examples/upstream.values.yaml) - reference
   allowlisted upstream mode with a co-located MCP container.
 * [`chart/`](chart/) - the generic ward-mcp Helm chart. See [`docs/chart.md`](docs/chart.md).
-* [`Makefile`](Makefile) and [`.ward/ward.yaml`](.ward/ward.yaml) - the tracked development command surface.
+* [`.ward/ward.yaml`](.ward/ward.yaml) and [`scripts/ward-command.sh`](scripts/ward-command.sh) - the tracked development command surface.
 * [`docs/DESIGN.md`](docs/DESIGN.md) - the spec→image pipeline, the interior-only scope, and the SDK-backed transport + safety model.
 * [`docs/chart.md`](docs/chart.md) - the chart's templates, values reference, and the runtime contract it targets.
 * [`docs/FEATURES.md`](docs/FEATURES.md) - the living inventory of what ships today.

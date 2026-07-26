@@ -1,31 +1,31 @@
 commands:
   build:
-    run: make build
+    run: bash scripts/ward-command.sh build
     description: Build all Go packages.
   test:
-    run: make test
+    run: bash scripts/ward-command.sh test
     description: Run the Go test suite.
   vet:
-    run: make vet
+    run: bash scripts/ward-command.sh vet
     description: Run go vet across the tree.
   tidy:
-    run: make tidy
+    run: bash scripts/ward-command.sh tidy
     description: Reconcile Go module dependencies.
   fmt:
-    run: make fmt
+    run: bash scripts/ward-command.sh fmt
     description: Format the Go source tree.
   pin-cli-guard:
-    run: make pin-cli-guard
-    description: Pin cli-guard and reconcile Go module dependencies.
+    run: bash scripts/ward-command.sh pin-cli-guard
+    description: Pin cli-guard and reconcile Go module dependencies. Pass an optional version after `--`.
   helm-lint-chart:
-    run: make helm-lint-chart
+    run: helm lint chart --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
     description: Lint the auth-neutral ward-mcp chart.
   helm-template-clusterip:
-    run: make helm-template-clusterip
+    run: helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
     description: Render the default ClusterIP chart shape.
   helm-template-nodeport:
-    run: make helm-template-nodeport
+    run: helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/forgejo-issues.mcp.kdl -f examples/forgejo-issues.values.yaml
     description: Render the optional NodePort chart shape.
   helm-template-upstream:
-    run: make helm-template-upstream
+    run: helm template ward-mcp chart --namespace ward-mcp -f examples/upstream.values.yaml
     description: Render the allowlisted upstream-proxy chart shape.
