@@ -13,9 +13,10 @@ import (
 // exactly the schema.
 func splitArgs(schema opcore.Schema, in map[string]any) opcore.Args {
 	a := opcore.Args{
-		Path:  map[string]string{},
-		Query: map[string]string{},
-		Body:  map[string]any{},
+		Path:        map[string]string{},
+		Query:       map[string]string{},
+		QueryValues: map[string]any{},
+		Body:        map[string]any{},
 	}
 	for name, val := range in {
 		prop, ok := schema.Properties[name]
@@ -26,7 +27,7 @@ func splitArgs(schema opcore.Schema, in map[string]any) opcore.Args {
 		case opcore.LocationPath:
 			a.Path[name] = scalarString(val)
 		case opcore.LocationQuery:
-			a.Query[name] = scalarString(val)
+			a.QueryValues[name] = val
 		case opcore.LocationBody, opcore.LocationForm:
 			a.Body[name] = val
 		}
@@ -34,9 +35,9 @@ func splitArgs(schema opcore.Schema, in map[string]any) opcore.Args {
 	return a
 }
 
-// scalarString renders a path/query scalar as the string opcore fills into the
-// URL. A string passes through; everything else takes fmt's default so a numeric
-// or boolean path param still lands as text.
+// scalarString renders a path scalar as the string opcore fills into the URL.
+// Query values retain their JSON types in Args.QueryValues so opcore can enforce
+// typed scalar and repeated-array contracts before assembling the request.
 func scalarString(v any) string {
 	if s, ok := v.(string); ok {
 		return s

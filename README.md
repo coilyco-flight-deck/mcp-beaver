@@ -52,7 +52,7 @@ convenience getter fixes that same path internally.
 
 The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_issue`, `close_issue` - each guarded, each scoped to `coilyco-*` / `kai` owners.
 
-The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks and safe local aliases for upstream query parameters, each grant projects to one MCP tool, and every call fires through the self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, auth). ward-mcp adds only the grant→tool projection and the SDK-backed transport/session layer.
+The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool, and every call fires through the self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, auth). ward-mcp retains MCP JSON types when routing query arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. ward-mcp adds only the grant→tool projection and the SDK-backed transport/session layer.
 
 ## Distributes as image + chart
 
@@ -75,6 +75,7 @@ The `.mcp.kdl` rides in as chart values (a ConfigMap mounted into the runtime). 
 * [`examples/skillsmp.mcp.kdl`](examples/skillsmp.mcp.kdl) - the first end-to-end target: two read tools over the SDK-backed transport against skillsmp.com.
 * [`examples/*.values.yaml`](examples/) - reference auth-neutral chart values: `skillsmp` uses the default ClusterIP, and `forgejo-issues` demonstrates the optional NodePort.
 * [`chart/`](chart/) - the generic ward-mcp Helm chart. See [`docs/chart.md`](docs/chart.md).
+* [`Makefile`](Makefile) and [`.ward/ward.yaml`](.ward/ward.yaml) - the tracked development command surface.
 * [`docs/DESIGN.md`](docs/DESIGN.md) - the spec→image pipeline, the interior-only scope, and the SDK-backed transport + safety model.
 * [`docs/chart.md`](docs/chart.md) - the chart's templates, values reference, and the runtime contract it targets.
 * [`docs/FEATURES.md`](docs/FEATURES.md) - the living inventory of what ships today.

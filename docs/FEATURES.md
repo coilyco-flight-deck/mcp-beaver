@@ -12,16 +12,22 @@ a guarded MCP server over the official MCP Go SDK's streamable HTTP transport
 at `/mcp`. No per-guardfile Go, no per-server handler. It never binds stdio -
 these run as remote pods reached by URL.
 
-* **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`, pinned
-  `v0.104.0`) parses the ward-mcp inline grammar: `wrap` header, `base-url`,
-  `auth`, `restrict`, and each `can <verb> <resource> { path/query/body/set }`
-  grant. Body blocks preserve JSON types and required fields. A query input can
-  use `upstream=` to expose a safe local name while sending the API's original
-  parameter name. The `.mcp.kdl` is the whole contract. Method is inferred from
-  the verb, path params from the `{template}`.
+* **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`) parses the
+  ward-mcp inline grammar: `wrap` header, `base-url`, `auth`, `restrict`, and
+  each `can <verb> <resource> { path/query/body/set }` grant. Body blocks
+  preserve JSON types and required fields. Query blocks preserve string,
+  boolean, integer, number, and scalar-array types plus numeric bounds, array
+  length bounds, required fields, mutually-exclusive groups, and safe local
+  aliases for upstream parameter names. The `.mcp.kdl` is the whole contract.
+  Method is inferred from the verb, path params from the `{template}`.
 * **Grant → MCP tool projection** - each `Descriptor` becomes one tool named
   `verb_resource`, its `inputSchema` derived (draft-07) from the grant's
   path/query/body, its description the grant sentence. `internal/mcpserver`.
+* **Typed query routing** - MCP query arguments retain their JSON types when
+  ward-mcp passes them to opcore. Scalars keep their existing wire spelling,
+  arrays become repeated upstream keys in caller order, and type, bound,
+  required-field, array-length, and mutual-exclusion violations fail before
+  the upstream receives a request. Flat string query specs stay compatible.
 * **Guarded execute** - a `tools/call` routes the MCP arguments onto
   `opcore.Args` (path/query → URL, body → JSON) and fires the self-guarding
   `opcore.Operation.Execute`: metachar gate, `restrict` allowlist, base-url, and

@@ -1,19 +1,28 @@
 commands:
+  build:
+    run: make build
+    description: Build all Go packages.
   test:
-    run: go test ./...
+    run: make test
     description: Run the Go test suite.
+  vet:
+    run: make vet
+    description: Run go vet across the tree.
   tidy:
-    run: go mod tidy
+    run: make tidy
     description: Reconcile Go module dependencies.
   fmt:
-    run: gofmt -w cmd internal
+    run: make fmt
     description: Format the Go source tree.
+  pin-cli-guard:
+    run: make pin-cli-guard
+    description: Pin cli-guard and reconcile Go module dependencies.
   helm-lint-chart:
-    run: helm lint chart --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
+    run: make helm-lint-chart
     description: Lint the auth-neutral ward-mcp chart.
   helm-template-clusterip:
-    run: helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
+    run: make helm-template-clusterip
     description: Render the default ClusterIP chart shape.
   helm-template-nodeport:
-    run: helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/forgejo-issues.mcp.kdl -f examples/forgejo-issues.values.yaml
+    run: make helm-template-nodeport
     description: Render the optional NodePort chart shape.
