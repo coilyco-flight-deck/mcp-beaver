@@ -12,14 +12,15 @@ a guarded MCP server over the official MCP Go SDK's streamable HTTP transport
 at `/mcp`. No per-guardfile Go, no per-server handler. It never binds stdio -
 these run as remote pods reached by URL.
 
-* **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`) parses the
-  ward-mcp inline grammar: `wrap` header, `base-url`, `auth`, `restrict`, and
-  each `can <verb> <resource> { path/query/body/set }` grant. Body blocks
-  preserve JSON types and required fields. Query blocks preserve string,
-  boolean, integer, number, and scalar-array types plus numeric bounds, array
-  length bounds, required fields, mutually-exclusive groups, and safe local
-  aliases for upstream parameter names. The `.mcp.kdl` is the whole contract.
-  Method is inferred from the verb, path params from the `{template}`.
+* **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`, pinned
+  `v0.122.0`) parses the ward-mcp inline grammar: `wrap` header, `base-url`,
+  `auth`, `restrict`, and each
+  `can <verb> <resource> { path/query/body/set }` grant. Body blocks preserve
+  JSON types and required fields. Query blocks preserve string, boolean,
+  integer, number, and scalar-array types plus numeric bounds, array length
+  bounds, required fields, mutually-exclusive groups, and safe local aliases
+  for upstream parameter names. The `.mcp.kdl` is the whole contract. Method is
+  inferred from the verb, path params from the `{template}`.
 * **Grant → MCP tool projection** - each `Descriptor` becomes one tool named
   `verb_resource`, its `inputSchema` derived (draft-07) from the grant's
   path/query/body, its description the grant sentence. `internal/mcpserver`.

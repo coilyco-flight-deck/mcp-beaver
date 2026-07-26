@@ -1,7 +1,7 @@
 .PHONY: build test vet tidy fmt pin-cli-guard helm-lint-chart helm-template-clusterip helm-template-nodeport
 
 export GOPRIVATE = forgejo.coilysiren.me
-CLI_GUARD_REF ?= v0.104.0
+CLI_GUARD_REF ?= v0.122.0
 
 build: ## Build all Go packages.
 	go build ./...
