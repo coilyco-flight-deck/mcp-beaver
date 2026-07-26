@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp/internal/mcpserver"
 )
@@ -85,6 +86,7 @@ func runServeUpstream(argv []string) error {
 	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
 	name := fs.String("name", "ward-mcp-upstream", "MCP server name")
 	upstream := fs.String("upstream", "", "streamable-HTTP MCP upstream endpoint")
+	connectTimeout := fs.Duration("connect-timeout", 0, "retry upstream startup until this timeout (0 fails immediately)")
 	var tools stringSliceFlag
 	fs.Var(&tools, "tool", "allowlisted upstream tool to expose (repeatable)")
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
@@ -96,13 +98,56 @@ func runServeUpstream(argv []string) error {
 	if len(tools) == 0 {
 		return fmt.Errorf("serve-upstream needs at least one --tool allowlist entry")
 	}
-	srv, err := mcpserver.NewProxy(context.Background(), *name, "", *upstream, tools, nil)
+	srv, err := connectProxyWithRetry(context.Background(), *connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
+		return mcpserver.NewProxy(ctx, *name, "", *upstream, tools, nil)
+	})
 	if err != nil {
 		return fmt.Errorf("connect upstream %q: %w", *upstream, err)
 	}
+	defer func() { _ = srv.Close() }()
 	fmt.Fprintf(os.Stderr, "ward-mcp: serving upstream proxy %s on %s (%d tools)\n", *upstream, *addr, len(tools))
 	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
 	return server.ListenAndServe()
+}
+
+// connectProxyWithRetry lets a proxy container start alongside an upstream
+// sidecar without crash-looping while the sidecar publishes its MCP listener.
+// A zero timeout retains the command's fail-fast behavior for direct use.
+func connectProxyWithRetry(
+	ctx context.Context,
+	timeout time.Duration,
+	retryInterval time.Duration,
+	connect func(context.Context) (*mcpserver.Server, error),
+) (*mcpserver.Server, error) {
+	if timeout < 0 {
+		return nil, fmt.Errorf("connect timeout must not be negative")
+	}
+	if timeout == 0 {
+		return connect(ctx)
+	}
+	if retryInterval <= 0 {
+		return nil, fmt.Errorf("retry interval must be positive")
+	}
+
+	retryCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	var lastErr error
+	for {
+		srv, err := connect(retryCtx)
+		if err == nil {
+			return srv, nil
+		}
+		lastErr = err
+
+		timer := time.NewTimer(retryInterval)
+		select {
+		case <-retryCtx.Done():
+			timer.Stop()
+			return nil, fmt.Errorf("timed out after %s: %w", timeout, lastErr)
+		case <-timer.C:
+		}
+	}
 }
 
 // runServeSSM serves the spec-declared, exact-parameter SSM reader. AWS SDK

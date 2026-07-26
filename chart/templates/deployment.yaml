@@ -1,3 +1,13 @@
+{{- $mode := default "spec" .Values.runtime.mode -}}
+{{- if not (has $mode (list "spec" "upstream")) -}}
+{{- fail (printf "ward-mcp: unsupported runtime.mode %q (want spec or upstream)" $mode) -}}
+{{- end -}}
+{{- if and (eq $mode "upstream") (not .Values.upstream.url) -}}
+{{- fail "ward-mcp: upstream mode needs .Values.upstream.url" -}}
+{{- end -}}
+{{- if and (eq $mode "upstream") (eq (len .Values.upstream.tools) 0) -}}
+{{- fail "ward-mcp: upstream mode needs at least one .Values.upstream.tools entry" -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,9 +31,12 @@ spec:
       labels:
         {{- include "ward-mcp.selectorLabels" . | nindent 8 }}
       annotations:
+        checksum/runtime: {{ dict "mode" $mode "upstream" .Values.upstream "extraContainers" .Values.extraContainers | toJson | sha256sum }}
+        {{- if eq $mode "spec" }}
         # Roll the pod whenever the mounted guardfile changes - a ConfigMap
         # edit alone does not restart a running container.
         checksum/spec: {{ .Values.spec | sha256sum }}
+        {{- end }}
         {{- with .Values.commonAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -46,17 +59,31 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          # Runtime contract: `ward-mcp serve <specPath> --http :<port>`. The
-          # guardfile is read from the mounted path, never baked.
           args:
+            {{- if eq $mode "upstream" }}
+            - serve-upstream
+            - --name
+            - {{ default (include "ward-mcp.fullname" .) .Values.upstream.name | quote }}
+            - --upstream
+            - {{ .Values.upstream.url | quote }}
+            - --connect-timeout
+            - {{ .Values.upstream.connectTimeout | quote }}
+            {{- range .Values.upstream.tools }}
+            - --tool
+            - {{ . | quote }}
+            {{- end }}
+            {{- else }}
             - serve
             - {{ include "ward-mcp.specPath" . }}
+            {{- end }}
             - --http
             - :{{ .Values.http.port }}
           ports:
             - name: http
               containerPort: {{ .Values.http.port }}
+          {{- if or (and .Values.runtime.injectSecrets (gt (len .Values.secret) 0)) (gt (len .Values.extraEnv) 0) }}
           env:
+            {{- if .Values.runtime.injectSecrets }}
             {{- range $env, $src := .Values.secret }}
             - name: {{ $env }}
               valueFrom:
@@ -69,13 +96,21 @@ spec:
                   key: {{ $src.key }}
                   {{- end }}
             {{- end }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- end }}
+          {{- if eq $mode "spec" }}
           volumeMounts:
             - name: spec
               mountPath: /spec
               readOnly: true
+          {{- end }}
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.readinessProbe }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}
@@ -86,10 +121,15 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+        {{- with .Values.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if eq $mode "spec" }}
       volumes:
         - name: spec
           configMap:
             name: {{ include "ward-mcp.fullname" . }}-spec
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -1,8 +1,8 @@
 apiVersion: v2
 name: ward-mcp
-description: The auth-neutral ward-mcp distribution chart - one runtime image, a mounted .mcp.kdl guardfile, application secret wiring, and a ClusterIP or optional NodePort Service.
+description: The auth-neutral ward-mcp distribution chart - one runtime image, a mounted guardfile or exact upstream MCP allowlist, application secret wiring, and a ClusterIP or optional NodePort Service.
 type: application
-version: 0.2.0
+version: 0.3.0
 # The generic ward-mcp runtime image tag this chart defaults to. A release
 # overrides image.tag with the built runtime sha; the guardfile it serves rides
 # in as chart values, not as a per-server image.

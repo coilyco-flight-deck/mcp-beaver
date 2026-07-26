@@ -1,0 +1,16 @@
+runtime:
+  mode: upstream
+  injectSecrets: false
+
+upstream:
+  name: example-reader
+  url: http://127.0.0.1:8000/mcp
+  tools:
+    - read_example
+
+extraContainers:
+  - name: example-upstream
+    image: example.invalid/read-only-mcp:v1
+    ports:
+      - name: upstream-http
+        containerPort: 8000

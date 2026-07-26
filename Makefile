@@ -1,4 +1,4 @@
-.PHONY: build test vet tidy fmt pin-cli-guard helm-lint-chart helm-template-clusterip helm-template-nodeport
+.PHONY: build test vet tidy fmt pin-cli-guard helm-lint-chart helm-template-clusterip helm-template-nodeport helm-template-upstream
 
 export GOPRIVATE = forgejo.coilysiren.me
 CLI_GUARD_REF ?= v0.122.0
@@ -30,3 +30,6 @@ helm-template-clusterip: ## Render the default ClusterIP chart shape.
 
 helm-template-nodeport: ## Render the optional NodePort chart shape.
 	helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/forgejo-issues.mcp.kdl -f examples/forgejo-issues.values.yaml
+
+helm-template-upstream: ## Render the allowlisted upstream-proxy chart shape.
+	helm template ward-mcp chart --namespace ward-mcp -f examples/upstream.values.yaml

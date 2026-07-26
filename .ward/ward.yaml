@@ -26,3 +26,6 @@ commands:
   helm-template-nodeport:
     run: make helm-template-nodeport
     description: Render the optional NodePort chart shape.
+  helm-template-upstream:
+    run: make helm-template-upstream
+    description: Render the allowlisted upstream-proxy chart shape.

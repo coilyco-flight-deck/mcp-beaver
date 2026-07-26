@@ -50,6 +50,9 @@ that subset on the outward MCP surface.
   errors instead of silently widening or mutating the surface.
 * **Proxy calls** - allowed `tools/call` requests are forwarded to the upstream
   MCP session after the guard checks.
+* **Bounded startup retry** - optional `--connect-timeout` retries the initial
+  MCP connection while a co-located upstream starts. Zero retains fail-fast
+  behavior for direct CLI use.
 
 ## `ward-mcp serve-ssm <spec.mcp.kdl> --http :addr`
 
@@ -107,10 +110,11 @@ the gate + publish walkthrough and the Actions-unit enablement gotcha
 ## The generic Helm chart (`chart/`)
 
 The auth-neutral distribution vehicle (ward-mcp#8). One chart, one runtime
-image, many releases: the `.mcp.kdl` rides in as values (a ConfigMap), and the
-chart templates the runtime Deployment, ClusterIP or optional NodePort Service,
-and application Secret wiring. Adding an MCP runtime is a values file plus
-`helm upgrade`. Spec-opaque, so the interior-only scope of the spec holds. See
+image, many releases. `runtime.mode: spec` mounts a `.mcp.kdl` ConfigMap.
+`runtime.mode: upstream` runs an exact passthrough allowlist, omits the
+guardfile, and can co-locate a private MCP through `extraContainers`. The chart
+templates the Deployment, ClusterIP or optional NodePort Service, application
+Secret wiring, and startup protection for sidecar-backed proxies. See
 [chart.md](chart.md).
 
 * **exposure-neutral** - the chart contains no ingress controller, identity
@@ -119,6 +123,8 @@ and application Secret wiring. Adding an MCP runtime is a values file plus
   own exposure layer.
 * **secret wiring** - `secret` maps each `value env <VAR>` the guardfile names to
   an SSM parameter path (chart mints an ExternalSecret) or an existing Secret ref.
+  Upstream mode can disable injection into ward-mcp while a co-located
+  upstream consumes the generated Secret directly.
 
 Deploying an MCP, including the host, exposure, authentication, TLS, DNS, and
 rollout, is [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy)'s
@@ -136,6 +142,8 @@ the auth-neutral runtime chart contract.
 * [`examples/*.values.yaml`](../examples/) - auth-neutral chart values: a
   ClusterIP read surface (`skillsmp`) and an optional NodePort write surface
   (`forgejo-issues`).
+* [`examples/upstream.values.yaml`](../examples/upstream.values.yaml) - an
+  allowlisted upstream proxy with a co-located MCP container.
 
 ## Not yet built
 

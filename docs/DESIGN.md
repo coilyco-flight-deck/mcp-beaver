@@ -97,9 +97,15 @@ inline `.mcp.kdl` + shared runtime ─► ward mcp build ─► OCI image (serve
 ward-mcp distributes as **two generic artifacts** (ward-mcp#6), not a per-server image alone:
 
 1. the **runtime image** above - one static `ward-mcp` binary, shared across every guardfile, and
-2. an **auth-neutral Helm chart** (`chart/`) that templates the runtime layer: the spec as a mounted ConfigMap, the Deployment running the shared runtime, the Service, and application Secret wiring.
+2. an **auth-neutral Helm chart** (`chart/`) that templates the runtime layer:
+   the Deployment, Service, application Secret wiring, and either a mounted
+   spec or an exact upstream MCP allowlist.
 
-Adding an MCP is then a **values file + `helm upgrade`**, no per-guardfile image build and no per-service manifest fork. The chart stays generic and **spec-opaque**: it mounts the `.mcp.kdl` and never parses it, so the interior-only scope holds - the spec still knows nothing about deployment, and the chart knows nothing about any one spec's grants. The full chart reference is in [chart.md](chart.md).
+Adding an MCP is then a **values file + `helm upgrade`**, with no per-service
+image build. In spec mode the chart stays generic and **spec-opaque**: it
+mounts the `.mcp.kdl` and never parses it. In upstream mode it passes the exact
+tool allowlist to `serve-upstream` and may co-locate a loopback-only private
+MCP. The full chart reference is in [chart.md](chart.md).
 
 This does not move deployment policy into ward-mcp. The consuming deployment chooses the host, application Secret source, network exposure, authentication, TLS, and DNS. CoilyCo's fleet-specific public gate lives in deploy's `charts/ingress-public-authed` chart. ward-mcp ships the runtime mechanism, and deploy sets exposure policy.
 

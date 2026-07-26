@@ -1,3 +1,4 @@
+{{- if eq (default "spec" .Values.runtime.mode) "spec" }}
 {{- if not .Values.spec }}
 {{- fail "ward-mcp: .Values.spec is empty - supply the guardfile with `--set-file spec=<name>.mcp.kdl`" }}
 {{- end }}
@@ -16,3 +17,4 @@ metadata:
 data:
   {{ include "ward-mcp.specName" . }}.mcp.kdl: |
     {{- .Values.spec | nindent 4 }}
+{{- end }}

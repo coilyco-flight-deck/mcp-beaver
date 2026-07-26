@@ -6,10 +6,15 @@
 # The full reference lives in docs/chart.md; this header only summarizes the
 # non-obvious knobs so the keys below stay uncluttered.
 #
-# - spec / specName: `spec` is the .mcp.kdl body, supplied with
+# - runtime.mode: `spec` runs a mounted .mcp.kdl. `upstream` runs the exact
+#   passthrough allowlist under `upstream` and does not render a spec ConfigMap.
+# - spec / specName: in spec mode, `spec` is the .mcp.kdl body, supplied with
 #   `--set-file spec=<name>.mcp.kdl`. It is written to a ConfigMap and mounted
 #   at /spec/<specName>.mcp.kdl; the runtime ENTRYPOINT reads it from there,
 #   never baked. specName defaults to the release name.
+# - upstream: streamable-HTTP endpoint, outward server name, exact tool
+#   allowlist, and bounded startup-connect timeout for upstream mode.
+# - extraContainers: optional co-located upstreams or support containers.
 # - image.tag defaults to .Chart.appVersion; a rollout sets it to the built
 #   ward-mcp runtime sha. image.repository defaults to the public Forgejo path;
 #   a deploy overrides it to the in-cluster registry mirror k3s pulls without
@@ -30,6 +35,16 @@ spec: ""
 specName: ""
 
 replicaCount: 1
+
+runtime:
+  mode: spec
+  injectSecrets: true
+
+upstream:
+  name: ""
+  url: ""
+  tools: []
+  connectTimeout: 2m
 
 image:
   repository: forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
@@ -78,6 +93,9 @@ externalSecret:
 # Extra plain (non-secret) env vars, if a runtime ever needs them.
 extraEnv: []
 
+# Optional co-located upstream or support containers.
+extraContainers: []
+
 service:
   type: ClusterIP
   # Optional node-local port. Unset -> ClusterIP-only. Set it to make the
@@ -92,9 +110,14 @@ resources:
     cpu: 250m
     memory: 128Mi
 
-# tcpSocket probes on the HTTP port - the interior binds a listener before it is
-# ready to serve, which is enough for a liveness/readiness gate without assuming
-# a health path on the MCP surface.
+# The startup probe gives upstream mode enough time to connect to a co-located
+# sidecar without liveness turning a bounded wait into a crash cycle.
+startupProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  periodSeconds: 2
+  failureThreshold: 75
 readinessProbe:
   tcpSocket:
     port: http

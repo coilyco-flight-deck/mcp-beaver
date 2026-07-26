@@ -1,6 +1,9 @@
 # The ward-mcp Helm chart
 
-The auth-neutral distribution vehicle ward-mcp ships (ward-mcp#6). **One chart, one runtime image, many releases:** the `.mcp.kdl` guardfile rides in as chart values (a ConfigMap), and the chart templates the runtime workload and Service. Adding an MCP runtime becomes a values file plus `helm upgrade` - no per-guardfile image build, no per-service manifest fork.
+The auth-neutral distribution vehicle ward-mcp ships (ward-mcp#6). **One
+chart, one runtime image, many releases.** The chart can mount a `.mcp.kdl`
+guardfile or wrap an existing streamable-HTTP MCP with an exact tool allowlist.
+Adding an MCP runtime becomes a values file plus `helm upgrade`.
 
 ```sh
 helm upgrade --install skillsmp ward-mcp \
@@ -11,10 +14,21 @@ helm upgrade --install skillsmp ward-mcp \
 
 The chart lives here because the product **distributes as image + chart** (ward-mcp#6). It stays generic and spec-opaque: it takes the `.mcp.kdl` as an opaque blob and never parses it, so the [interior-only scope](DESIGN.md) of the spec is preserved. The spec never reaches down into a chart, and the chart never reaches up into the spec. [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) composes this runtime contract with its fleet-specific exposure charts and owns rollout.
 
+For an upstream MCP:
+
+```sh
+helm upgrade --install reader ward-mcp \
+  -f upstream.values.yaml \
+  --set image.tag=<built-runtime-sha>
+```
+
 ## What it templates
 
-* `configmap-spec.yaml` renders the `.mcp.kdl` from `--set-file spec=...` and mounts it at `/spec/<name>.mcp.kdl`.
-* `deployment.yaml` renders the generic runtime and injects application tokens as environment variables.
+* `configmap-spec.yaml` renders only in spec mode. It mounts the `.mcp.kdl` at
+  `/spec/<name>.mcp.kdl`.
+* `deployment.yaml` renders the generic runtime in spec or upstream mode,
+  injects application tokens when requested, and appends optional co-located
+  containers.
 * `service.yaml` renders a ClusterIP, or a NodePort when `service.nodePort` is set.
 * `externalsecret.yaml` pulls each SSM-path `secret` entry into the environment variable named by the guardfile.
 
@@ -24,17 +38,35 @@ The chart intentionally renders no Ingress, authentication proxy, identity-provi
 
 The chart is buildable against the pinned runtime contract below, in parallel with the runtime image that implements it. Finalize the mount path / port / probe once the runtime lands.
 
-- image ENTRYPOINT `ward-mcp serve /spec/<name>.mcp.kdl --http :8080` (the chart supplies the args, so the path and port stay chart-controlled)
+- spec mode runs `ward-mcp serve /spec/<name>.mcp.kdl --http :8080`
+- upstream mode runs `ward-mcp serve-upstream --upstream <url> --tool <name>... --connect-timeout 2m --http :8080`
 - MCP served over SSE / streamable-HTTP at `/mcp`
-- the token supplied as env, its name per the guardfile's `value env <VAR>`
-- the `.mcp.kdl` read from the mounted path, not baked into the image
+- application secrets remain server-side
+- the `.mcp.kdl` is read from the mounted path in spec mode, never baked
 
 ## Values reference
 
 ### The spec
 
-- **`spec`** - the `.mcp.kdl` guardfile body, supplied with `--set-file spec=<name>.mcp.kdl`. Written to a ConfigMap, mounted at `/spec/<specName>.mcp.kdl`. Empty by default so a bare render fails loud rather than shipping an MCP with no surface.
+- **`runtime.mode`** - `spec` by default, or `upstream`.
+- **`runtime.injectSecrets`** - inject generated application secrets into the
+  ward-mcp container. Disable this when only a co-located upstream needs them.
+- **`spec`** - the `.mcp.kdl` guardfile body in spec mode, supplied with `--set-file spec=<name>.mcp.kdl`. Written to a ConfigMap, mounted at `/spec/<specName>.mcp.kdl`. Empty by default so a spec-mode render fails loud.
 - **`specName`** - the `<name>` in the mount path. Defaults to the release name.
+
+### The upstream
+
+- **`upstream.url`** - private streamable-HTTP MCP endpoint. Required in
+  upstream mode.
+- **`upstream.name`** - outward MCP server name. Defaults to the release
+  fullname.
+- **`upstream.tools`** - exact tool-name allowlist. At least one entry is
+  required.
+- **`upstream.connectTimeout`** - bounded retry window for initial connection,
+  `2m` by default.
+- **`extraContainers`** - optional upstream or support containers appended to
+  the pod. A loopback-only upstream keeps its unfiltered surface off the
+  network.
 
 ### Image
 
@@ -56,7 +88,10 @@ The chart is buildable against the pinned runtime contract below, in parallel wi
 
 ### Pod
 
-- **`replicaCount`, `resources`, `nodeSelector`, `tolerations`, `affinity`, `podSecurityContext`, `securityContext`, `readinessProbe`, `livenessProbe`, `extraEnv`** - the usual pod knobs. Scheduling is empty by default and belongs to the consuming deployment.
+- **`replicaCount`, `resources`, `nodeSelector`, `tolerations`, `affinity`,
+  `podSecurityContext`, `securityContext`, `startupProbe`, `readinessProbe`,
+  `livenessProbe`, `extraEnv`** - the usual pod knobs. The startup probe keeps
+  upstream warmup from becoming a liveness crash cycle.
 
 ## Exposure belongs to the consumer
 
@@ -69,5 +104,7 @@ Run the tracked Ward verbs:
 * `ward exec helm-lint-chart`
 * `ward exec helm-template-clusterip`
 * `ward exec helm-template-nodeport`
+* `ward exec helm-template-upstream`
 
-The two renders prove that the chart emits the runtime objects for both Service shapes. Exposure-layer verification belongs to the consuming deployment.
+The renders prove both Service shapes and the allowlisted upstream shape.
+Exposure-layer verification belongs to the consuming deployment.

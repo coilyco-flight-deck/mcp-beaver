@@ -32,12 +32,14 @@ docker run -p 8080:8080 -e SKILLSMP_API_KEY \
 ```
 
 For a passthrough MCP wrapper over a private upstream, use `serve-upstream`
-with an allowlist:
+with an allowlist. `--connect-timeout` lets a co-located upstream warm up
+without putting the wrapper into a crash cycle:
 
 ```sh
 ward-mcp serve-upstream --name grubhub-mcp \
   --upstream http://playwright-mcp.namespace.svc.cluster.local/mcp \
-  --tool browser_navigate --tool browser_click --http :8080
+  --tool browser_navigate --tool browser_click \
+  --connect-timeout 2m --http :8080
 ```
 
 For an exact-parameter AWS SSM reader, use the KDL-backed SDK runtime:
@@ -65,7 +67,13 @@ helm upgrade --install skillsmp ward-mcp \
   --set image.tag=<built-runtime-sha>
 ```
 
-The `.mcp.kdl` rides in as chart values (a ConfigMap mounted into the runtime). The chart templates only the auth-neutral runtime layer: Deployment, Service, optional NodePort, and application Secret wiring. It stays generic and **spec-opaque** (it never parses the guardfile), so the interior-only scope of the spec holds: the spec never reaches down into the chart, and the chart never reaches up into the spec. [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) owns public ingress, authentication, TLS, DNS, and rollout. Its shared `charts/ingress-public-authed` template composes this runtime contract with the CoilyCo fleet gate.
+The chart has two runtime modes. `spec` mounts a `.mcp.kdl` from chart values.
+`upstream` runs `serve-upstream` with an exact tool allowlist and can co-locate
+the private upstream through `extraContainers`. The chart templates only the
+auth-neutral runtime layer: Deployment, Service, optional NodePort, and
+application Secret wiring. In spec mode it stays **spec-opaque** and never
+parses the guardfile. [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy)
+owns public ingress, authentication, TLS, DNS, and rollout.
 
 ## Layout
 
@@ -74,6 +82,8 @@ The `.mcp.kdl` rides in as chart values (a ConfigMap mounted into the runtime). 
 * [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issues as an MCP. Its body is the frozen ward-mcp inline grammar (`opcore.ParseInline`), and it is the whole contract.
 * [`examples/skillsmp.mcp.kdl`](examples/skillsmp.mcp.kdl) - the first end-to-end target: two read tools over the SDK-backed transport against skillsmp.com.
 * [`examples/*.values.yaml`](examples/) - reference auth-neutral chart values: `skillsmp` uses the default ClusterIP, and `forgejo-issues` demonstrates the optional NodePort.
+* [`examples/upstream.values.yaml`](examples/upstream.values.yaml) - reference
+  allowlisted upstream mode with a co-located MCP container.
 * [`chart/`](chart/) - the generic ward-mcp Helm chart. See [`docs/chart.md`](docs/chart.md).
 * [`Makefile`](Makefile) and [`.ward/ward.yaml`](.ward/ward.yaml) - the tracked development command surface.
 * [`docs/DESIGN.md`](docs/DESIGN.md) - the spec→image pipeline, the interior-only scope, and the SDK-backed transport + safety model.
