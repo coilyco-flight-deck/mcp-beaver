@@ -11,8 +11,8 @@
 # ward-mcp runtime sha the rollout resolves.
 specName: skillsmp
 
-# Pull the run-time token the guardfile names (`value env SKILLSMP_API_KEY`)
-# from SSM into the injected env var. A deploy overrides image.repository to the
-# in-cluster registry mirror.
+# Pull the runtime token the guardfile names (`value env SKILLSMP_API_KEY`)
+# from SSM into the injected env var. A fleet deploy also supplies the
+# read-only Forgejo package Secret through imagePullSecrets.
 secret:
   SKILLSMP_API_KEY: /skillsmp/api-key

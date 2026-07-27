@@ -95,17 +95,14 @@ A single [`Dockerfile`](../Dockerfile) builds the one generic runtime image
 line - the same binary drives every `.mcp.kdl`. Building the image is a CI
 consequence of a landed commit: the `publish` job in
 [`.forgejo/workflows/ci.yml`](../.forgejo/workflows/ci.yml) builds the Dockerfile
-on every push to `main` and pushes it to the in-cluster registry as
-`ward-mcp:<sha>` (mount-not-bake, so one image serves every guardfile - published
-when the runtime source changes, not per spec). The `gate` and `publish` jobs
-run inside the moving :release aos dev-base image
-(`forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:release`), so the CI
-surface no longer bootstraps Go or the Docker CLI itself. The deploy CD resolves
-that sha into the chart's `image.tag` and rolls it. Mirrors the fleet's other
-MCP source repos (reddit-mcp / node-stats-mcp); the plain-http push to the
-insecure in-cluster registry needs no registry secret. See [ci.md](ci.md) for
-the gate + publish walkthrough and the Actions-unit enablement gotcha
-(ward-mcp#10).
+on every push to `main` and publishes the private single-architecture image as
+`forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp:<full-source-sha>`
+(mount-not-bake, so one image serves every guardfile and publishes only when
+runtime source changes). The source gate runs in the moving :release aos
+dev-base image. The trusted deploy runner owns the package-write credential,
+verifies the remote manifest, and hands the exact reference to deploy. Fleet
+consumers use a separate read-only credential. See [ci.md](ci.md) for the gate
+and publish walkthrough plus the Actions-unit enablement gotcha (ward-mcp#10).
 
 ## The generic Helm chart (`chart/`)
 

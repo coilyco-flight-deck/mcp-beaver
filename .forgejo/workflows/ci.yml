@@ -1,10 +1,8 @@
 # CI gate for ward-mcp: build, vet, and test the generic runtime on every push,
-# then - on a push to main only - build the ONE runtime image and publish it to
-# the in-cluster registry keyed by sha. This is the source-repo -> in-cluster
-# -registry half of the fleet's publish pattern (lunch-money-k8s#23); the deploy
-# CD resolves that sha into the chart's image.tag (ward-mcp#8's values.yaml) and
-# rolls it (deploy#61 / #46). One generic image, published when the runtime
-# SOURCE changes - not per guardfile (ward-mcp#6, mount-not-bake).
+# then - on a push to main only - publish the one runtime image to Forgejo OCI,
+# keyed by the full source sha. Deploy consumes that exact reference. One
+# generic image is published when the runtime source changes, not per
+# guardfile (ward-mcp#6, mount-not-bake).
 #
 # cli-guard is a private forgejo module fetched anonymously, so GOPRIVATE keeps
 # it off the public proxy and sumdb (the go gate here and the Dockerfile build).
@@ -33,13 +31,8 @@ jobs:
       - name: test
         run: go test ./...
 
-  # Build + push the runtime image to the in-cluster registry, tagged by sha.
-  # Mirrors coilyco-flight-deck/reddit-mcp and node-stats-mcp's build-publish:
-  # the DinD sidecar carries --insecure-registry=192.168.0.194:30500, so the
-  # plain-http push round-trips with no registry login or push secret. Runs only
-  # on a push to main (never PRs), after the gate, so a green source commit is
-  # what produces `.../ward-mcp:<sha>`. No :latest - the fleet keys rollouts by
-  # sha (scripts/rollout.sh), and the chart's image.tag is the resolved sha.
+  # A trusted main-only host runner publishes one private source-sha image and
+  # verifies the remote manifest after the source gate passes.
       - name: Alert Telegram on main failure
         if: ${{ failure() && github.ref == 'refs/heads/main' }}
         continue-on-error: true
@@ -55,42 +48,14 @@ jobs:
           API_BASE: https://api.telegram.org
         run: "python3 -c 'exec(\"import os\\nimport sys\\nimport urllib.error\\nimport urllib.parse\\nimport urllib.request\\n\\ndef build_message():\\n    return \\\"\\\\n\\\".join([\\n        \\\"CI failed on main\\\",\\n        f\\\"repo: {os.environ['\"'\"'REPO'\"'\"']}\\\",\\n        f\\\"workflow: {os.environ['\"'\"'WORKFLOW'\"'\"']}\\\",\\n        f\\\"job: {os.environ['\"'\"'JOB'\"'\"']}\\\",\\n        f\\\"ref: {os.environ['\"'\"'REF'\"'\"']}\\\",\\n        f\\\"sha: {os.environ['\"'\"'SHA'\"'\"']}\\\",\\n        f\\\"run: {os.environ['\"'\"'RUN_URL'\"'\"']}\\\",\\n    ])\\n\\ndef main():\\n    bot_token = os.environ.get(\\\"BOT_TOKEN\\\", \\\"\\\")\\n    chat_id = os.environ.get(\\\"CHAT_ID\\\", \\\"\\\")\\n    if not bot_token or not chat_id:\\n        print(\\\"telegram alert missing required secret\\\", file=sys.stderr)\\n        return 2\\n    proxy_url = os.environ.get(\\\"FORGEJO_EGRESS_PROXY\\\", \\\"\\\").strip()\\n    payload = urllib.parse.urlencode(\\n        {\\n            \\\"chat_id\\\": chat_id,\\n            \\\"text\\\": build_message(),\\n            \\\"disable_web_page_preview\\\": \\\"true\\\",\\n        }\\n    ).encode(\\\"utf-8\\\")\\n    api_base = os.environ.get(\\\"API_BASE\\\", \\\"https://api.telegram.org\\\").rstrip(\\\"/\\\")\\n    request = urllib.request.Request(\\n        f\\\"{api_base}/bot{bot_token}/sendMessage\\\",\\n        data=payload,\\n        method=\\\"POST\\\",\\n    )\\n    opener = urllib.request.build_opener(\\n        urllib.request.ProxyHandler({\\\"https\\\": proxy_url})\\n        if proxy_url\\n        else urllib.request.ProxyHandler()\\n    )\\n    try:\\n        with opener.open(request, timeout=15) as response:\\n            response.read()\\n    except urllib.error.URLError as exc:\\n        print(f\\\"telegram alert failed ({type(exc).__name__})\\\", file=sys.stderr)\\n        return 1\\n    return 0\\n\\nraise SystemExit(main())\\n\")'"
   publish:
-    runs-on: docker
-    container: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:release
+    runs-on: deploy
     needs: [gate]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      # The DinD sidecar shares the runner pod's netns on :2375, but the job
-      # container sits on a separate per-workflow bridge - so probe candidate
-      # hosts and pin the first that answers. Same shape as the other MCPs.
-      - name: Resolve docker host
-        run: |
-          set -euo pipefail
-          gw=$(node -e "const fs=require('fs');const l=(fs.readFileSync('/proc/net/route','utf8').split('\n').find(x=>x.split('\t')[1]==='00000000'))||'';const h=l.split(/\s+/)[2]||'';if(h){console.log(h.match(/../g).reverse().map(x=>parseInt(x,16)).join('.'))}" || true)
-          for h in "tcp://${gw}:2375" "${DOCKER_HOST:-}" tcp://localhost:2375 unix:///var/run/docker.sock; do
-            [ -z "$h" ] && continue
-            [ "$h" = "tcp://:2375" ] && continue
-            if docker -H "$h" info >/dev/null 2>&1; then
-              echo "docker daemon reachable at $h"
-              echo "DOCKER_HOST=$h" >> "$GITHUB_ENV"
-              exit 0
-            fi
-            echo "no docker daemon at $h"
-          done
-          echo "no reachable docker daemon" >&2
-          exit 1
-      # Build and push to the in-cluster registry. The DinD sidecar carries
-      # --insecure-registry=192.168.0.194:30500, so the plain-http push
-      # round-trips. Legacy builder (no buildx plugin in the static CLI). The
-      # Dockerfile sets GOPRIVATE so its cli-guard fetch stays off the public
-      # proxy/sumdb, matching the go gate above.
-      - name: Build and push
-        run: |
-          set -euo pipefail
-          IMAGE=192.168.0.194:30500/ward-mcp:${{ github.sha }}
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
+      - name: Publish immutable image
+        run: bash scripts/publish-image.sh
       - name: Alert Telegram on main failure
         if: ${{ failure() && github.ref == 'refs/heads/main' }}
         continue-on-error: true

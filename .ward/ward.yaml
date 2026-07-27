@@ -14,6 +14,12 @@ commands:
   fmt:
     run: bash scripts/ward-command.sh fmt
     description: Format the Go source tree.
+  image-build:
+    run: docker build -t ward-mcp:local .
+    description: Build the generic ward-mcp runtime image locally.
+  check-publish:
+    run: bash -n scripts/publish-image.sh
+    description: Validate the trusted Forgejo OCI publisher shell contract.
   pin-cli-guard:
     run: bash scripts/ward-command.sh pin-cli-guard
     description: Pin cli-guard and reconcile Go module dependencies. Pass an optional version after `--`.

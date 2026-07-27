@@ -16,9 +16,9 @@
 #   allowlist, and bounded startup-connect timeout for upstream mode.
 # - extraContainers: optional co-located upstreams or support containers.
 # - image.tag defaults to .Chart.appVersion; a rollout sets it to the built
-#   ward-mcp runtime sha. image.repository defaults to the public Forgejo path;
-#   a deploy overrides it to the in-cluster registry mirror k3s pulls without
-#   auth (kept out of this public-safe repo).
+#   ward-mcp runtime sha. image.repository defaults to the canonical Forgejo
+#   OCI path. A private-package consumer supplies a read-only pull Secret
+#   through imagePullSecrets.
 # - secret: map of ENV_VAR -> source, one entry per `value env <VAR>` the
 #   guardfile names. A STRING value is an SSM parameter path - the chart mints
 #   an ExternalSecret pulling it into a Secret and injects it as that env var. A

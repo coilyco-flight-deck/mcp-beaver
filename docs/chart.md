@@ -70,9 +70,12 @@ The chart is buildable against the pinned runtime contract below, in parallel wi
 
 ### Image
 
-- **`image.repository`** - defaults to the public Forgejo path; a deploy overrides it to the in-cluster registry mirror k3s pulls without auth (kept out of this public-safe repo).
+- **`image.repository`** - defaults to the canonical Forgejo OCI path.
 - **`image.tag`** - defaults to `.Chart.appVersion`; a rollout sets it to the built runtime sha. The guardfile it serves is values, not a per-server image.
 - **`image.pullPolicy`** - `Always` by default (the shared `:latest`-style runtime).
+- **`imagePullSecrets`** - a private-package consumer names the
+  `kubernetes.io/dockerconfigjson` Secret backed by its read-only Forgejo
+  package credential.
 
 ### Secret wiring
 

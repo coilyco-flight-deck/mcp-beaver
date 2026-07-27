@@ -3,9 +3,8 @@
 The [`.forgejo/workflows/ci.yml`](../.forgejo/workflows/ci.yml) pipeline is the
 whole automation surface: a **gate** that build/vet/tests the generic runtime on
 every push and pull request, and a **publish** step that - on a push to `main`
-only - builds the one runtime image and pushes it to the in-cluster registry
-keyed by sha. It mirrors the fleet's other MCP source repos (`reddit-mcp`,
-`node-stats-mcp`).
+only - builds the one runtime image, publishes it to Forgejo OCI under the full
+source sha, and verifies the remote manifest.
 
 ## `gate` job
 
@@ -25,28 +24,22 @@ moving :release aos dev-base image, which already ships Go and the Docker CLI.
 
 ## `publish` job
 
-Runs on the `docker` label, `needs: [gate]`, guarded by
+Runs on the trusted `deploy` label, `needs: [gate]`, guarded by
 `if: github.event_name == 'push' && github.ref == 'refs/heads/main'` - never on a
 pull request, never on a feature branch. A green source commit on `main` is what
-produces `192.168.0.194:30500/ward-mcp:<sha>`.
+produces
+`forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp:<full-source-sha>`.
 
-* **dev-base container** - the job also runs inside
-  `forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:release`, which already
-  ships the Docker CLI.
-* **resolve docker host** - the sidecar shares the runner pod's netns on `:2375`
-  but the job container sits on a separate per-workflow bridge, so the step
-  probes candidate hosts and pins the first that answers.
-* **build + push** - `docker build` then `docker push` to the in-cluster
-  registry. The DinD sidecar carries `--insecure-registry=192.168.0.194:30500`,
-  so the plain-http push round-trips with no registry login or push secret.
+* **trusted host runner** - the main-only lane owns Docker and receives the
+  package-write credential.
+* **build + push** - `scripts/publish-image.sh` creates a temporary Docker
+  config, authenticates through password-stdin, builds one source-sha tag, and
+  pushes it to Forgejo OCI.
+* **remote proof** - `docker manifest inspect` must resolve the exact pushed
+  reference before the job succeeds.
 * **no `:latest`** - the fleet keys rollouts by sha (`scripts/rollout.sh`), and
-  the chart's `image.tag` is the resolved sha. The deploy CD resolves that sha
-  and rolls it (deploy#61 / deploy#46).
-
-The publish target `192.168.0.194:30500` is an **in-cluster** address. If the
-runner executing the job cannot reach it, that is an infra reachability fact
-(runner placement / registry route), not a code bug - land the gate green and
-report the publish blocker precisely rather than forcing it.
+  the deploy bundle consumes the exact full reference through a separate
+  read-only credential.
 
 ## Why CI never ran (ward-mcp#10)
 

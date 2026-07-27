@@ -67,6 +67,12 @@ helm upgrade --install skillsmp ward-mcp \
   --set image.tag=<built-runtime-sha>
 ```
 
+Every push to canonical `main` publishes the private single-architecture
+runtime as
+`forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp:<full-source-sha>`.
+The trusted publisher verifies the remote manifest, and every fleet release
+consumes that exact reference through a separate read-only credential.
+
 The chart has two runtime modes. `spec` mounts a `.mcp.kdl` from chart values.
 `upstream` runs `serve-upstream` with an exact tool allowlist and can co-locate
 the private upstream through `extraContainers`. The chart templates only the
