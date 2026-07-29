@@ -1,8 +1,8 @@
 # CI gate for ward-mcp: build, vet, and test the generic runtime on every push,
-# then - on a push to main only - publish the one runtime image to Forgejo OCI,
-# keyed by the full source sha. Deploy consumes that exact reference. One
-# generic image is published when the runtime source changes, not per
-# guardfile (ward-mcp#6, mount-not-bake).
+# then - on a push to main or an authorized manual dispatch of main - publish
+# the one runtime image to Forgejo OCI, keyed by the full source sha. Deploy
+# consumes that exact reference. One generic image is published when the
+# runtime source changes, not per guardfile (ward-mcp#6, mount-not-bake).
 #
 # cli-guard is a private forgejo module fetched anonymously, so GOPRIVATE keeps
 # it off the public proxy and sumdb (the go gate here and the Dockerfile build).
@@ -50,7 +50,7 @@ jobs:
   publish:
     runs-on: deploy
     needs: [gate]
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4

@@ -3,8 +3,9 @@
 The [`.forgejo/workflows/ci.yml`](../.forgejo/workflows/ci.yml) pipeline is the
 whole automation surface: a **gate** that build/vet/tests the generic runtime on
 every push and pull request, and a **publish** step that - on a push to `main`
-only - builds the one runtime image, publishes it to Forgejo OCI under the full
-source sha, and verifies the remote manifest.
+or an authorized manual dispatch of `main` - builds the one runtime image,
+publishes it to Forgejo OCI under the full source sha, and verifies the remote
+manifest.
 
 ## `gate` job
 
@@ -25,9 +26,10 @@ moving :release aos dev-base image, which already ships Go and the Docker CLI.
 ## `publish` job
 
 Runs on the trusted `deploy` label, `needs: [gate]`, guarded by
-`if: github.event_name == 'push' && github.ref == 'refs/heads/main'` - never on a
-pull request, never on a feature branch. A green source commit on `main` is what
-produces
+the `push` or `workflow_dispatch` event plus `refs/heads/main` - never on a pull
+request, never on a feature branch. The manual path recovers a commit whose
+original push did not queue Actions without inventing a local image or empty
+source commit. A green source commit on `main` is what produces
 `forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp:<full-source-sha>`.
 
 * **trusted host runner** - the main-only lane owns Docker and receives the
