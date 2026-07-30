@@ -50,11 +50,13 @@ func toolSuccess(resp opcore.Response) *mcp.CallToolResult {
 	if text == "" {
 		text = resp.Status
 	}
-	out := &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+	result := any(resp.Decoded)
+	if result == nil {
+		result = text
 	}
-	if resp.Decoded != nil {
-		out.StructuredContent = map[string]any{"result": resp.Decoded}
+	out := &mcp.CallToolResult{
+		Content:           []mcp.Content{&mcp.TextContent{Text: text}},
+		StructuredContent: map[string]any{"result": result},
 	}
 	return out
 }

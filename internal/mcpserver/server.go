@@ -16,6 +16,15 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+const serverInstructions = "This server exposes only policy-approved tools. Use read-only tools to inspect state before mutation tools. Follow each tool's input and output schema, and treat safety annotations as hints rather than authorization."
+
+var resultOutputSchema = json.RawMessage(`{
+	"type":"object",
+	"properties":{"result":{}},
+	"required":["result"],
+	"additionalProperties":false
+}`)
+
 // Server is a guarded MCP runtime backed by either local opcore grants or an
 // allowlisted upstream streamable-HTTP MCP server.
 type Server struct {
@@ -58,7 +67,7 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		descs:    descs,
 		cfg:      cfg,
 		tools:    tools,
-		sdk:      mcp.NewServer(&mcp.Implementation{Name: name, Version: "0.1.0", Icons: icons}, nil),
+		sdk:      newSDKServer(name, icons),
 	}
 
 	for _, d := range descs {
@@ -83,7 +92,7 @@ func NewProxy(ctx context.Context, name, specPath, upstreamURL string, allowTool
 		specPath:  specPath,
 		tools:     proxy.selectedTools(),
 		upstreams: []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http"}},
-		sdk:       mcp.NewServer(&mcp.Implementation{Name: name, Version: "0.1.0"}, nil),
+		sdk:       newSDKServer(name, nil),
 		closeFn:   proxy.Close,
 	}
 	for _, tool := range proxy.selectedTools() {
@@ -165,11 +174,21 @@ func cloneTool(tool *mcp.Tool) *mcp.Tool {
 	return &cloned
 }
 
+func newSDKServer(name string, icons []mcp.Icon) *mcp.Server {
+	return mcp.NewServer(
+		&mcp.Implementation{Name: name, Version: "0.1.0", Icons: icons},
+		&mcp.ServerOptions{Instructions: serverInstructions},
+	)
+}
+
 func toolSpec(d opcore.Descriptor) *mcp.Tool {
 	return &mcp.Tool{
-		Name:        toolName(d),
-		Description: describe(d),
-		InputSchema: json.RawMessage(d.InputSchema().JSONSchema()),
+		Name:         toolName(d),
+		Title:        toolTitle(d),
+		Description:  describe(d),
+		InputSchema:  json.RawMessage(d.InputSchema().JSONSchema()),
+		OutputSchema: resultOutputSchema,
+		Annotations:  toolAnnotations(d),
 	}
 }
 
@@ -197,14 +216,50 @@ func toolName(d opcore.Descriptor) string {
 	return d.Leaf + "_" + d.Group
 }
 
+func toolTitle(d opcore.Descriptor) string {
+	title := strings.NewReplacer("_", " ", "-", " ").Replace(toolName(d))
+	if title == "" {
+		return ""
+	}
+	return strings.ToUpper(title[:1]) + title[1:]
+}
+
 // describe is the tool's human description: the Guardfile `describe "..."` note
-// when present, else the authorizing grant sentence (`can create issue`), which
-// is always meaningful and audit-anchored.
+// when present, else a user-goal sentence derived from the authorizing grant.
 func describe(d opcore.Descriptor) string {
 	if strings.TrimSpace(d.Describe) != "" {
 		return d.Describe
 	}
-	return d.Grant
+	return fmt.Sprintf("Use this when the user wants to %s %s through the configured upstream service.", d.Leaf, d.Group)
+}
+
+func toolAnnotations(d opcore.Descriptor) *mcp.ToolAnnotations {
+	destructive := d.Destructive
+	openWorld := true
+	return &mcp.ToolAnnotations{
+		ReadOnlyHint:    isReadOnlyMethod(d.Method),
+		DestructiveHint: &destructive,
+		IdempotentHint:  isIdempotentMethod(d.Method),
+		OpenWorldHint:   &openWorld,
+	}
+}
+
+func isReadOnlyMethod(method string) bool {
+	switch strings.ToUpper(method) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+func isIdempotentMethod(method string) bool {
+	switch strings.ToUpper(method) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPut, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Server) specName() string {

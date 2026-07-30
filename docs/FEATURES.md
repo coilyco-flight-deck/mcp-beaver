@@ -13,7 +13,7 @@ at `/mcp`. No per-guardfile Go, no per-server handler. It never binds stdio -
 these run as remote pods reached by URL.
 
 * **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`, pinned
-  `v0.122.0`) parses the ward-mcp inline grammar: `wrap` header, `base-url`,
+  `v0.127.0`) parses the ward-mcp inline grammar: `wrap` header, `base-url`,
   `auth`, `restrict`, and each
   `can <verb> <resource> { path/query/body/set }` grant. Body blocks preserve
   JSON types and required fields. Query blocks preserve string, boolean,
@@ -23,7 +23,13 @@ these run as remote pods reached by URL.
   inferred from the verb, path params from the `{template}`.
 * **Grant → MCP tool projection** - each `Descriptor` becomes one tool named
   `verb_resource`, its `inputSchema` derived (draft-07) from the grant's
-  path/query/body, its description the grant sentence. `internal/mcpserver`.
+  path/query/body, and its description taken from `describe` or derived as a
+  user-goal sentence. ward-mcp also derives a human title, read-only,
+  destructive, idempotent, and open-world annotations from the operation's
+  HTTP behavior, plus a `{result: ...}` output schema. Successful calls return
+  matching `structuredContent` while retaining the upstream response as text
+  for older clients. Initialization includes compact server instructions for
+  the policy boundary. `internal/mcpserver`.
 * **Typed query routing** - MCP query arguments retain their JSON types when
   ward-mcp passes them to opcore. Scalars keep their existing wire spelling,
   arrays become repeated upstream keys in caller order, and type, bound,
@@ -34,6 +40,10 @@ these run as remote pods reached by URL.
   `opcore.Operation.Execute`: metachar gate, `restrict` allowlist, base-url, and
   env-token auth are the engine's, never re-implemented here. A denied or failed
   call returns as a tool result with `isError` set.
+* **Built-in reader metadata** - the exact-parameter SSM tools advertise
+  read-only, non-destructive, idempotent, open-world behavior and a specific
+  structured parameter output schema. Passthrough mode preserves upstream
+  titles, schemas, annotations, and results without reclassifying them.
 * **Deny-by-absence** - the served surface is exactly the `can` grants. An
   unwritten grant is an absent tool; that is the deletion guard.
 

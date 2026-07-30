@@ -22,6 +22,18 @@ type ssmPolicy struct {
 	Parameter string
 }
 
+var ssmOutputSchema = json.RawMessage(`{
+	"type":"object",
+	"properties":{
+		"name":{"type":"string"},
+		"type":{"type":"string"},
+		"value":{"type":"string"},
+		"version":{"type":"integer"}
+	},
+	"required":["name","type","value","version"],
+	"additionalProperties":false
+}`)
+
 // NewSSM builds an SSM reader whose KDL policy fixes the sole parameter that
 // either outward tool may retrieve.
 func NewSSM(ctx context.Context, name, specPath string, src []byte) (*Server, error) {
@@ -39,14 +51,20 @@ func NewSSM(ctx context.Context, name, specPath string, src []byte) (*Server, er
 func newSSMServer(name, specPath string, policy ssmPolicy, client ssmGetter) (*Server, error) {
 	tools := []*mcp.Tool{
 		{
-			Name:        "get_parameter",
-			Description: "Get the one SSM parameter allowed by this ward policy.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}`),
+			Name:         "get_parameter",
+			Title:        "Get parameter",
+			Description:  "Use this when the user wants to get the one SSM parameter allowed by this ward policy.",
+			InputSchema:  json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}`),
+			OutputSchema: ssmOutputSchema,
+			Annotations:  readOnlyOpenWorldAnnotations(),
 		},
 		{
-			Name:        "get_forgejo_read_token",
-			Description: "Get the ward policy's fixed Forgejo read token parameter.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+			Name:         "get_forgejo_read_token",
+			Title:        "Get Forgejo read token",
+			Description:  "Use this when the user wants to get the ward policy's fixed Forgejo read token parameter.",
+			InputSchema:  json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+			OutputSchema: ssmOutputSchema,
+			Annotations:  readOnlyOpenWorldAnnotations(),
 		},
 	}
 	s := &Server{
@@ -54,12 +72,23 @@ func newSSMServer(name, specPath string, policy ssmPolicy, client ssmGetter) (*S
 		specPath:  specPath,
 		tools:     tools,
 		upstreams: []adminUpstreamResponse{{Kind: "aws-ssm", Mode: "sdk"}},
-		sdk:       mcp.NewServer(&mcp.Implementation{Name: name, Version: "0.1.0"}, nil),
+		sdk:       newSDKServer(name, nil),
 	}
 	s.sdk.AddTool(tools[0], ssmToolHandler(client, policy, true))
 	s.sdk.AddTool(tools[1], ssmToolHandler(client, policy, false))
 	s.installCallRewrite()
 	return s, nil
+}
+
+func readOnlyOpenWorldAnnotations() *mcp.ToolAnnotations {
+	destructive := false
+	openWorld := true
+	return &mcp.ToolAnnotations{
+		ReadOnlyHint:    true,
+		DestructiveHint: &destructive,
+		IdempotentHint:  true,
+		OpenWorldHint:   &openWorld,
+	}
 }
 
 func ssmToolHandler(client ssmGetter, policy ssmPolicy, callerNamesParameter bool) mcp.ToolHandler {
@@ -104,7 +133,10 @@ func ssmToolSuccess(parameter *types.Parameter) *mcp.CallToolResult {
 		Version: parameter.Version,
 	}
 	raw, _ := json.Marshal(payload)
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(raw)}}}
+	return &mcp.CallToolResult{
+		Content:           []mcp.Content{&mcp.TextContent{Text: string(raw)}},
+		StructuredContent: payload,
+	}
 }
 
 func parseSSMPolicy(src []byte) (ssmPolicy, error) {

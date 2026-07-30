@@ -11,7 +11,9 @@ The exposed MCP surface is exactly the guardfile's grants: an unwritten `delete 
 ## Quickstart
 
 The generic `ward-mcp serve` runtime renders any `.mcp.kdl` into a guarded MCP
-server. Run it directly:
+server. Each grant also projects ChatGPT-friendly metadata: a human title,
+user-goal description, input and output schemas, and safety annotations derived
+from the operation's HTTP behavior. Run it directly:
 
 ```sh
 # initialize, then reuse the session id for tools/list and tools/call
@@ -54,7 +56,7 @@ convenience getter fixes that same path internally.
 
 The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_issue`, `close_issue` - each guarded, each scoped to `coilyco-*` / `kai` owners.
 
-The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool, and every call fires through the self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, auth). ward-mcp retains MCP JSON types when routing query arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. ward-mcp adds only the grant→tool projection and the SDK-backed transport/session layer.
+The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool, and every call fires through the self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, auth). ward-mcp retains MCP JSON types when routing query arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. ward-mcp adds only the grant→tool projection and the SDK-backed transport/session layer.
 
 ## Distributes as image + chart
 

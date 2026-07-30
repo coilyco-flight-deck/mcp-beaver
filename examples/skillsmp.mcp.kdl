@@ -12,6 +12,9 @@
 // projection with an arbitrary vendor tool name is a naming follow-up (see
 // DESIGN.md "Still open"), not a runtime concern. The guarded surface is
 // correct either way - two read-only GETs, no write grants minted.
+// ward-mcp advertises that read-only classification, idempotence, the
+// open-world upstream boundary, and the structured result output schema in
+// each MCP tool definition.
 //
 // The exact query fields and paths mirror skillsmp's public search endpoints;
 // adjust them to a one-time authoring reference if the vendor surface changes.

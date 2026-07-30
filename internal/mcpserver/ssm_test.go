@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -44,5 +45,53 @@ func TestSSMPolicyFailsClosed(t *testing.T) {
 }`)
 	if _, err := parseSSMPolicy(src); err == nil {
 		t.Fatal("write grant should fail closed")
+	}
+}
+
+func TestSSMToolsAdvertiseReadMetadataAndStructuredOutput(t *testing.T) {
+	s, err := newSSMServer("ssm", "ssm.mcp.kdl", ssmPolicy{
+		Region:    "us-east-1",
+		Parameter: "/allowed",
+	}, &fakeSSM{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.tools) != 2 {
+		t.Fatalf("tool count = %d, want 2", len(s.tools))
+	}
+	for _, tool := range s.tools {
+		if tool.Title == "" {
+			t.Errorf("%s title is empty", tool.Name)
+		}
+		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint || !tool.Annotations.IdempotentHint {
+			t.Errorf("%s annotations = %#v, want read-only and idempotent", tool.Name, tool.Annotations)
+		}
+		if tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint {
+			t.Errorf("%s destructiveHint = %#v, want false", tool.Name, tool.Annotations.DestructiveHint)
+		}
+		if tool.Annotations.OpenWorldHint == nil || !*tool.Annotations.OpenWorldHint {
+			t.Errorf("%s openWorldHint = %#v, want true", tool.Name, tool.Annotations.OpenWorldHint)
+		}
+		if tool.OutputSchema == nil {
+			t.Errorf("%s output schema is nil", tool.Name)
+		}
+	}
+
+	result := ssmToolSuccess(&types.Parameter{
+		Name:    aws.String("/allowed"),
+		Type:    types.ParameterTypeSecureString,
+		Value:   aws.String("redacted-test-value"),
+		Version: 7,
+	})
+	raw, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var structured map[string]any
+	if err := json.Unmarshal(raw, &structured); err != nil {
+		t.Fatal(err)
+	}
+	if structured["name"] != "/allowed" || structured["version"] != float64(7) {
+		t.Errorf("structuredContent = %v", structured)
 	}
 }

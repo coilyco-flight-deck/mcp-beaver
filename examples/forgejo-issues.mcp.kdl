@@ -12,9 +12,11 @@
 // engine directly. cli-mcp is read as a CODE REFERENCE only; ward-mcp
 // implements its own SSE/HTTP MCP server and does not depend on cli-mcp.
 //
-// The magic is what is NOT here: no tool definitions, no input schemas. Each
+// The magic is what is NOT here: no separate tool definitions or schemas. Each
 // `can` grant IS one MCP tool named `verb_resource`; its input schema is
-// derived by opcore from the grant's `path`/`query`/`body`.
+// derived by opcore from the grant's `path`/`query`/`body`. ward-mcp derives
+// the human title, safety annotations, and structured `{result: ...}` output
+// contract from the same operation descriptor.
 wrap ward mcp forgejo {
     base-url "forgejo.coilysiren.me/api/v1"
 

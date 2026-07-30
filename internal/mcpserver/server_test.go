@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"forgejo.coilysiren.me/coilyco-flight-deck/cli-guard/http/opcore"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -187,6 +188,9 @@ func TestInitializeHandshake(t *testing.T) {
 	if serverInfo["name"] != "test" {
 		t.Errorf("serverInfo.name = %v, want test", serverInfo["name"])
 	}
+	if got, _ := result["instructions"].(string); !strings.Contains(got, "policy-approved tools") {
+		t.Errorf("instructions = %q, want policy boundary guidance", got)
+	}
 }
 
 // TestToolsListFromSpec proves the tool list is derived from a `.mcp.kdl`: the
@@ -243,6 +247,60 @@ func TestToolsListFromSpec(t *testing.T) {
 		if _, ok := props[field]; !ok {
 			t.Errorf("create_issue schema missing property %q; got %v", field, props)
 		}
+	}
+	assertToolMetadata(t, create, "Create issue", false, false, false, true)
+	assertResultOutputSchema(t, create)
+
+	get := findTool(t, tools, "get_issue")
+	assertToolMetadata(t, get, "Get issue", true, false, true, true)
+	assertResultOutputSchema(t, get)
+}
+
+func TestToolMetadataClassifiesHTTPBehavior(t *testing.T) {
+	tests := []struct {
+		name            string
+		desc            opcore.Descriptor
+		wantReadOnly    bool
+		wantDestructive bool
+		wantIdempotent  bool
+	}{
+		{
+			name:           "read",
+			desc:           opcore.Descriptor{Leaf: "get", Group: "thing", Method: http.MethodGet},
+			wantReadOnly:   true,
+			wantIdempotent: true,
+		},
+		{
+			name: "additive write",
+			desc: opcore.Descriptor{Leaf: "create", Group: "thing", Method: http.MethodPost},
+		},
+		{
+			name:            "destructive idempotent write",
+			desc:            opcore.Descriptor{Leaf: "delete", Group: "thing", Method: http.MethodDelete, Destructive: true},
+			wantDestructive: true,
+			wantIdempotent:  true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tool := toolSpec(test.desc)
+			if tool.Title == "" || tool.OutputSchema == nil {
+				t.Fatalf("metadata incomplete: %#v", tool)
+			}
+			got := tool.Annotations
+			if got == nil {
+				t.Fatal("annotations are nil")
+			}
+			if got.ReadOnlyHint != test.wantReadOnly || got.IdempotentHint != test.wantIdempotent {
+				t.Errorf("annotations = %#v", got)
+			}
+			if got.DestructiveHint == nil || *got.DestructiveHint != test.wantDestructive {
+				t.Errorf("destructiveHint = %#v, want %t", got.DestructiveHint, test.wantDestructive)
+			}
+			if got.OpenWorldHint == nil || !*got.OpenWorldHint {
+				t.Errorf("openWorldHint = %#v, want true", got.OpenWorldHint)
+			}
+		})
 	}
 }
 
@@ -310,6 +368,11 @@ func TestToolCallRoundTrip(t *testing.T) {
 	text := firstText(t, result)
 	if !strings.Contains(text, `"name":"widget"`) {
 		t.Errorf("tool content = %q, want the upstream body", text)
+	}
+	structured, _ := result["structuredContent"].(map[string]any)
+	value, _ := structured["result"].(map[string]any)
+	if value["id"] != float64(42) || value["name"] != "widget" {
+		t.Errorf("structuredContent = %v, want decoded upstream result", structured)
 	}
 }
 
@@ -656,6 +719,53 @@ func findTool(t *testing.T, tools []map[string]any, name string) map[string]any 
 	}
 	t.Fatalf("no tool %q", name)
 	return nil
+}
+
+func assertToolMetadata(
+	t *testing.T,
+	tool map[string]any,
+	wantTitle string,
+	wantReadOnly, wantDestructive, wantIdempotent, wantOpenWorld bool,
+) {
+	t.Helper()
+	if tool["title"] != wantTitle {
+		t.Errorf("%s title = %v, want %q", tool["name"], tool["title"], wantTitle)
+	}
+	annotations, ok := tool["annotations"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s annotations = %T, want object", tool["name"], tool["annotations"])
+	}
+	want := map[string]bool{
+		"readOnlyHint":    wantReadOnly,
+		"destructiveHint": wantDestructive,
+		"idempotentHint":  wantIdempotent,
+		"openWorldHint":   wantOpenWorld,
+	}
+	for field, expected := range want {
+		got, _ := annotations[field].(bool)
+		if got != expected {
+			t.Errorf("%s annotations.%s = %v, want %t", tool["name"], field, annotations[field], expected)
+		}
+	}
+}
+
+func assertResultOutputSchema(t *testing.T, tool map[string]any) {
+	t.Helper()
+	schema, ok := tool["outputSchema"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s outputSchema = %T, want object", tool["name"], tool["outputSchema"])
+	}
+	if schema["type"] != "object" {
+		t.Errorf("%s outputSchema.type = %v, want object", tool["name"], schema["type"])
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	if _, ok := properties["result"]; !ok {
+		t.Errorf("%s outputSchema omitted result: %v", tool["name"], schema)
+	}
+	required, _ := schema["required"].([]any)
+	if len(required) != 1 || required[0] != "result" {
+		t.Errorf("%s outputSchema.required = %v, want [result]", tool["name"], schema["required"])
+	}
 }
 
 func firstText(t *testing.T, res map[string]any) string {

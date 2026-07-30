@@ -39,7 +39,7 @@ The engine carries zero upstream knowledge, so **one engine drives every spec, n
 ## What ward-mcp adds on top of cli-guard
 
 * cli-guard provides inline operation parsing, guards, request assembly, and authentication.
-* ward-mcp provides grant-to-tool projection, the SDK-backed streamable HTTP transport, the runtime image, and the spec-opaque auth-neutral chart.
+* ward-mcp provides grant-to-tool projection, derived MCP metadata, the SDK-backed streamable HTTP transport, the runtime image, and the spec-opaque auth-neutral chart.
 * deploy composes the runtime contract with ingress, authentication, TLS, DNS, per-MCP values, and rollout.
 
 A tool call arrives over the SDK-backed MCP session, is validated against the derived schema, run through cli-guard's guard (restrict gate, argv metachar gate on URL-bound inputs), resolved to an HTTP request, signed with the injected secret, and fired upstream. The response renders back over the MCP channel.
@@ -78,6 +78,32 @@ A ward-mcp server **cannot exceed its guardfile**, because the guardfile is the 
 * The argv metachar gate runs on inputs that compose into the URL (path + query); body fields (issue titles, markdown) are exempt, as in cli-guard.
 
 Handing a write-capable MCP to an agent (deploy#40's ask) is defensible: the blast radius is one small reviewable file, enforced at the transport, not trusted to the model.
+
+## Derived tool metadata
+
+The guardfile remains the sole per-tool authoring surface. ward-mcp derives the
+MCP metadata that clients use for selection, display, and confirmation:
+
+* **Title** - a human-readable form of `verb_resource`, such as `Create issue`.
+* **Description** - the grant's `describe` note when present. Otherwise a
+  user-goal sentence derived from the verb and resource.
+* **Safety annotations** - GET, HEAD, and OPTIONS are read-only. The standard
+  HTTP idempotent methods are marked idempotent. cli-guard's destructive grant
+  bit controls `destructiveHint`. Local operations are open-world because they
+  call a configured upstream service.
+* **Output schema** - generic HTTP operations advertise an object with one
+  required `result` field. The field accepts the decoded upstream JSON value or
+  the fallback response text. `tools/call` returns that object in
+  `structuredContent` and mirrors the original response in text content for
+  older clients.
+* **Server instructions** - initialize includes compact guidance about the
+  policy-approved surface, reading before mutation, and treating annotations as
+  hints rather than authorization.
+
+The exact-parameter SSM reader advertises the same read-only safety metadata and
+a specific parameter result schema. An allowlisted upstream proxy preserves the
+upstream tool contract, including its title, schemas, annotations, and result,
+instead of reclassifying behavior ward-mcp does not own.
 
 ## The pipeline (Guardfile -> image; deploy takes it from there)
 
@@ -133,9 +159,9 @@ One construct rides **beside** the frozen grammar rather than in it (deploy#255)
 
 ### Implemented (ward-mcp#7)
 
-The `ward-mcp serve <spec> --http :addr` runtime ships as a thin shell over cli-guard's `http/opcore` (pinned at `v0.80.0` in [`go.mod`](../go.mod)):
+The `ward-mcp serve <spec> --http :addr` runtime ships as a thin shell over cli-guard's `http/opcore` (pinned at `v0.127.0` in [`go.mod`](../go.mod)):
 
-* `internal/mcpserver.New` runs `opcore.ParseInline`, wires the value providers (env/file/literal), and registers each `Descriptor` as one MCP tool on the official Go SDK server (name `verb_resource`, `inputSchema` from `Descriptor.InputSchema().JSONSchema()`, description from the grant sentence).
+* `internal/mcpserver.New` runs `opcore.ParseInline`, wires the value providers (env/file/literal), and registers each `Descriptor` as one MCP tool on the official Go SDK server. The name is `verb_resource`, `inputSchema` comes from `Descriptor.InputSchema().JSONSchema()`, and client-facing metadata is derived as described above.
 * A `tools/call` maps the MCP arguments onto `opcore.Args` by the schema's neutral Location hint (path/query→URL, body→JSON) and fires the self-guarding `opcore.Operation.Execute`; a guard/upstream failure returns as an MCP tool result with `isError` set, not a transport fault.
 * The runtime serves `/mcp` through the SDK's streamable HTTP handler and `/healthz` for liveness. Never stdio.
 
