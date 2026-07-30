@@ -45,13 +45,20 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		return nil, err
 	}
 
+	// Top-level `icon` nodes ride beside `wrap`, outside the frozen inline
+	// grammar opcore owns (deploy#255) - parsed here, served on initialize.
+	icons, err := parseIcons(src)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Server{
 		name:     name,
 		specPath: specPath,
 		descs:    descs,
 		cfg:      cfg,
 		tools:    tools,
-		sdk:      mcp.NewServer(&mcp.Implementation{Name: name, Version: "0.1.0"}, nil),
+		sdk:      mcp.NewServer(&mcp.Implementation{Name: name, Version: "0.1.0", Icons: icons}, nil),
 	}
 
 	for _, d := range descs {

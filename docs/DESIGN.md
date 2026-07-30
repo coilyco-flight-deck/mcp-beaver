@@ -117,6 +117,8 @@ A push touching a `.mcp.kdl` triggers the image build in CI, the way kai-server 
 
 The body is the frozen ward-mcp inline grammar parsed by `opcore.ParseInline` - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` grants (each with its `path`/`query`/`body`/`set`); input schemas are derived from those inline op definitions, not authored separately. The `.mcp.kdl` suffix marks the ward-mcp target and keeps the file out of cli-guard's CLI-discovery glob.
 
+One construct rides **beside** the frozen grammar rather than in it (deploy#255): a top-level `icon "<src>"` node (optional `mime=` / `sizes=` props, repeatable), stated as a sibling of `wrap`. `opcore.ParseInline` reads only the `wrap` node, so the icon never touches the frozen wrap-body grammar or the cli-guard pin; ward-mcp parses it itself (`internal/mcpserver/icon.go`) and serves it as `serverInfo.icons` on initialize - the mark connector tiles render. Prefer a `data:` URI: the gated deploys sit behind oauth2-proxy, where a hosted icon URL would 401 for the connecting client.
+
 ### Resolved
 
 * **Filename** - `.mcp.kdl`. Exclusively an HTTP MCP image, not also a CLI, so the file names its target.
