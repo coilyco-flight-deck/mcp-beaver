@@ -15,12 +15,14 @@ these run as remote pods reached by URL.
 * **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`, pinned
   `v0.127.0`) parses the ward-mcp inline grammar: `wrap` header, `base-url`,
   `auth`, `restrict`, and each
-  `can <verb> <resource> { path/query/body/set }` grant. Body blocks preserve
-  JSON types and required fields. Query blocks preserve string, boolean,
-  integer, number, and scalar-array types plus numeric bounds, array length
-  bounds, required fields, mutually-exclusive groups, and safe local aliases
-  for upstream parameter names. The `.mcp.kdl` is the whole contract. Method is
-  inferred from the verb, path params from the `{template}`.
+  `can <verb> <resource> { path/query/body/set }` grant. Flat body declarations
+  remain optional string shorthand. Body blocks preserve typed scalars, scalar
+  arrays, nested objects, required fields, and unconstrained raw object or
+  array subtrees. Query blocks preserve string, boolean, integer, number, and
+  scalar-array types plus numeric bounds, array length bounds, required fields,
+  mutually-exclusive groups, and safe local aliases for upstream parameter
+  names. The `.mcp.kdl` is the whole contract. Method is inferred from the verb,
+  path params from the `{template}`.
 * **Grant → MCP tool projection** - each `Descriptor` becomes one tool named
   `verb_resource`, its `inputSchema` derived (draft-07) from the grant's
   path/query/body, and its description taken from `describe` or derived as a
@@ -36,10 +38,11 @@ these run as remote pods reached by URL.
   required-field, array-length, and mutual-exclusion violations fail before
   the upstream receives a request. Flat string query specs stay compatible.
 * **Guarded execute** - a `tools/call` routes the MCP arguments onto
-  `opcore.Args` (path/query → URL, body → JSON) and fires the self-guarding
-  `opcore.Operation.Execute`: metachar gate, `restrict` allowlist, base-url, and
-  env-token auth are the engine's, never re-implemented here. A denied or failed
-  call returns as a tool result with `isError` set.
+  `opcore.Args` (path/query → URL, body → JSON) without flattening nested body
+  objects or arrays, then fires the self-guarding `opcore.Operation.Execute`:
+  metachar gate, `restrict` allowlist, base-url, and env-token auth are the
+  engine's, never re-implemented here. A denied or failed call returns as a
+  tool result with `isError` set.
 * **Built-in reader metadata** - the exact-parameter SSM tools advertise
   read-only, non-destructive, idempotent, open-world behavior and a specific
   structured parameter output schema. Passthrough mode preserves upstream

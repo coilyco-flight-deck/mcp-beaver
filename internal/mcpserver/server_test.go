@@ -248,6 +248,18 @@ func TestToolsListFromSpec(t *testing.T) {
 			t.Errorf("create_issue schema missing property %q; got %v", field, props)
 		}
 	}
+	for _, field := range []string{"title", "body"} {
+		prop, _ := props[field].(map[string]any)
+		if prop["type"] != "string" {
+			t.Errorf("flat body property %q = %v, want optional string", field, prop)
+		}
+	}
+	required, _ := schema["required"].([]any)
+	for _, name := range required {
+		if name == "title" || name == "body" {
+			t.Errorf("flat body property %q became required: %v", name, required)
+		}
+	}
 	assertToolMetadata(t, create, "Create issue", false, false, false, true)
 	assertResultOutputSchema(t, create)
 

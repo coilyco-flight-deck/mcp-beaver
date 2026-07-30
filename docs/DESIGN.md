@@ -141,7 +141,7 @@ A push touching a `.mcp.kdl` triggers the image build in CI, the way kai-server 
 
 ## The spec dialect
 
-The body is the frozen ward-mcp inline grammar parsed by `opcore.ParseInline` - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` grants (each with its `path`/`query`/`body`/`set`); input schemas are derived from those inline op definitions, not authored separately. The `.mcp.kdl` suffix marks the ward-mcp target and keeps the file out of cli-guard's CLI-discovery glob.
+The body is the frozen ward-mcp inline grammar parsed by `opcore.ParseInline` - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` grants (each with its `path`/`query`/`body`/`set`). Input schemas are derived from those inline op definitions, not authored separately. Flat `body "title" "body"` syntax remains shorthand for optional string fields. A `body { ... }` block adds typed scalars, scalar arrays, nested objects, required fields, and raw object or array escape hatches. Raw fields advertise their outer JSON type and `x-opcore-raw: true` while leaving the subtree unconstrained. The `.mcp.kdl` suffix marks the ward-mcp target and keeps the file out of cli-guard's CLI-discovery glob.
 
 One construct rides **beside** the frozen grammar rather than in it (deploy#255): a top-level `icon "<src>"` node (optional `mime=` / `sizes=` props, repeatable), stated as a sibling of `wrap`. `opcore.ParseInline` reads only the `wrap` node, so the icon never touches the frozen wrap-body grammar or the cli-guard pin; ward-mcp parses it itself (`internal/mcpserver/icon.go`) and serves it as `serverInfo.icons` on initialize - the mark connector tiles render. Prefer a `data:` URI: the gated deploys sit behind oauth2-proxy, where a hosted icon URL would 401 for the connecting client.
 
@@ -161,8 +161,8 @@ One construct rides **beside** the frozen grammar rather than in it (deploy#255)
 
 The `ward-mcp serve <spec> --http :addr` runtime ships as a thin shell over cli-guard's `http/opcore` (pinned at `v0.127.0` in [`go.mod`](../go.mod)):
 
-* `internal/mcpserver.New` runs `opcore.ParseInline`, wires the value providers (env/file/literal), and registers each `Descriptor` as one MCP tool on the official Go SDK server. The name is `verb_resource`, `inputSchema` comes from `Descriptor.InputSchema().JSONSchema()`, and client-facing metadata is derived as described above.
-* A `tools/call` maps the MCP arguments onto `opcore.Args` by the schema's neutral Location hint (path/query→URL, body→JSON) and fires the self-guarding `opcore.Operation.Execute`; a guard/upstream failure returns as an MCP tool result with `isError` set, not a transport fault.
+* `internal/mcpserver.New` runs `opcore.ParseInline`, wires the value providers (env/file/literal), and registers each `Descriptor` as one MCP tool on the official Go SDK server. The name is `verb_resource`, `inputSchema` is the unchanged output of `Descriptor.InputSchema().JSONSchema()`, and client-facing metadata is derived as described above.
+* A `tools/call` maps the MCP arguments onto `opcore.Args` by the schema's neutral Location hint (path/query→URL, body→JSON) without flattening JSON values, then fires the self-guarding `opcore.Operation.Execute`. A guard or upstream failure returns as an MCP tool result with `isError` set, not a transport fault.
 * The runtime serves `/mcp` through the SDK's streamable HTTP handler and `/healthz` for liveness. Never stdio.
 
 ## First milestone (matches deploy#40)

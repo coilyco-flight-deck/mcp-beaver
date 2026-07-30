@@ -58,6 +58,52 @@ The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_i
 
 The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool, and every call fires through the self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, auth). ward-mcp retains MCP JSON types when routing query arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. ward-mcp adds only the grant→tool projection and the SDK-backed transport/session layer.
 
+## Authoring request bodies
+
+Use the flat shorthand when every caller-supplied body field is an optional
+string:
+
+```kdl
+body "title" "body"
+```
+
+Use a body block when the MCP schema needs types, required fields, arrays, or
+nested objects:
+
+```kdl
+body {
+    field "title" type="string" required=true
+    field "published" type="boolean"
+    array "labels" items="string"
+    object "options" {
+        field "limit" type="integer" required=true
+        field "compact" type="boolean"
+    }
+}
+```
+
+Use `raw=true` only as the escape hatch for an object or array whose internal
+shape is intentionally unconstrained:
+
+```kdl
+body {
+    object "vendorPayload" raw=true required=true
+    array "events" raw=true
+}
+```
+
+Raw values are still real JSON objects or arrays in `tools/call` arguments.
+They are not JSON strings. ward-mcp advertises the object or array type plus
+`x-opcore-raw: true`, then preserves the supplied subtree when it builds the
+upstream request.
+
+To migrate an existing `body "title" "body"` declaration, replace it with a
+block containing `field "title" type="string"` and
+`field "body" type="string"`. Both remain optional, so the behavior is
+unchanged. Add `required=true` only when the upstream contract requires the
+field. Replace a string field with `object`, `array`, or a scalar `field` type
+only when callers should send that JSON type.
+
 ## Distributes as image + chart
 
 The product ships two artifacts (ward-mcp#6): the generic runtime **image** above, and a generic **Helm chart** (`chart/`) that templates the k3s exposure. **Deploying** an MCP is then a values file plus `helm upgrade` - no per-guardfile image build, no per-service manifest fork:
