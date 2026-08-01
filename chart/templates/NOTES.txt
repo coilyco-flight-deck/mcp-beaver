@@ -2,6 +2,8 @@ ward-mcp release {{ .Release.Name }} deployed to namespace {{ .Release.Namespace
 
 The runtime serves the guardfile mounted at {{ include "ward-mcp.specPath" . }},
 over MCP (streamable-HTTP) at {{ .Values.http.path }} on port {{ .Values.http.port }}.
+Every projected tool is also available automatically at
+POST /api/{tool-name} on the same port.
 
 Reach the auth-neutral service in-cluster:
 
@@ -12,6 +14,7 @@ Reach the auth-neutral service in-cluster:
 Optional node-local path: http://<node>:{{ .Values.service.nodePort }}{{ .Values.http.path }}
 {{- end }}
 
-Public ingress, authentication, TLS, and DNS belong to the consuming deployment.
-The guardfile is the whole tool surface: only its `can` grants become MCP tools,
-each `never` denial mints nothing. Audit that one file to know the blast radius.
+Public ingress, caller identity, authentication, TLS, and DNS belong to the
+consuming deployment. The guardfile is the whole tool surface: only its `can`
+grants become MCP tools and matching HTTP endpoints, each `never` denial mints
+nothing. Audit that one file to know the blast radius.

@@ -71,11 +71,16 @@ func newSSMServer(name, specPath string, policy ssmPolicy, client ssmGetter) (*S
 		name:      name,
 		specPath:  specPath,
 		tools:     tools,
+		handlers:  make(map[string]mcp.ToolHandler, len(tools)),
 		upstreams: []adminUpstreamResponse{{Kind: "aws-ssm", Mode: "sdk"}},
 		sdk:       newSDKServer(name, nil),
 	}
-	s.sdk.AddTool(tools[0], ssmToolHandler(client, policy, true))
-	s.sdk.AddTool(tools[1], ssmToolHandler(client, policy, false))
+	parameterHandler := ssmToolHandler(client, policy, true)
+	tokenHandler := ssmToolHandler(client, policy, false)
+	s.handlers[tools[0].Name] = parameterHandler
+	s.handlers[tools[1].Name] = tokenHandler
+	s.sdk.AddTool(tools[0], parameterHandler)
+	s.sdk.AddTool(tools[1], tokenHandler)
 	s.installCallRewrite()
 	return s, nil
 }

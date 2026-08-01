@@ -4,13 +4,13 @@ Tracking: [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/
 
 ## The one-line pitch
 
-**A cli-guard Guardfile, no handwritten code, becomes a Docker image that serves a working MCP over HTTP.**
+**A cli-guard Guardfile, no handwritten code, becomes a Docker image that serves a working MCP and matching HTTP tool API.**
 
-`ward mcp build forgejo-issues.mcp.kdl` bakes the guardfile plus one generic runtime into an OCI image whose ENTRYPOINT serves the Model Context Protocol over the official MCP Go SDK's streamable HTTP transport. The `.mcp.kdl` is the whole contract: every `can` grant becomes one MCP tool, with method, path template, and typed params authored inline. No per-server Go, no per-server Dockerfile, no per-server MCP handler, and - the part that surprises people - **no per-tool input schema**, because the engine derives it from the inline op definition.
+`ward mcp build forgejo-issues.mcp.kdl` bakes the guardfile plus one generic runtime into an OCI image whose ENTRYPOINT serves the Model Context Protocol over the official MCP Go SDK's streamable HTTP transport and automatically projects the same tools over HTTP. The `.mcp.kdl` is the whole contract: every `can` grant becomes one MCP tool and one `POST /api/{tool-name}` endpoint, with method, path template, and typed params authored inline. No per-server Go, no per-server Dockerfile, no per-server handler, and - the part that surprises people - **no per-tool input schema**, because the engine derives it from the inline op definition.
 
 ## Scope: the spec configures the image interior, and stops there
 
-The `.mcp.kdl` spec configures **only the interior of the Docker image**: which upstream API, how it authenticates, and which grants become which MCP tools - the behavior of the server process running inside the container. ward-mcp's job ends at a runnable image that serves MCP over `/mcp`.
+The `.mcp.kdl` spec configures **only the interior of the Docker image**: which upstream API, how it authenticates, and which grants become which tools - the behavior of the server process running inside the container. ward-mcp's job ends at a runnable image that serves MCP over `/mcp` and projects the same tools over `/api/{tool-name}`.
 
 Everything about **exposing** that image is out of scope for the spec and for ward-mcp:
 
@@ -20,9 +20,9 @@ Everything about **exposing** that image is out of scope for the spec and for wa
 
 are templated by the generic **chart** ward-mcp ships (see [Distribution](#distribution-image--chart) below), which [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) consumes per-MCP with one values file and rolls out. This keeps the dependency direction clean, the same rule deploy already follows: **the image stays unaware of how it is deployed.** The spec never reaches down into a chart, and the chart never reaches up into the spec - the chart is generic and treats the `.mcp.kdl` as opaque values it mounts, never parses.
 
-## Why HTTP at /mcp and never stdio
+## Why network HTTP and never stdio
 
-The image serves MCP over the SDK-backed streamable HTTP transport because the servers are meant to run always-on on kai-server's k3s cluster and be reached **by URL over the network** - like deploy's existing `steam-mcp`, `reddit-mcp`, `node-stats-mcp`, `repo-recall`. A remote pod cannot be driven over stdio, which co-locates server with client. So the interior always binds an HTTP listener, never a stdio loop. There is no transport fork to decide. (The *listener* is interior; the *route to it* is deploy's.)
+The image serves MCP over the SDK-backed streamable HTTP transport and each tool over an ordinary JSON HTTP endpoint because the servers are meant to run always-on on kai-server's k3s cluster and be reached **by URL over the network** - like deploy's existing `steam-mcp`, `reddit-mcp`, `node-stats-mcp`, `repo-recall`. A remote pod cannot be driven over stdio, which co-locates server with client. So the interior always binds one HTTP listener, never a stdio loop. There is no transport fork to decide. (The *listener* is interior; the *route to it* is deploy's.)
 
 ## Not built on ward. Not built on cli-mcp. Built on cli-guard.
 
@@ -34,23 +34,40 @@ cli-guard already turns a Guardfile into a guarded surface, in three layers ([sp
 * **L1 - policy IR.** The compiled operation set. verb+resource resolves to an operation by convention; `op` overrides.
 * **L2 - Guardfile.** The human authoring layer, pure KDL data, parsed never evaluated.
 
-The engine carries zero upstream knowledge, so **one engine drives every spec, no code changes.** Its `specverb.Build` mounts each grant as a generic guarded action: path params become positionals, query and body fields become typed flags, all validated before the wire call. cli-guard's own `kdl-specs` driver renders that into a no-code **CLI**. ward-mcp renders the same engine's inline operation set into **MCP tools** instead, served over HTTP.
+The engine carries zero upstream knowledge, so **one engine drives every spec, no code changes.** Its `specverb.Build` mounts each grant as a generic guarded action: path params become positionals, query and body fields become typed flags, all validated before the wire call. cli-guard's own `kdl-specs` driver renders that into a no-code **CLI**. ward-mcp renders the same engine's inline operation set into **MCP tools and matching HTTP endpoints** instead.
 
 ## What ward-mcp adds on top of cli-guard
 
 * cli-guard provides inline operation parsing, guards, request assembly, and authentication.
-* ward-mcp provides grant-to-tool projection, derived MCP metadata, the SDK-backed streamable HTTP transport, the runtime image, and the spec-opaque auth-neutral chart.
+* ward-mcp provides grant-to-tool projection, derived MCP metadata, matching HTTP endpoint projection, the SDK-backed streamable HTTP transport, the runtime image, and the spec-opaque auth-neutral chart.
 * deploy composes the runtime contract with ingress, authentication, TLS, DNS, per-MCP values, and rollout.
 
-A tool call arrives over the SDK-backed MCP session, is validated against the derived schema, run through cli-guard's guard (restrict gate, argv metachar gate on URL-bound inputs), resolved to an HTTP request, signed with the injected secret, and fired upstream. The response renders back over the MCP channel.
+A tool call arrives over the SDK-backed MCP session or `POST /api/{tool-name}`, runs through the same registered handler and cli-guard guard (restrict gate, argv metachar gate on URL-bound inputs), resolves to an HTTP request, is signed with the injected upstream secret, and fires upstream. Both projections return the MCP `CallToolResult` JSON shape.
 
-## MCP boundary: generic surface only
+## Automatic dual projection
 
-ward-mcp intentionally exposes only the generic MCP protocol surface. It keeps
-`initialize`, `ping`, `tools/list`, and `tools/call` today, and any future
-resource or prompt support must stay on the generic MCP names (`resources/list`,
-`resources/read`, `prompts/list`, `prompts/get`). Ward-specific admin,
-lifecycle, reload, or control verbs do not belong in the MCP surface.
+Every projected tool is always available through two protocol faces:
+
+* MCP clients use `tools/call` over the SDK-backed `/mcp` session.
+* Ordinary HTTP clients send the same JSON argument object to
+  `POST /api/{tool-name}` without creating an MCP session.
+
+The HTTP route is not a second authorization surface. It looks up the same
+deny-by-absence tool registry and calls the exact handler registered with the
+MCP SDK. Inline opcore tools, allowlisted upstream MCP tools, and exact-parameter
+SSM tools all use the same projection. There is no flag, chart value, or
+per-tool handler to drift.
+
+ward-mcp does not authenticate inbound callers or trust identity-shaped request
+fields. Deploy owns the identity proxy, workload identity, network boundary,
+TLS, and ingress policy. Guardfile `auth` is the credential ward-mcp uses to
+call its upstream. It is not caller authentication.
+
+The MCP protocol surface keeps `initialize`, `ping`, `tools/list`, and
+`tools/call` today. Any future resource or prompt support must stay on the
+generic MCP names (`resources/list`, `resources/read`, `prompts/list`,
+`prompts/get`). Ward-specific admin, lifecycle, reload, or control verbs do not
+belong in the MCP surface.
 
 ## Operator HTTP boundary: non-MCP control and inspection
 
@@ -65,14 +82,14 @@ surface:
   runtime cannot safely swap its guarded state in place, so the endpoint says
   restart required instead of pretending otherwise.
 
-These endpoints sit behind the same deployment/auth assumptions as the other
-operator-only surfaces. The MCP surface stays model-facing only.
+These endpoints sit behind the same deployment-owned authentication assumptions
+as `/mcp` and `/api/`. ward-mcp itself performs no inbound authentication.
 
 ## The safety story - the guardfile IS the tool surface
 
 A ward-mcp server **cannot exceed its guardfile**, because the guardfile is the only source of the tools.
 
-* Every `can` grant is one tool. There is no way to declare a tool the guardfile does not grant.
+* Every `can` grant is one MCP tool and one matching HTTP endpoint. There is no way to declare a tool the guardfile does not grant.
 * An unwritten `delete issue` grant means no `delete_issue` tool is minted. In the frozen `opcore.ParseInline` grammar this is **deny-by-absence**: the served surface is exactly the `can` grants, so leaving a grant out is the deletion guard.
 * `restrict owner matches coilyco-*` bounds every `{owner}` path param.
 * The argv metachar gate runs on inputs that compose into the URL (path + query); body fields (issue titles, markdown) are exempt, as in cli-guard.
@@ -114,7 +131,7 @@ inline `.mcp.kdl` + shared runtime ─► ward mcp build ─► OCI image (serve
 
 1. **Author** the `*.mcp.kdl` inline. The method, path, and typed params are the reviewable surface.
 2. **Build** bakes the guardfile plus the single static `ward-mcp` runtime into an image. There is no vendored OpenAPI JSON, no `.lock.json`, no prune output, and no `op` pin in the build input.
-3. The image ENTRYPOINT is `ward-mcp serve /spec/<name>.mcp.kdl --http :8080`: it parses the guardfile, registers one MCP tool per grant, and binds an HTTP listener on a default port.
+3. The image ENTRYPOINT is `ward-mcp serve /spec/<name>.mcp.kdl --http :8080`: it parses the guardfile, registers one MCP tool and one HTTP endpoint per grant, and binds an HTTP listener on a default port.
 
 **Consuming the chart** - picking the host, the SSM token, and public-vs-tailnet for a given MCP, and rolling it out - is deploy's work (deploy#61, deploy#46), described there. ward-mcp ships the generic chart the values feed; deploy owns the values.
 
@@ -148,7 +165,7 @@ One construct rides **beside** the frozen grammar rather than in it (deploy#255)
 ### Resolved
 
 * **Filename** - `.mcp.kdl`. Exclusively an HTTP MCP image, not also a CLI, so the file names its target.
-* **Transport** - SDK-backed streamable HTTP at `/mcp`, bound inside the image. No stdio.
+* **Transport** - SDK-backed streamable HTTP at `/mcp` plus automatic `POST /api/{tool-name}`, bound on one listener inside the image. No stdio.
 * **cli-mcp** - code reference only, not a dependency.
 * **Serve knobs** - the image binds a default HTTP port; the spec stays **pure policy** and carries no `serve` block. Port mapping and path routing are k3s concerns owned by `deploy`, consistent with the interior-only scope.
 
@@ -161,9 +178,9 @@ One construct rides **beside** the frozen grammar rather than in it (deploy#255)
 
 The `ward-mcp serve <spec> --http :addr` runtime ships as a thin shell over cli-guard's `http/opcore` (pinned at `v0.127.0` in [`go.mod`](../go.mod)):
 
-* `internal/mcpserver.New` runs `opcore.ParseInline`, wires the value providers (env/file/literal), and registers each `Descriptor` as one MCP tool on the official Go SDK server. The name is `verb_resource`, `inputSchema` is the unchanged output of `Descriptor.InputSchema().JSONSchema()`, and client-facing metadata is derived as described above.
+* `internal/mcpserver.New` runs `opcore.ParseInline`, wires the value providers (env/file/literal), and registers each `Descriptor` as one MCP tool on the official Go SDK server plus one matching HTTP route. The name is `verb_resource`, `inputSchema` is the unchanged output of `Descriptor.InputSchema().JSONSchema()`, and client-facing metadata is derived as described above.
 * A `tools/call` maps the MCP arguments onto `opcore.Args` by the schema's neutral Location hint (path/query→URL, body→JSON) without flattening JSON values, then fires the self-guarding `opcore.Operation.Execute`. A guard or upstream failure returns as an MCP tool result with `isError` set, not a transport fault.
-* The runtime serves `/mcp` through the SDK's streamable HTTP handler and `/healthz` for liveness. Never stdio.
+* The runtime serves `/mcp` through the SDK's streamable HTTP handler, every registered tool through `POST /api/{tool-name}`, and `/healthz` for liveness. The MCP and HTTP calls share one handler. Never stdio.
 
 ## First milestone (matches deploy#40)
 

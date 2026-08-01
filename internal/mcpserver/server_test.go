@@ -549,6 +549,12 @@ func TestAdminDescribe(t *testing.T) {
 	if transport["mode"] != transportMode {
 		t.Errorf("transport.mode = %v, want %s", transport["mode"], transportMode)
 	}
+	if transport["apiPrefix"] != apiPrefix {
+		t.Errorf("transport.apiPrefix = %v, want %s", transport["apiPrefix"], apiPrefix)
+	}
+	if transport["inboundAuth"] != "deployment-owned" {
+		t.Errorf("transport.inboundAuth = %v, want deployment-owned", transport["inboundAuth"])
+	}
 	config, _ := body["config"].(map[string]any)
 	if config["baseUrlMode"] != "static" {
 		t.Errorf("config.baseUrlMode = %v, want static", config["baseUrlMode"])

@@ -1,14 +1,13 @@
 // Command ward-mcp is the generic runtime that renders one `.mcp.kdl` spec into
-// a guarded MCP server over HTTP. It is the single static binary baked into
-// every ward-mcp image; the spec is the only thing that varies. There is no
-// per-guardfile Go and no per-server handler.
+// a guarded MCP server and matching HTTP tool API. It is the single static
+// binary baked into every ward-mcp image; the spec is the only thing that
+// varies. There is no per-guardfile Go and no per-server handler.
 //
 //	ward-mcp serve /spec/<name>.mcp.kdl --http :8080
 //
 // It parses the spec through cli-guard's opcore engine, projects one MCP tool
-// per grant, and binds an HTTP listener that speaks MCP over the SDK-backed
-// streamable HTTP transport. It never binds stdio: these run as remote pods
-// reached by URL.
+// plus one POST /api/{tool-name} endpoint per grant, and binds one HTTP
+// listener. It never binds stdio: these run as remote pods reached by URL.
 package main
 
 import (
@@ -74,7 +73,7 @@ func runServe(argv []string) error {
 		return fmt.Errorf("parse spec %q: %w", specPath, err)
 	}
 
-	fmt.Fprintf(os.Stderr, "ward-mcp: serving %s on %s (SDK-backed MCP over /mcp)\n", specPath, *addr)
+	fmt.Fprintf(os.Stderr, "ward-mcp: serving %s on %s (MCP /mcp, HTTP tools /api/{tool-name})\n", specPath, *addr)
 	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
 	return server.ListenAndServe()
 }
@@ -105,7 +104,7 @@ func runServeUpstream(argv []string) error {
 		return fmt.Errorf("connect upstream %q: %w", *upstream, err)
 	}
 	defer func() { _ = srv.Close() }()
-	fmt.Fprintf(os.Stderr, "ward-mcp: serving upstream proxy %s on %s (%d tools)\n", *upstream, *addr, len(tools))
+	fmt.Fprintf(os.Stderr, "ward-mcp: serving upstream proxy %s on %s (%d MCP and HTTP tools)\n", *upstream, *addr, len(tools))
 	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
 	return server.ListenAndServe()
 }
@@ -170,7 +169,7 @@ func runServeSSM(argv []string) error {
 	if err != nil {
 		return fmt.Errorf("parse SSM spec %q: %w", specPath, err)
 	}
-	fmt.Fprintf(os.Stderr, "ward-mcp: serving guarded SSM reader %s on %s\n", specPath, *addr)
+	fmt.Fprintf(os.Stderr, "ward-mcp: serving guarded SSM reader %s on %s (MCP and HTTP tools)\n", specPath, *addr)
 	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
 	return server.ListenAndServe()
 }

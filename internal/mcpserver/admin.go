@@ -22,10 +22,12 @@ type adminDescribeResponse struct {
 		SpecPath string `json:"specPath,omitempty"`
 	} `json:"server"`
 	Transport struct {
-		Mode       string `json:"mode"`
-		MCPPath    string `json:"mcpPath"`
-		HealthPath string `json:"healthPath"`
-		AdminPath  string `json:"adminPath"`
+		Mode        string `json:"mode"`
+		MCPPath     string `json:"mcpPath"`
+		APIPrefix   string `json:"apiPrefix"`
+		InboundAuth string `json:"inboundAuth"`
+		HealthPath  string `json:"healthPath"`
+		AdminPath   string `json:"adminPath"`
 	} `json:"transport"`
 	Projection struct {
 		ToolCount int      `json:"toolCount"`
@@ -62,6 +64,8 @@ func (s *Server) adminDescribe() adminDescribeResponse {
 	out.Server.SpecPath = s.specPath
 	out.Transport.Mode = transportMode
 	out.Transport.MCPPath = "/mcp"
+	out.Transport.APIPrefix = apiPrefix
+	out.Transport.InboundAuth = "deployment-owned"
 	out.Transport.HealthPath = "/healthz"
 	out.Transport.AdminPath = "/admin"
 	out.Projection.ToolCount = len(s.tools)

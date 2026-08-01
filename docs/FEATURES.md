@@ -2,15 +2,16 @@
 
 The living inventory of what ward-mcp ships today. Completes the
 README / AGENTS / docs/FEATURES trifecta. ward-mcp turns a cli-guard Guardfile
-into a guarded MCP server, distributed as a runtime image plus a generic Helm
-chart.
+into a guarded MCP server with an automatic matching HTTP tool API, distributed
+as a runtime image plus a generic Helm chart.
 
 ## `ward-mcp serve <spec.mcp.kdl> --http :addr`
 
 The generic local runtime. One static binary renders any `.mcp.kdl` spec into
 a guarded MCP server over the official MCP Go SDK's streamable HTTP transport
-at `/mcp`. No per-guardfile Go, no per-server handler. It never binds stdio -
-these run as remote pods reached by URL.
+at `/mcp` and automatically exposes the identical tool arguments at
+`POST /api/{tool-name}`. No per-guardfile Go, no per-server handler. It never
+binds stdio - these run as remote pods reached by URL.
 
 * **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`, pinned
   `v0.127.0`) parses the ward-mcp inline grammar: `wrap` header, `base-url`,
@@ -23,8 +24,9 @@ these run as remote pods reached by URL.
   mutually-exclusive groups, and safe local aliases for upstream parameter
   names. The `.mcp.kdl` is the whole contract. Method is inferred from the verb,
   path params from the `{template}`.
-* **Grant → MCP tool projection** - each `Descriptor` becomes one tool named
-  `verb_resource`, its `inputSchema` derived (draft-07) from the grant's
+* **Grant → tool projection** - each `Descriptor` becomes one MCP tool and
+  one matching HTTP endpoint named `verb_resource`, its `inputSchema` derived
+  (draft-07) from the grant's
   path/query/body, and its description taken from `describe` or derived as a
   user-goal sentence. ward-mcp also derives a human title, read-only,
   destructive, idempotent, and open-world annotations from the operation's
@@ -54,11 +56,11 @@ these run as remote pods reached by URL.
 
 The guarded passthrough backend. It connects to a private streamable-HTTP MCP
 upstream, snapshots the allowlisted upstream tool contracts, and exposes only
-that subset on the outward MCP surface.
+that subset on the outward MCP and automatic HTTP tool surfaces.
 
 * **Upstream tool projection** - each allowlisted upstream tool becomes one
-  outward MCP tool, preserving the upstream schema and tool metadata where
-  possible.
+  outward MCP tool and one matching HTTP endpoint, preserving the upstream
+  schema and tool metadata where possible.
 * **Fail closed** - unknown upstream tools and schema drift return MCP tool
   errors instead of silently widening or mutating the surface.
 * **Proxy calls** - allowed `tools/call` requests are forwarded to the upstream
@@ -76,12 +78,26 @@ IAM independently restricts the workload principal to the same parameter ARN.
 
 ## Transports
 
-The runtime exposes the SDK-backed streamable HTTP transport and a liveness
-probe:
+The runtime exposes the SDK-backed streamable HTTP transport, an automatic HTTP
+tool API, and a liveness probe:
 
 * **Streamable HTTP** (`/mcp`, SDK-backed) - `initialize`, `tools/list`, and
   `tools/call` ride the MCP Go SDK's session lifecycle and session IDs.
+* **Automatic HTTP tool API** (`POST /api/{tool-name}`) - every projected MCP
+  tool receives one matching endpoint without a flag or chart value. The JSON
+  request body is the tool argument object. A successful response is the MCP
+  `CallToolResult` JSON shape. Both surfaces call the same handler, so opcore
+  guards, upstream schema-drift checks, and exact-parameter SDK policy cannot
+  diverge. Requests require `application/json` and are bounded to 1 MiB.
+  Unknown tools, invalid inputs, oversized bodies, tool errors, and handler
+  errors return non-2xx JSON responses.
 * **Health** - `GET /healthz` for a pod liveness probe.
+
+ward-mcp does not authenticate inbound MCP or HTTP callers. The consuming
+deployment owns identity, authentication, TLS, ingress, and network exposure.
+Guardfile authentication is outbound authentication from ward-mcp to the
+configured upstream. Caller-supplied identity-shaped tool arguments are data,
+not trusted identity.
 
 ## Operator HTTP
 

@@ -33,14 +33,15 @@ type Server struct {
 	descs     []opcore.Descriptor
 	cfg       opcore.RuntimeConfig
 	tools     []*mcp.Tool
+	handlers  map[string]mcp.ToolHandler
 	upstreams []adminUpstreamResponse
 	sdk       *mcp.Server
 	closeFn   func() error
 }
 
 // New parses a `.mcp.kdl` source and builds the SDK-backed server: one MCP tool
-// per grant, with opcore still owning the guardfile parse, guard, and upstream
-// request execution.
+// and matching HTTP endpoint per grant, with opcore still owning the guardfile
+// parse, guard, and upstream request execution.
 func New(name, specPath string, src []byte) (*Server, error) {
 	descs, cfg, err := opcore.ParseInline(src)
 	if err != nil {
@@ -67,12 +68,16 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		descs:    descs,
 		cfg:      cfg,
 		tools:    tools,
+		handlers: make(map[string]mcp.ToolHandler, len(descs)),
 		sdk:      newSDKServer(name, icons),
 	}
 
 	for _, d := range descs {
 		desc := d
-		s.sdk.AddTool(toolSpec(desc), toolHandler(rt, desc))
+		name := toolName(desc)
+		handler := toolHandler(rt, desc)
+		s.handlers[name] = handler
+		s.sdk.AddTool(toolSpec(desc), handler)
 	}
 	s.installCallRewrite()
 	return s, nil
@@ -91,13 +96,16 @@ func NewProxy(ctx context.Context, name, specPath, upstreamURL string, allowTool
 		name:      name,
 		specPath:  specPath,
 		tools:     proxy.selectedTools(),
+		handlers:  make(map[string]mcp.ToolHandler, len(allowTools)),
 		upstreams: []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http"}},
 		sdk:       newSDKServer(name, nil),
 		closeFn:   proxy.Close,
 	}
 	for _, tool := range proxy.selectedTools() {
 		t := cloneTool(tool)
-		s.sdk.AddTool(t, proxy.toolHandler(tool.Name))
+		handler := proxy.toolHandler(tool.Name)
+		s.handlers[tool.Name] = handler
+		s.sdk.AddTool(t, handler)
 	}
 	s.installCallRewrite()
 	return s, nil
@@ -113,12 +121,14 @@ func (s *Server) Close() error {
 }
 
 // Handler exposes the runtime on /mcp using the official SDK streamable HTTP
-// handler, plus the pod health probe and the operator admin endpoints.
+// handler, automatically projects each tool at /api/{tool-name}, and retains
+// the pod health probe plus operator admin endpoints.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return s.sdk
 	}, &mcp.StreamableHTTPOptions{JSONResponse: true}))
+	mux.HandleFunc(apiPrefix, s.serveAPITool)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))

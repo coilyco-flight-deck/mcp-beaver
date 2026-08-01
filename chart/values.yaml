@@ -73,7 +73,8 @@ securityContext:
       - ALL
 
 # The interior HTTP listener. The runtime ENTRYPOINT is
-# `ward-mcp serve /spec/<name>.mcp.kdl --http :<port>`, MCP served at /mcp.
+# `ward-mcp serve /spec/<name>.mcp.kdl --http :<port>`, MCP served at /mcp and
+# every projected tool served automatically at POST /api/{tool-name}.
 http:
   port: 8080
   path: /mcp

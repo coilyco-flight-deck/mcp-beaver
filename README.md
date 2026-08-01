@@ -1,12 +1,12 @@
 # ward-mcp
 
-**A cli-guard Guardfile, no handwritten code, becomes a Docker image that serves a working MCP over HTTP.**
+**A cli-guard Guardfile, no handwritten code, becomes a Docker image that serves a working MCP and matching HTTP tool API.**
 
-ward-mcp renders a [cli-guard](https://github.com/coilysiren/cli-guard) Guardfile into a guarded MCP server, baked into an OCI image. One generic runtime, many guardfiles. No per-server Go, no per-server Dockerfile, no per-server MCP handler - and no per-tool input schema, because cli-guard's engine derives it from the inline operation definition in the `.mcp.kdl`.
+ward-mcp renders a [cli-guard](https://github.com/coilysiren/cli-guard) Guardfile into a guarded MCP server and HTTP tool API, baked into an OCI image. One generic runtime, many guardfiles. No per-server Go, no per-server Dockerfile, no per-server MCP or HTTP handler - and no per-tool input schema, because cli-guard's engine derives it from the inline operation definition in the `.mcp.kdl`.
 
-The spec configures **only the image interior**: which upstream, which auth, which grants become which tools. The image serves MCP over the official Go SDK's streamable HTTP transport at `/mcp` (never stdio - these run as remote k3s pods reached by URL). ward-mcp has **no relation to the ward codebase**, and uses [cli-mcp](https://github.com/coilysiren/cli-mcp) as a code reference only, not a dependency.
+The spec configures **only the image interior**: which upstream, which outbound auth, which grants become which tools. The image serves MCP over the official Go SDK's streamable HTTP transport at `/mcp` and automatically exposes each tool at `POST /api/{tool-name}` (never stdio - these run as remote k3s pods reached by URL). ward-mcp has **no relation to the ward codebase**, and uses [cli-mcp](https://github.com/coilysiren/cli-mcp) as a code reference only, not a dependency.
 
-The exposed MCP surface is exactly the guardfile's grants: an unwritten `delete issue` grant means no `delete_issue` tool can ever be served (**deny-by-absence**), and `restrict owner matches coilyco-*` bounds every path. Audit one small file, hand a write-capable MCP to an agent, know the blast radius.
+The exposed tool surface is exactly the guardfile's grants: an unwritten `delete issue` grant means no `delete_issue` tool or HTTP endpoint can ever be served (**deny-by-absence**), and `restrict owner matches coilyco-*` bounds every path. Audit one small file, hand a write-capable MCP to an agent, know the blast radius.
 
 ## Quickstart
 
@@ -22,7 +22,19 @@ FORGEJO_TOKEN=... go run ./cmd/ward-mcp serve examples/forgejo-issues.mcp.kdl --
 # list the derived tools (SDK-backed streamable HTTP transport at /mcp)
 curl -s -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' localhost:8080/mcp
+
+# call the same guarded handler without an MCP session
+curl -s -H 'Content-Type: application/json' \
+  -d '{"owner":"coilyco-flight-deck","repo":"ward-mcp","index":"41"}' \
+  localhost:8080/api/get_issue
 ```
+
+The HTTP projection is always present. It accepts one JSON argument object,
+uses the same tool handler as `tools/call`, and returns the MCP
+`CallToolResult` JSON shape. ward-mcp performs no inbound authentication.
+Consuming deployments own caller identity, authentication, TLS, ingress, and
+network reachability. Guardfile `auth` configures ward-mcp's credential for the
+upstream service, not the caller's credential to ward-mcp.
 
 Or as the image (one runtime, many specs - the spec is mounted, not baked):
 
@@ -56,7 +68,7 @@ convenience getter fixes that same path internally.
 
 The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_issue`, `close_issue` - each guarded, each scoped to `coilyco-*` / `kai` owners.
 
-The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool, and every call fires through the self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, auth). ward-mcp retains MCP JSON types when routing query arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. ward-mcp adds only the grant→tool projection and the SDK-backed transport/session layer.
+The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool and one HTTP endpoint, and every call fires through the same self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, outbound auth). ward-mcp retains MCP JSON types when routing arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. ward-mcp adds only the grant→tool projection and transport layers.
 
 ## Authoring request bodies
 
@@ -132,7 +144,7 @@ owns public ingress, authentication, TLS, DNS, and rollout.
 ## Layout
 
 * [`cmd/ward-mcp`](cmd/ward-mcp) - the `serve` entrypoint: parse a spec, project tools, bind the SDK-backed HTTP listener.
-* [`internal/mcpserver`](internal/mcpserver) - the thin shell: grant→MCP-tool projection, the SDK-backed streamable HTTP/session layer, and the non-MCP `/healthz` plus `/admin/*` operator endpoints.
+* [`internal/mcpserver`](internal/mcpserver) - the thin shell: grant→MCP-tool and HTTP endpoint projection, the SDK-backed streamable HTTP/session layer, and the non-MCP `/healthz` plus `/admin/*` operator endpoints.
 * [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issues as an MCP. Its body is the frozen ward-mcp inline grammar (`opcore.ParseInline`), and it is the whole contract.
 * [`examples/skillsmp.mcp.kdl`](examples/skillsmp.mcp.kdl) - the first end-to-end target: two read tools over the SDK-backed transport against skillsmp.com.
 * [`examples/*.values.yaml`](examples/) - reference auth-neutral chart values: `skillsmp` uses the default ClusterIP, and `forgejo-issues` demonstrates the optional NodePort.
@@ -146,4 +158,4 @@ owns public ingress, authentication, TLS, DNS, and rollout.
 
 ## Status
 
-The `ward-mcp serve` runtime is **implemented** (ward-mcp#7): it parses a `.mcp.kdl`, serves the derived tools over MCP at `/mcp`, guarded-executes each call through opcore, and exposes operator-only `/healthz` plus `/admin/describe` and `/admin/reload` HTTP endpoints outside the MCP tool surface. The generic Helm chart that runs this image is also in (ward-mcp#8). Tracking [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/issues/164) (concept) and [coilyco-bridge/deploy#40](https://forgejo.coilysiren.me/coilyco-bridge/deploy/issues/40) (first consumer).
+The `ward-mcp serve` runtime is **implemented** (ward-mcp#7): it parses a `.mcp.kdl`, serves the derived tools over MCP at `/mcp` and HTTP at `/api/{tool-name}`, guarded-executes both projections through the same handler, and exposes operator-only `/healthz` plus `/admin/describe` and `/admin/reload` endpoints. The generic Helm chart that runs this image is also in (ward-mcp#8). Tracking [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/issues/164) (concept) and [coilyco-bridge/deploy#40](https://forgejo.coilysiren.me/coilyco-bridge/deploy/issues/40) (first consumer).

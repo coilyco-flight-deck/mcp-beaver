@@ -41,6 +41,8 @@ The chart is buildable against the pinned runtime contract below, in parallel wi
 - spec mode runs `ward-mcp serve /spec/<name>.mcp.kdl --http :8080`
 - upstream mode runs `ward-mcp serve-upstream --upstream <url> --tool <name>... --connect-timeout 2m --http :8080`
 - MCP served over SSE / streamable-HTTP at `/mcp`
+- every projected tool automatically served at `POST /api/{tool-name}` on the
+  same listener
 - application secrets remain server-side
 - the `.mcp.kdl` is read from the mounted path in spec mode, never baked
 
@@ -98,7 +100,7 @@ The chart is buildable against the pinned runtime contract below, in parallel wi
 
 ## Exposure belongs to the consumer
 
-The product chart does not choose between public, private, or tailnet access. It also carries no fleet identity provider or ingress-controller assumptions. CoilyCo deployments that need a public authenticated MCP use deploy's `charts/ingress-public-authed` chart. Other consumers bring an equivalent composition for their environment.
+The product chart does not choose between public, private, or tailnet access. It also carries no fleet identity provider or ingress-controller assumptions. The MCP and automatic HTTP tool API share that boundary and receive no runtime-owned inbound authentication. CoilyCo deployments that need a public authenticated surface use deploy's `charts/ingress-public-authed` chart. Other consumers bring an equivalent composition for their environment.
 
 ## Verify
 
