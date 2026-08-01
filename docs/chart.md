@@ -98,6 +98,32 @@ The chart is buildable against the pinned runtime contract below, in parallel wi
   `livenessProbe`, `extraEnv`** - the usual pod knobs. The startup probe keeps
   upstream warmup from becoming a liveness crash cycle.
 
+### OpenTelemetry
+
+The chart carries no collector endpoint or fleet service identity. A consuming
+deployment opts in through `extraEnv` using standard variables:
+
+```yaml
+extraEnv:
+  - name: OTEL_TRACES_EXPORTER
+    value: otlp
+  - name: OTEL_METRICS_EXPORTER
+    value: otlp
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: https://collector.example.invalid
+  - name: OTEL_SERVICE_NAME
+    value: reader-mcp
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: deployment.environment.name=example
+```
+
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` may replace the shared endpoint. Protocol
+selection uses `OTEL_EXPORTER_OTLP_PROTOCOL` or its signal-specific standard
+variants. `OTEL_SDK_DISABLED=true`, `OTEL_TRACES_EXPORTER=none`, and
+`OTEL_METRICS_EXPORTER=none` are honored. Leaving all selectors and endpoints
+unset keeps startup a no-network no-op.
+
 ## Exposure belongs to the consumer
 
 The product chart does not choose between public, private, or tailnet access. It also carries no fleet identity provider or ingress-controller assumptions. The MCP and automatic HTTP tool API share that boundary and receive no runtime-owned inbound authentication. CoilyCo deployments that need a public authenticated surface use deploy's `charts/ingress-public-authed` chart. Other consumers bring an equivalent composition for their environment.

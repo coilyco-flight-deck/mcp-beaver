@@ -101,6 +101,38 @@ Guardfile authentication is outbound authentication from ward-mcp to the
 configured upstream. Caller-supplied identity-shaped tool arguments are data,
 not trusted identity.
 
+## Opt-in OpenTelemetry
+
+The generic runtime provides application-level traces and metrics for every
+spec-backed, SSM, and upstream-proxy server. Standard `OTEL_*` variables own
+configuration. With no explicit exporter selector or OTLP endpoint, provider
+initialization stays a no-network no-op. `OTEL_SDK_DISABLED=true` and the
+per-signal `none` selectors disable export explicitly. Invalid explicit
+configuration fails startup, while asynchronous export failures never alter a
+tool result.
+
+* **MCP server** - one SERVER span and one
+  `mcp.server.operation.duration` measurement per MCP request or notification.
+  `tools/call` carries `gen_ai.operation.name=execute_tool` and the bounded tool
+  name. Tool-error results set `error.type=tool_error` and ERROR status.
+* **Upstream MCP client** - `serve-upstream` emits CLIENT spans and
+  `mcp.client.operation.duration` across startup discovery, schema refresh,
+  and actual tool calls. W3C trace context and baggage inject into upstream
+  `params._meta`, preserving the inbound server-to-client chain.
+* **Context boundary** - inbound `params._meta` supplies the remote MCP parent.
+  The active streamable-HTTP transport span is linked when it is distinct.
+* **Direct HTTP tools** - `POST /api/{tool-name}` receives standard HTTP server
+  telemetry and exactly one logical `execute_tool <tool-name>` child span.
+  MCP `tools/call` does not duplicate that logical span. `/healthz` is excluded.
+* **Resource and lifecycle** - the resolved MCP server name is the default
+  `service.name`. `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` override
+  or extend it. Graceful shutdown flushes trace and metric providers within a
+  five-second bound.
+* **Safe attributes** - signal attributes stay bounded to methods, projected
+  tools, transport, runtime mode, and closed-set error classes. Arguments,
+  results, bodies, authorization headers, tokens, Guardfile contents, spec
+  paths, and upstream URLs are never captured.
+
 ## Operator HTTP
 
 Non-MCP endpoints for runtime inspection and control. These are HTTP surfaces

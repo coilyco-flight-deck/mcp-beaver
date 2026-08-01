@@ -12,19 +12,27 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp/internal/mcpserver"
+	internaltelemetry "forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp/internal/telemetry"
 )
 
+const shutdownTimeout = 5 * time.Second
+
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := runContext(ctx, os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "ward-mcp:", err)
 		os.Exit(1)
 	}
@@ -33,16 +41,20 @@ func main() {
 // run dispatches the subcommand. Only `serve` exists today; the pipeline's
 // build/lock steps are cli-guard's and deploy's, not this runtime's.
 func run(argv []string) error {
+	return runContext(context.Background(), argv)
+}
+
+func runContext(ctx context.Context, argv []string) error {
 	if len(argv) == 0 {
 		return fmt.Errorf("usage: ward-mcp serve <spec.mcp.kdl> [--http :8080] | ward-mcp serve-ssm <spec.mcp.kdl> [--http :8080] | ward-mcp serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...]")
 	}
 	switch argv[0] {
 	case "serve":
-		return runServe(argv[1:])
+		return runServe(ctx, argv[1:])
 	case "serve-upstream":
-		return runServeUpstream(argv[1:])
+		return runServeUpstream(ctx, argv[1:])
 	case "serve-ssm":
-		return runServeSSM(argv[1:])
+		return runServeSSM(ctx, argv[1:])
 	default:
 		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-upstream)", argv[0])
 	}
@@ -50,7 +62,7 @@ func run(argv []string) error {
 
 // runServe parses the spec and binds the HTTP listener. The spec path is the one
 // positional; --http sets the bind address (default :8080).
-func runServe(argv []string) error {
+func runServe(ctx context.Context, argv []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
 	// The documented entrypoint writes the spec before --http
@@ -63,24 +75,25 @@ func runServe(argv []string) error {
 		return fmt.Errorf("serve needs exactly one spec path, e.g. `serve /spec/forgejo.mcp.kdl --http :8080`")
 	}
 	specPath := fs.Arg(0)
+	name := serverName(specPath)
+	return withTelemetry(ctx, name, func() error {
+		src, err := os.ReadFile(specPath) //nolint:gosec // operator-supplied trusted policy path
+		if err != nil {
+			return fmt.Errorf("read spec %q: %w", specPath, err)
+		}
+		srv, err := mcpserver.New(name, specPath, src)
+		if err != nil {
+			return fmt.Errorf("parse spec %q: %w", specPath, err)
+		}
 
-	src, err := os.ReadFile(specPath) //nolint:gosec // operator-supplied trusted policy path
-	if err != nil {
-		return fmt.Errorf("read spec %q: %w", specPath, err)
-	}
-	srv, err := mcpserver.New(serverName(specPath), specPath, src)
-	if err != nil {
-		return fmt.Errorf("parse spec %q: %w", specPath, err)
-	}
-
-	fmt.Fprintf(os.Stderr, "ward-mcp: serving %s on %s (MCP /mcp, HTTP tools /api/{tool-name})\n", specPath, *addr)
-	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
-	return server.ListenAndServe()
+		fmt.Fprintf(os.Stderr, "ward-mcp: serving %s on %s (MCP /mcp, HTTP tools /api/{tool-name})\n", specPath, *addr)
+		return serveHTTP(ctx, *addr, srv.Handler())
+	})
 }
 
 // runServeUpstream binds the HTTP listener for a proxy server that exposes a
 // selected subset of an upstream streamable-HTTP MCP server.
-func runServeUpstream(argv []string) error {
+func runServeUpstream(ctx context.Context, argv []string) error {
 	fs := flag.NewFlagSet("serve-upstream", flag.ContinueOnError)
 	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
 	name := fs.String("name", "ward-mcp-upstream", "MCP server name")
@@ -97,16 +110,17 @@ func runServeUpstream(argv []string) error {
 	if len(tools) == 0 {
 		return fmt.Errorf("serve-upstream needs at least one --tool allowlist entry")
 	}
-	srv, err := connectProxyWithRetry(context.Background(), *connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
-		return mcpserver.NewProxy(ctx, *name, "", *upstream, tools, nil)
+	return withTelemetry(ctx, *name, func() error {
+		srv, err := connectProxyWithRetry(ctx, *connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
+			return mcpserver.NewProxy(ctx, *name, "", *upstream, tools, nil)
+		})
+		if err != nil {
+			return fmt.Errorf("connect upstream %q: %w", *upstream, err)
+		}
+		defer func() { _ = srv.Close() }()
+		fmt.Fprintf(os.Stderr, "ward-mcp: serving upstream proxy %s on %s (%d MCP and HTTP tools)\n", *upstream, *addr, len(tools))
+		return serveHTTP(ctx, *addr, srv.Handler())
 	})
-	if err != nil {
-		return fmt.Errorf("connect upstream %q: %w", *upstream, err)
-	}
-	defer func() { _ = srv.Close() }()
-	fmt.Fprintf(os.Stderr, "ward-mcp: serving upstream proxy %s on %s (%d MCP and HTTP tools)\n", *upstream, *addr, len(tools))
-	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
-	return server.ListenAndServe()
 }
 
 // connectProxyWithRetry lets a proxy container start alongside an upstream
@@ -151,7 +165,7 @@ func connectProxyWithRetry(
 
 // runServeSSM serves the spec-declared, exact-parameter SSM reader. AWS SDK
 // credential discovery reads the static key injected into the container.
-func runServeSSM(argv []string) error {
+func runServeSSM(ctx context.Context, argv []string) error {
 	fs := flag.NewFlagSet("serve-ssm", flag.ContinueOnError)
 	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
@@ -161,17 +175,61 @@ func runServeSSM(argv []string) error {
 		return fmt.Errorf("serve-ssm needs exactly one spec path")
 	}
 	specPath := fs.Arg(0)
-	src, err := os.ReadFile(specPath) //nolint:gosec // operator-supplied trusted policy path
+	name := serverName(specPath)
+	return withTelemetry(ctx, name, func() error {
+		src, err := os.ReadFile(specPath) //nolint:gosec // operator-supplied trusted policy path
+		if err != nil {
+			return fmt.Errorf("read spec %q: %w", specPath, err)
+		}
+		srv, err := mcpserver.NewSSM(ctx, name, specPath, src)
+		if err != nil {
+			return fmt.Errorf("parse SSM spec %q: %w", specPath, err)
+		}
+		fmt.Fprintf(os.Stderr, "ward-mcp: serving guarded SSM reader %s on %s (MCP and HTTP tools)\n", specPath, *addr)
+		return serveHTTP(ctx, *addr, srv.Handler())
+	})
+}
+
+func withTelemetry(ctx context.Context, serviceName string, run func() error) (err error) {
+	runtime, err := internaltelemetry.Setup(ctx, serviceName)
 	if err != nil {
-		return fmt.Errorf("read spec %q: %w", specPath, err)
+		return err
 	}
-	srv, err := mcpserver.NewSSM(context.Background(), serverName(specPath), specPath, src)
-	if err != nil {
-		return fmt.Errorf("parse SSM spec %q: %w", specPath, err)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if shutdownErr := runtime.Shutdown(shutdownCtx); shutdownErr != nil {
+			err = errors.Join(err, fmt.Errorf("shutdown OpenTelemetry: %w", shutdownErr))
+		}
+	}()
+	return run()
+}
+
+func serveHTTP(ctx context.Context, addr string, handler http.Handler) error {
+	server := &http.Server{Addr: addr, Handler: handler}
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-errCh:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown HTTP server: %w", err)
+		}
+		err := <-errCh
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
 	}
-	fmt.Fprintf(os.Stderr, "ward-mcp: serving guarded SSM reader %s on %s (MCP and HTTP tools)\n", specPath, *addr)
-	server := &http.Server{Addr: *addr, Handler: srv.Handler()}
-	return server.ListenAndServe()
 }
 
 // reorderFlagsFirst moves flag tokens (and the value of the one known

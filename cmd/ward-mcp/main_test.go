@@ -3,12 +3,21 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp/internal/mcpserver"
 )
+
+func TestServeHTTPShutsDownOnContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := serveHTTP(ctx, "127.0.0.1:0", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})); err != nil {
+		t.Fatalf("serveHTTP: %v", err)
+	}
+}
 
 func TestConnectProxyWithRetryRecovers(t *testing.T) {
 	attempts := 0

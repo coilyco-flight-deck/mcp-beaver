@@ -21,9 +21,10 @@ type proxyBackend struct {
 	baseline   map[string]string
 	selected   []*mcp.Tool
 	driftErr   error
+	telemetry  *instrumentation
 }
 
-func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []string, httpClient *http.Client) (*proxyBackend, error) {
+func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []string, httpClient *http.Client, telemetry *instrumentation) (*proxyBackend, error) {
 	if strings.TrimSpace(upstreamURL) == "" {
 		return nil, fmt.Errorf("ward-mcp: upstream endpoint is empty")
 	}
@@ -36,6 +37,7 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 	}
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "ward-mcp", Version: "0.1.0"}, nil)
+	client.AddSendingMiddleware(telemetry.clientMiddleware)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint:             upstreamURL,
 		HTTPClient:           httpClient,
@@ -51,6 +53,7 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 		session:    session,
 		allowlist:  allowlist,
 		baseline:   map[string]string{},
+		telemetry:  telemetry,
 	}
 	if err := p.snapshot(ctx); err != nil {
 		_ = session.Close()
@@ -163,6 +166,7 @@ func (p *proxyBackend) probeTools(ctx context.Context) (*mcp.ListToolsResult, er
 		return nil, fmt.Errorf("ward-mcp: upstream endpoint is empty")
 	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "ward-mcp-probe", Version: "0.1.0"}, nil)
+	client.AddSendingMiddleware(p.telemetry.clientMiddleware)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint:             p.endpoint,
 		HTTPClient:           p.httpClient,

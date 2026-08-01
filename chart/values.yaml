@@ -91,7 +91,11 @@ externalSecret:
     name: aws-parameter-store
     kind: ClusterSecretStore
 
-# Extra plain (non-secret) env vars, if a runtime ever needs them.
+# Extra plain (non-secret) env vars. OpenTelemetry is opt-in here through
+# standard OTEL_* names such as OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER,
+# OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, and
+# OTEL_RESOURCE_ATTRIBUTES. The chart intentionally carries no exporter,
+# collector endpoint, or fleet service identity. See docs/chart.md.
 extraEnv: []
 
 # Optional co-located upstream or support containers.

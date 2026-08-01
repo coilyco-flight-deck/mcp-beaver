@@ -68,6 +68,38 @@ convenience getter fixes that same path internally.
 
 The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_issue`, `close_issue` - each guarded, each scoped to `coilyco-*` / `kai` owners.
 
+## Opt-in OpenTelemetry
+
+ward-mcp emits OpenTelemetry traces and metrics when standard `OTEL_*`
+configuration explicitly selects an exporter or supplies an OTLP endpoint. An
+unset telemetry environment is a no-network no-op. In particular, ward-mcp
+does not inherit autoexport's default OTLP exporter and does not dial a local
+collector unless an operator opts in.
+
+Common settings are:
+
+* `OTEL_TRACES_EXPORTER=otlp|console|none`
+* `OTEL_METRICS_EXPORTER=otlp|console|prometheus|none`
+* `OTEL_EXPORTER_OTLP_ENDPOINT`, or the signal-specific
+  `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and
+  `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`
+* `OTEL_EXPORTER_OTLP_PROTOCOL=grpc|http/protobuf`, with signal-specific
+  protocol overrides available through the standard variables
+* `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES`
+* `OTEL_SDK_DISABLED=true` to disable the SDK completely
+
+The default `service.name` is the resolved MCP server name. MCP server and
+upstream proxy client spans use the current MCP semantic conventions and
+propagate W3C trace context plus baggage through `params._meta`. The matching
+operation-duration histograms use the recommended explicit buckets. Direct
+`POST /api/{tool-name}` requests receive standard HTTP telemetry plus one
+logical `execute_tool <tool-name>` span. `/healthz` is excluded.
+
+Instrumentation never records tool arguments, results, request or response
+bodies, authorization headers, tokens, Guardfile contents, spec paths, or
+upstream URLs. Export failures do not change tool results. Graceful process
+shutdown flushes active providers within a five-second bound.
+
 The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, exact nested-string body mapping, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool and one HTTP endpoint, and every call fires through the same self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, outbound auth). ward-mcp retains MCP JSON types when routing arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. ward-mcp adds only the grant→tool projection and transport layers.
 
 ## Authoring request bodies

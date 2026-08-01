@@ -14,6 +14,8 @@ import (
 	"forgejo.coilysiren.me/coilyco-flight-deck/cli-guard/pkg/valuesource"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const serverInstructions = "This server exposes only policy-approved tools. Use read-only tools to inspect state before mutation tools. Follow each tool's input and output schema, and treat safety annotations as hints rather than authorization."
@@ -36,6 +38,7 @@ type Server struct {
 	handlers  map[string]mcp.ToolHandler
 	upstreams []adminUpstreamResponse
 	sdk       *mcp.Server
+	telemetry *instrumentation
 	closeFn   func() error
 }
 
@@ -54,6 +57,10 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	instrumentation, err := newInstrumentation("spec", tools)
+	if err != nil {
+		return nil, fmt.Errorf("initialize telemetry: %w", err)
+	}
 
 	// Top-level `icon` nodes ride beside `wrap`, outside the frozen inline
 	// grammar opcore owns (deploy#255) - parsed here, served on initialize.
@@ -63,23 +70,21 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	}
 
 	s := &Server{
-		name:     name,
-		specPath: specPath,
-		descs:    descs,
-		cfg:      cfg,
-		tools:    tools,
-		handlers: make(map[string]mcp.ToolHandler, len(descs)),
-		sdk:      newSDKServer(name, icons),
+		name:      name,
+		specPath:  specPath,
+		descs:     descs,
+		cfg:       cfg,
+		tools:     tools,
+		handlers:  make(map[string]mcp.ToolHandler, len(descs)),
+		sdk:       newSDKServer(name, icons),
+		telemetry: instrumentation,
 	}
 
 	for _, d := range descs {
 		desc := d
-		name := toolName(desc)
-		handler := toolHandler(rt, desc)
-		s.handlers[name] = handler
-		s.sdk.AddTool(toolSpec(desc), handler)
+		s.registerTool(toolSpec(desc), toolHandler(rt, desc))
 	}
-	s.installCallRewrite()
+	s.installMiddleware()
 	return s, nil
 }
 
@@ -87,7 +92,15 @@ func New(name, specPath string, src []byte) (*Server, error) {
 // the selected upstream tools. The outward contract preserves the upstream tool
 // schemas, descriptions, titles, and annotations where possible.
 func NewProxy(ctx context.Context, name, specPath, upstreamURL string, allowTools []string, httpClient *http.Client) (*Server, error) {
-	proxy, err := newProxyBackend(ctx, upstreamURL, allowTools, httpClient)
+	declaredTools := make([]*mcp.Tool, 0, len(allowTools))
+	for _, tool := range allowTools {
+		declaredTools = append(declaredTools, &mcp.Tool{Name: tool})
+	}
+	instrumentation, err := newInstrumentation("upstream", declaredTools)
+	if err != nil {
+		return nil, fmt.Errorf("initialize telemetry: %w", err)
+	}
+	proxy, err := newProxyBackend(ctx, upstreamURL, allowTools, httpClient, instrumentation)
 	if err != nil {
 		return nil, err
 	}
@@ -99,15 +112,14 @@ func NewProxy(ctx context.Context, name, specPath, upstreamURL string, allowTool
 		handlers:  make(map[string]mcp.ToolHandler, len(allowTools)),
 		upstreams: []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http"}},
 		sdk:       newSDKServer(name, nil),
+		telemetry: instrumentation,
 		closeFn:   proxy.Close,
 	}
 	for _, tool := range proxy.selectedTools() {
 		t := cloneTool(tool)
-		handler := proxy.toolHandler(tool.Name)
-		s.handlers[tool.Name] = handler
-		s.sdk.AddTool(t, handler)
+		s.registerTool(t, proxy.toolHandler(tool.Name))
 	}
-	s.installCallRewrite()
+	s.installMiddleware()
 	return s, nil
 }
 
@@ -125,9 +137,10 @@ func (s *Server) Close() error {
 // the pod health probe plus operator admin endpoints.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return s.sdk
-	}, &mcp.StreamableHTTPOptions{JSONResponse: true}))
+	}, &mcp.StreamableHTTPOptions{JSONResponse: true})
+	mux.Handle("/mcp", captureTransportSpan(mcpHandler))
 	mux.HandleFunc(apiPrefix, s.serveAPITool)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -135,11 +148,31 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc(adminDescribePath, s.serveAdminDescribe)
 	mux.HandleFunc(adminReloadPath, s.serveAdminReload)
-	return mux
+	return otelhttp.NewHandler(mux, "ward-mcp HTTP",
+		otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/healthz" }),
+	)
 }
 
-func (s *Server) installCallRewrite() {
-	s.sdk.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+func captureTransportSpan(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cloned := r.Clone(r.Context())
+		cloned.Header = r.Header.Clone()
+		cloned.Header.Del(transportTraceparentHeader)
+		spanContext := trace.SpanContextFromContext(r.Context())
+		if !spanContext.IsValid() {
+			next.ServeHTTP(w, cloned)
+			return
+		}
+		cloned.Header.Set(transportTraceparentHeader, fmt.Sprintf(
+			"00-%s-%s-%02x",
+			spanContext.TraceID(), spanContext.SpanID(), byte(spanContext.TraceFlags()),
+		))
+		next.ServeHTTP(w, cloned)
+	})
+}
+
+func (s *Server) installMiddleware() {
+	s.sdk.AddReceivingMiddleware(s.telemetry.serverMiddleware, func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			res, err := next(ctx, method, req)
 			if method == "tools/call" {
@@ -152,6 +185,12 @@ func (s *Server) installCallRewrite() {
 			return res, err
 		}
 	})
+}
+
+func (s *Server) registerTool(tool *mcp.Tool, handler mcp.ToolHandler) {
+	handler = s.telemetry.toolHandler(tool.Name, handler)
+	s.handlers[tool.Name] = handler
+	s.sdk.AddTool(tool, handler)
 }
 
 func localTools(descs []opcore.Descriptor) ([]*mcp.Tool, error) {
