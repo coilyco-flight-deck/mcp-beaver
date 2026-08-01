@@ -14,12 +14,14 @@ at `/mcp` and automatically exposes the identical tool arguments at
 binds stdio - these run as remote pods reached by URL.
 
 * **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`, pinned
-  `v0.127.0`) parses the ward-mcp inline grammar: `wrap` header, `base-url`,
+  `v0.131.0`) parses the ward-mcp inline grammar: `wrap` header, `base-url`,
   `auth`, `restrict`, and each
   `can <verb> <resource> { path/query/body/set }` grant. Flat body declarations
   remain optional string shorthand. Body blocks preserve typed scalars, scalar
   arrays, nested objects, required fields, and unconstrained raw object or
-  array subtrees. Query blocks preserve string, boolean, integer, number, and
+  array subtrees. They can instead project required nested string inputs onto
+  fresh top-level JSON keys without forwarding undeclared input. Query blocks
+  preserve string, boolean, integer, number, and
   scalar-array types plus numeric bounds, array length bounds, required fields,
   mutually-exclusive groups, and safe local aliases for upstream parameter
   names. The `.mcp.kdl` is the whole contract. Method is inferred from the verb,
