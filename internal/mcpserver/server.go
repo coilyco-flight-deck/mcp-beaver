@@ -123,6 +123,13 @@ func NewProxy(ctx context.Context, name, specPath, upstreamURL string, allowTool
 	return s, nil
 }
 
+// ToolNames returns the projected tool names in the order the runtime serves
+// them. `ward-mcp lint` prints these so a consumer can read the minted surface
+// off the owning loader instead of writing a second parser for the same file.
+func (s *Server) ToolNames() []string {
+	return projectedToolNames(s.tools)
+}
+
 // Close releases any upstream session resources. Local opcore-backed servers do
 // not hold additional runtime state, so Close is a no-op there.
 func (s *Server) Close() error {

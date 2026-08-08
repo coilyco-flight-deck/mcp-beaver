@@ -4,6 +4,7 @@
 // varies. There is no per-guardfile Go and no per-server handler.
 //
 //	ward-mcp serve /spec/<name>.mcp.kdl --http :8080
+//	ward-mcp lint /spec/<name>.mcp.kdl
 //
 // It parses the spec through cli-guard's opcore engine, projects one MCP tool
 // plus one POST /api/{tool-name} endpoint per grant, and binds one HTTP
@@ -15,6 +16,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -38,15 +40,17 @@ func main() {
 	}
 }
 
-// run dispatches the subcommand. Only `serve` exists today; the pipeline's
-// build/lock steps are cli-guard's and deploy's, not this runtime's.
+// run dispatches the subcommand. The serving verbs bind a listener; `lint` is
+// the one offline verb, so a consumer can validate a guardfile without starting
+// anything. The pipeline's build/lock steps remain cli-guard's and deploy's,
+// not this runtime's.
 func run(argv []string) error {
 	return runContext(context.Background(), argv)
 }
 
 func runContext(ctx context.Context, argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: ward-mcp serve <spec.mcp.kdl> [--http :8080] | ward-mcp serve-ssm <spec.mcp.kdl> [--http :8080] | ward-mcp serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...]")
+		return fmt.Errorf("usage: ward-mcp serve <spec.mcp.kdl> [--http :8080] | ward-mcp serve-ssm <spec.mcp.kdl> [--http :8080] | ward-mcp serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...] | ward-mcp lint <spec.mcp.kdl>")
 	}
 	switch argv[0] {
 	case "serve":
@@ -55,9 +59,48 @@ func runContext(ctx context.Context, argv []string) error {
 		return runServeUpstream(ctx, argv[1:])
 	case "serve-ssm":
 		return runServeSSM(ctx, argv[1:])
+	case "lint":
+		return runLint(os.Stdout, argv[1:])
 	default:
-		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-upstream)", argv[0])
+		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-upstream, lint)", argv[0])
 	}
+}
+
+// runLint is runServe minus serveHTTP and minus withTelemetry: it reads the
+// spec, builds the same server, prints the minted tool names one per line, and
+// exits. No listener, no telemetry, no network, so it runs in a sealed clone
+// and in CI.
+//
+// It goes through mcpserver.New rather than opcore.ParseInline directly on
+// purpose. That validates the grant-to-tool projection as well as the KDL
+// parse, so the check covers what the runtime will actually mint rather than
+// only what the file says.
+func runLint(out io.Writer, argv []string) error {
+	fs := flag.NewFlagSet("lint", flag.ContinueOnError)
+	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("lint needs exactly one spec path, e.g. `lint /spec/forgejo.mcp.kdl`")
+	}
+	specPath := fs.Arg(0)
+	src, err := os.ReadFile(specPath) //nolint:gosec // operator-supplied trusted policy path
+	if err != nil {
+		return fmt.Errorf("read spec %q: %w", specPath, err)
+	}
+	// "invalid spec" rather than serve's "parse spec": a failure here is just as
+	// often a projection failure (two grants minting one tool name) as a KDL
+	// parse failure, and this message is the whole product of the command.
+	srv, err := mcpserver.New(serverName(specPath), specPath, src)
+	if err != nil {
+		return fmt.Errorf("invalid spec %q: %w", specPath, err)
+	}
+	for _, name := range srv.ToolNames() {
+		if _, err := fmt.Fprintln(out, name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // runServe parses the spec and binds the HTTP listener. The spec path is the one

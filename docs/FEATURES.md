@@ -54,6 +54,25 @@ binds stdio - these run as remote pods reached by URL.
 * **Deny-by-absence** - the served surface is exactly the `can` grants. An
   unwritten grant is an absent tool; that is the deletion guard.
 
+## `ward-mcp lint <spec.mcp.kdl>`
+
+The offline validation surface. It is `serve` minus the listener and minus
+telemetry: read the spec, build the same server, print the minted tool names,
+exit. No network, so it runs in a sealed clone and in CI.
+
+* **Owning-loader validation** - lint builds the server through the same
+  constructor `serve` uses rather than calling `opcore.ParseInline` directly,
+  so it validates the grant-to-tool projection as well as the KDL parse. A
+  well-formed file whose grants collide on one tool name fails here.
+* **Tool-name output** - a clean spec exits 0 and writes the projected tool
+  names to stdout, sorted, one per line. This is how a consumer repo reads its
+  served surface off the owning loader instead of writing a second parser for
+  the same guardfile. A rejected spec exits non-zero with the failure on
+  stderr and writes nothing to stdout.
+* **Scope** - the `wrap` inline grammar the serving runtime renders.
+  `serve-ssm` policies use a separate grammar and are not lintable through
+  this path.
+
 ## `ward-mcp serve-upstream --upstream <mcp-url> --tool <name>...`
 
 The guarded passthrough backend. It connects to a private streamable-HTTP MCP

@@ -66,6 +66,30 @@ The SSM policy declares one parameter and exactly two read tools. The general
 getter accepts a name but rejects every value except the declared path. The
 convenience getter fixes that same path internally.
 
+## Validating a guardfile without serving it
+
+`ward-mcp lint` is the offline check. It reads the spec, builds the same server
+`serve` would, prints the minted tool names to stdout one per line, and exits -
+no listener, no telemetry, no network, so it runs in a sealed clone and in CI:
+
+```sh
+$ ward-mcp lint examples/skillsmp.mcp.kdl
+search_ai-skills
+search_skills
+```
+
+A spec that does not parse, or that projects two grants onto one tool name,
+exits non-zero with the failure on stderr and prints nothing to stdout.
+
+The tool-name output matters as much as the exit code. A consumer repo diffing
+that list against a reviewed expectation is invoking the owning loader. A
+consumer reimplementing the parse to derive the same list is the antipattern
+this command exists to remove. Linting goes through the full server build
+rather than the raw KDL parse on purpose, so the check covers the
+grant-to-tool projection the runtime will actually mint, not only what the file
+says. `serve-ssm` policies use a separate grammar and are not lintable through
+this path.
+
 The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_issue`, `close_issue` - each guarded, each scoped to `coilyco-*` / `kai` owners.
 
 ## Opt-in OpenTelemetry
@@ -175,7 +199,7 @@ owns public ingress, authentication, TLS, DNS, and rollout.
 
 ## Layout
 
-* [`cmd/ward-mcp`](cmd/ward-mcp) - the `serve` entrypoint: parse a spec, project tools, bind the SDK-backed HTTP listener.
+* [`cmd/ward-mcp`](cmd/ward-mcp) - the `serve` entrypoint: parse a spec, project tools, bind the SDK-backed HTTP listener. `lint` is the same path minus the listener and telemetry.
 * [`internal/mcpserver`](internal/mcpserver) - the thin shell: grant→MCP-tool and HTTP endpoint projection, the SDK-backed streamable HTTP/session layer, and the non-MCP `/healthz` plus `/admin/*` operator endpoints.
 * [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issues as an MCP. Its body is the frozen ward-mcp inline grammar (`opcore.ParseInline`), and it is the whole contract.
 * [`examples/skillsmp.mcp.kdl`](examples/skillsmp.mcp.kdl) - the first end-to-end target: two read tools over the SDK-backed transport against skillsmp.com.

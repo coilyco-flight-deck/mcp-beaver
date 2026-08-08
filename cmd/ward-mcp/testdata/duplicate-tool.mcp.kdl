@@ -1,0 +1,18 @@
+// duplicate-tool.mcp.kdl - parses as KDL but two grants project onto the same
+// `get_issue` tool name. This is the case that motivates linting through
+// mcpserver.New instead of opcore.ParseInline: the file is well-formed, and
+// only the grant-to-tool projection catches it.
+wrap ward mcp lint-fixture {
+    base-url "example.invalid/api/v1"
+
+    auth bearer {
+        value env "LINT_FIXTURE_TOKEN"
+    }
+
+    can get issue {
+        path "/repos/{owner}/{repo}/issues/{index}"
+    }
+    can get issue {
+        path "/repos/{owner}/{repo}/issues/{index}/alternate"
+    }
+}

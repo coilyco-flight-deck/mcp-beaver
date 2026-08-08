@@ -1,0 +1,18 @@
+// valid.mcp.kdl - the smallest spec that parses and projects cleanly, used to
+// pin `ward-mcp lint`'s success path: exit 0 plus the minted tool names on
+// stdout, sorted, one per line.
+wrap ward mcp lint-fixture {
+    base-url "example.invalid/api/v1"
+
+    auth bearer {
+        value env "LINT_FIXTURE_TOKEN"
+    }
+
+    can list issue {
+        path "/repos/{owner}/{repo}/issues"
+        query "state"
+    }
+    can get issue {
+        path "/repos/{owner}/{repo}/issues/{index}"
+    }
+}
