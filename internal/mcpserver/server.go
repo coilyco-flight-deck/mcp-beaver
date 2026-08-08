@@ -139,7 +139,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return s.sdk
-	}, &mcp.StreamableHTTPOptions{JSONResponse: true})
+	}, &mcp.StreamableHTTPOptions{JSONResponse: true, Stateless: true})
 	mux.Handle("/mcp", captureTransportSpan(mcpHandler))
 	mux.HandleFunc(apiPrefix, s.serveAPITool)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
