@@ -23,6 +23,9 @@ commands:
   pin-cli-guard:
     run: bash scripts/ward-command.sh pin-cli-guard
     description: Pin cli-guard and reconcile Go module dependencies. Pass an optional version after `--`.
+  serve-example:
+    run: bash scripts/ward-command.sh serve-example
+    description: Serve the skillsmp example spec on localhost:18080 for local MCP handshake checks.
   helm-lint-chart:
     run: helm lint chart --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
     description: Lint the auth-neutral ward-mcp chart.

@@ -23,6 +23,9 @@ case "$action" in
   fmt)
     gofmt -w cmd internal
     ;;
+  serve-example)
+    go run ./cmd/ward-mcp serve examples/skillsmp.mcp.kdl --http "${1:-:18080}"
+    ;;
   pin-cli-guard)
     ref="${1:-v0.122.0}"
     go get "forgejo.coilysiren.me/coilyco-flight-deck/cli-guard@${ref}"
