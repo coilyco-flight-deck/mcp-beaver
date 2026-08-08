@@ -38,3 +38,6 @@ commands:
   helm-template-upstream:
     run: helm template ward-mcp chart --namespace ward-mcp -f examples/upstream.values.yaml
     description: Render the allowlisted upstream-proxy chart shape.
+
+agent:
+  workflow: merge-remote-main
