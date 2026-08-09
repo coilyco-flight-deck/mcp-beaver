@@ -1,0 +1,59 @@
+// guardfile-siblings.mcp.kdl - the worked reference for the optional nodes that
+// ride BESIDE `wrap`: `server-info`, `confirm`, `resource`, and `prompt`.
+//
+// `opcore.ParseInline` reads only the `wrap` node, so none of these touch the
+// frozen inline grammar or the cli-guard pin. Every one is opt-in and fails
+// closed - a guardfile that states none serves exactly its grants, which is
+// what every other example here does. See docs/DESIGN.md.
+
+// One read-only tool reporting this server's own shape. Also the liveness
+// probe clients lost when MCP 2026-07-28 removed the protocol-level `ping`.
+server-info
+
+// Gate the one mutation behind a Multi Round-Trip Request. The first call
+// returns an input request instead of acting; the tool runs only on a retry
+// carrying an explicit accept. Named by PROJECTED TOOL NAME, not by grant.
+confirm "create_thing" message="This creates a thing upstream. Continue?"
+
+// Static content, served on resources/read and rendered as an `@` mention in
+// Claude Code. Inline only: a resource that proxied an upstream read would be
+// a second egress path beside the grants.
+resource "oncall-runbook" uri="ward://runbook/oncall" mime="text/markdown" {
+    description "First response when this upstream starts 5xx-ing"
+    text "1. Call ward_mcp_info and confirm the pod is serving its tools."
+    text "2. Check the upstream's own status page before touching the pod."
+    text "3. Escalate rather than retrying a write that already 5xx'd."
+}
+
+// A message template, served on prompts/get and rendered as a slash command in
+// Claude Code. `{service}` is substituted from the argument; omitting a
+// required argument is an error rather than an empty substitution.
+prompt "triage" title="Triage an incident" {
+    description "Walk the on-call first-response steps for this upstream"
+    argument "service" description="Which service is failing" required=#true
+    argument "since" description="How far back to look, e.g. 1h"
+    text "You are triaging {service}."
+    text "Read ward://runbook/oncall before taking any action."
+    text "Look back {since} and report what you find before changing anything."
+}
+
+wrap ward mcp things {
+    base-url "things.example/api/v1"
+
+    auth bearer {
+        value env "THINGS_API_TOKEN"
+    }
+
+    restrict owner matches "coilyco-*"
+
+    can get thing {
+        path "/owners/{owner}/things/{id}"
+    }
+
+    can create thing {
+        path "/owners/{owner}/things"
+        body {
+            field "title" type="string" required=#true
+        }
+    }
+}

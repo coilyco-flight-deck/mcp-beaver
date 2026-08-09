@@ -92,6 +92,53 @@ this path.
 
 The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_issue`, `close_issue` - each guarded, each scoped to `coilyco-*` / `kai` owners.
 
+## Optional guardfile siblings
+
+A guardfile can state a few optional nodes beside `wrap`. `opcore.ParseInline`
+reads only `wrap`, so these never touch the frozen grammar. Each is opt-in and
+fails closed: declare none and the server behaves exactly as before.
+
+```kdl
+server-info                                   // mints `ward_mcp_info`
+confirm "create_issue" message="Create this issue upstream?"
+
+resource "oncall" uri="ward://runbook/oncall" mime="text/markdown" {
+    description "First response for an upstream 5xx"
+    text "1. Call ward_mcp_info to confirm the pod is serving."
+    text "2. Check the upstream status page."
+}
+
+prompt "triage" title="Triage an incident" {
+    description "Walk the on-call first-response steps"
+    argument "service" description="Which service is failing" required=#true
+    text "You are triaging {service}. Read ward://runbook/oncall first."
+}
+
+wrap ward mcp forgejo {
+    // ... unchanged
+}
+```
+
+`resource` and `prompt` are what Claude Code renders as `@` mentions and slash
+commands. Resource content is inline only: a resource that proxied an upstream
+read would be a second egress path beside the `can` grants, and the grants are
+the whole security model.
+
+`server-info` mints one read-only tool that reports the server's identity,
+mode, and tool inventory without reaching any upstream. It also restores a
+liveness probe, which clients otherwise lost when MCP 2026-07-28 removed the
+protocol-level `ping`. It is opt-in rather than always-on because deny-by-
+absence is the rule here, and a locked-down deployment has a fair reason to
+refuse to describe its own shape.
+
+`confirm` names a **projected tool name** and gates it behind a Multi
+Round-Trip Request: the first call returns an input request rather than acting,
+and the tool runs only if the client retries with an explicit accept. A decline
+or a dismissal never reaches the upstream. It is per tool rather than automatic
+on every mutation because these deploy headless, where a prompt on every write
+would wedge the service. Naming a tool the spec does not mint is an error - a
+confirmation attached to nothing looks like a gate that is not there.
+
 ## Validating an upstream allowlist
 
 `serve-upstream` has no spec file, so `lint-upstream` checks the allowlist

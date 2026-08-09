@@ -35,6 +35,8 @@ type Server struct {
 	descs     []opcore.Descriptor
 	cfg       opcore.RuntimeConfig
 	tools     []*mcp.Tool
+	resources []mcp.Resource
+	prompts   []mcp.Prompt
 	handlers  map[string]mcp.ToolHandler
 	upstreams []adminUpstreamResponse
 	sdk       *mcp.Server
@@ -57,16 +59,47 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	instrumentation, err := newInstrumentation("spec", tools)
-	if err != nil {
-		return nil, fmt.Errorf("initialize telemetry: %w", err)
-	}
-
-	// Top-level `icon` nodes ride beside `wrap`, outside the frozen inline
-	// grammar opcore owns (deploy#255) - parsed here, served on initialize.
+	// Top-level `icon`, `resource`, `prompt`, and `server-info` nodes ride
+	// beside `wrap`, outside the frozen inline grammar opcore owns
+	// (deploy#255) - parsed here, projected onto the served surface below.
 	icons, err := parseIcons(src)
 	if err != nil {
 		return nil, err
+	}
+	resources, err := parseResources(src)
+	if err != nil {
+		return nil, err
+	}
+	prompts, err := parsePrompts(src)
+	if err != nil {
+		return nil, err
+	}
+	infoCfg, err := parseServerInfo(src)
+	if err != nil {
+		return nil, err
+	}
+	confirmations, err := parseConfirmations(src)
+	if err != nil {
+		return nil, err
+	}
+	// Built before telemetry and folded into the tool list, so the info tool
+	// is a first-class member of the served surface: bounded in metrics like
+	// any grant, and reported by ToolNames and `ward-mcp lint`.
+	infoTool, err := serverInfoTool(infoCfg, tools)
+	if err != nil {
+		return nil, err
+	}
+	if infoTool != nil {
+		tools = append(tools, infoTool)
+		sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
+	}
+	if err := validateConfirmations(confirmations, tools); err != nil {
+		return nil, err
+	}
+
+	instrumentation, err := newInstrumentation("spec", tools)
+	if err != nil {
+		return nil, fmt.Errorf("initialize telemetry: %w", err)
 	}
 
 	s := &Server{
@@ -82,8 +115,16 @@ func New(name, specPath string, src []byte) (*Server, error) {
 
 	for _, d := range descs {
 		desc := d
-		s.registerTool(toolSpec(desc), toolHandler(rt, desc))
+		spec := toolSpec(desc)
+		handler := toolHandler(rt, desc)
+		if message, gated := confirmations[spec.Name]; gated {
+			handler = withConfirmation(message, handler)
+		}
+		s.registerTool(spec, handler)
 	}
+	s.registerResources(resources)
+	s.registerPrompts(prompts)
+	s.registerServerInfo(infoTool)
 	s.installMiddleware()
 	return s, nil
 }

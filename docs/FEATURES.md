@@ -73,6 +73,42 @@ exit. No network, so it runs in a sealed clone and in CI.
   `serve-ssm` policies use a separate grammar and are not lintable through
   this path.
 
+## Guardfile siblings: resources, prompts, server-info, confirmations
+
+Optional top-level nodes stated beside `wrap`, outside the frozen inline
+grammar `opcore.ParseInline` owns. Each is opt-in and fails closed, so a
+guardfile that declares none serves exactly what it served before.
+
+* **Resources** - `resource "<name>" uri=... { text ... }` serves static
+  content on `resources/read`. Inline only by design: a resource proxying an
+  upstream read would be a second, unguarded egress path beside the grants.
+  Claude Code surfaces these as `@` mentions.
+* **Prompts** - `prompt "<name>" { argument ...; text ... }` serves a message
+  template on `prompts/get` with `{arg}` substitution. A missing required
+  argument is an error, since a half-filled prompt reads as a complete one.
+  Claude Code surfaces these as slash commands.
+* **Server info** - `server-info` mints one read-only tool reporting the
+  server's identity, mode, and tool inventory. It reaches no upstream and
+  restores the liveness probe 2026-07-28 removed along with `ping`. Opt-in
+  because deny-by-absence is the model. It counts itself, so `lint` and
+  `tools/list` report the same surface.
+* **Confirmations** - `confirm "<tool-name>"` gates one tool behind a Multi
+  Round-Trip Request: the first call returns an input request, and the tool
+  runs only on a retry carrying an explicit accept. Anything else never
+  reaches the upstream. Per tool rather than blanket, because these run
+  headless where a prompt on every write would wedge the deployment.
+
+## MCP 2026-07-28 conformance
+
+* **Stateless transport** - the streamable HTTP handler is stateless, which the
+  current revision requires; a session-backed handler rejects a 2026-07-28
+  client outright. Pre-2026 clients still negotiate their own version.
+* **Cacheable lists** - list results carry `ttlMs` and `cacheScope`. A
+  spec-driven surface changes only when the pod restarts and gets the longer
+  hint; a proxied surface mirrors a drifting upstream and gets the shorter one.
+* **Deprecations** - the runtime no longer advertises the deprecated `logging`
+  capability. Observability is OpenTelemetry, which it already emits.
+
 ## `ward-mcp lint-upstream --tool <name>...`
 
 The validation surface for a `serve-upstream` allowlist, the counterpart to

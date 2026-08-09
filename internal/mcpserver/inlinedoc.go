@@ -1,0 +1,71 @@
+package mcpserver
+
+import (
+	"fmt"
+	"strings"
+
+	kdl "github.com/calico32/kdl-go"
+)
+
+// parseInlineDoc parses a `.mcp.kdl` document for the nodes that ride BESIDE
+// `wrap` at the top level. `opcore.ParseInline` reads only the `wrap` node, so
+// these siblings never touch the frozen wrap-body grammar or the cli-guard pin.
+// See docs/DESIGN.md for the rule and the nodes that use it.
+func parseInlineDoc(src []byte, what string) (*kdl.Document, error) {
+	// Mirror opcore's normalizeInlineBooleans: the wrap body spells booleans
+	// as `required=true` shorthand, which kdl-go alone rejects. A sibling node
+	// may not use booleans at all, but the document must parse as a whole.
+	repl := strings.NewReplacer(
+		"required=true", "required=#true",
+		"required=false", "required=#false",
+		"raw=true", "raw=#true",
+		"raw=false", "raw=#false",
+	)
+	doc, err := kdl.ParseString(repl.Replace(string(src)))
+	if err != nil {
+		return nil, fmt.Errorf("ward-mcp: parse KDL for %s: %w", what, err)
+	}
+	return doc, nil
+}
+
+// oneStringArg reads the single required string argument a sibling node names
+// itself with, so every node reports the same shape error.
+func oneStringArg(n *kdl.Node, node string) (string, error) {
+	if len(n.Arguments()) != 1 {
+		return "", fmt.Errorf("ward-mcp: `%s` wants exactly one name argument, got %d", node, len(n.Arguments()))
+	}
+	value := n.Arg(0).String()
+	if value == "" {
+		return "", fmt.Errorf("ward-mcp: `%s` name must be non-empty", node)
+	}
+	return value, nil
+}
+
+// boolProp reads a KDL boolean property. Value.String() renders a bool as
+// "<kdl.Bool true>" and Value.Bool() panics on a non-bool, so comparing the
+// rendered string silently reads every boolean as false - which would turn a
+// `required=#true` argument into an optional one. Fail closed on a non-bool
+// instead, and never panic on operator-supplied config.
+func boolProp(value kdl.Value, node, key string) (bool, error) {
+	if value.Kind() != kdl.Bool {
+		return false, fmt.Errorf("ward-mcp: `%s` property %q wants a boolean (#true or #false), got %s", node, key, value.String())
+	}
+	return value.Bool(), nil
+}
+
+// joinTextChildren collects repeated `text "..."` children into one body.
+// KDL has no ergonomic multi-line string here, so a body is written as one
+// `text` node per line and joined with newlines.
+func joinTextChildren(n *kdl.Node, node string) (string, error) {
+	var lines []string
+	for _, child := range n.Children().Nodes {
+		if child.Name() != "text" {
+			continue
+		}
+		if len(child.Arguments()) != 1 {
+			return "", fmt.Errorf("ward-mcp: `%s` child `text` wants exactly one argument, got %d", node, len(child.Arguments()))
+		}
+		lines = append(lines, child.Arg(0).String())
+	}
+	return strings.Join(lines, "\n"), nil
+}

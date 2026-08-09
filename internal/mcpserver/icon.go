@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	kdl "github.com/calico32/kdl-go"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -29,18 +28,9 @@ import (
 // hosted icon URL would 401 for the connecting client, and a data URI rides
 // inside the initialize payload with no external dependency.
 func parseIcons(src []byte) ([]mcp.Icon, error) {
-	// Mirror opcore's normalizeInlineBooleans: the wrap body spells booleans
-	// as `required=true` shorthand, which kdl-go alone rejects. The icon node
-	// never carries booleans, but the document must parse as a whole.
-	repl := strings.NewReplacer(
-		"required=true", "required=#true",
-		"required=false", "required=#false",
-		"raw=true", "raw=#true",
-		"raw=false", "raw=#false",
-	)
-	doc, err := kdl.ParseString(repl.Replace(string(src)))
+	doc, err := parseInlineDoc(src, "icons")
 	if err != nil {
-		return nil, fmt.Errorf("ward-mcp: parse KDL for icons: %w", err)
+		return nil, err
 	}
 
 	var icons []mcp.Icon
