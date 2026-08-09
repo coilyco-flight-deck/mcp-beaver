@@ -159,8 +159,8 @@ func toolList(t *testing.T, resp rpcResponse) []map[string]any {
 	return out
 }
 
-// TestInitializeHandshake proves the SDK-backed initialize call negotiates the
-// protocol, advertises tools, and issues a session id header.
+// TestInitializeHandshake proves a pre-2026 client still negotiates through the
+// stateless handler: version, tools capability, server info, and instructions.
 func TestInitializeHandshake(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()
@@ -169,8 +169,11 @@ func TestInitializeHandshake(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
-	if got := resp.Header.Get("Mcp-Session-Id"); got == "" {
-		t.Fatal("initialize response missing Mcp-Session-Id")
+	// No session id: the handler is stateless so 2026-07-28 clients are not
+	// rejected, and that revision removed the header. A pre-2026 client still
+	// negotiates its own version, which is what the rest of this asserts.
+	if got := resp.Header.Get("Mcp-Session-Id"); got != "" {
+		t.Fatalf("stateless handler minted a session id %q", got)
 	}
 	out := decodeRPCResponse(t, resp)
 	var result map[string]any
@@ -803,4 +806,115 @@ func toJSON(v any, out any) error {
 		return err
 	}
 	return json.Unmarshal(raw, out)
+}
+
+// The regression this guards: a session-backed handler rejects a 2026-07-28
+// client outright with 400, so ward-mcp was unreachable from any client that
+// negotiated the current revision.
+func TestStatelessAcceptsCurrentProtocolRevision(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, ts.URL+"/mcp", strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`,
+	))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Mcp-Protocol-Version", "2026-07-28")
+	req.Header.Set("Mcp-Method", "tools/list")
+	req.Header.Set("Mcp-Name", "tools/list")
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 200; body = %s", resp.StatusCode, body)
+	}
+	out := decodeRPCResponse(t, resp)
+	if out.Error != nil {
+		t.Fatalf("tools/list error: %+v", out.Error)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(out.Result, &result); err != nil {
+		t.Fatalf("result: %v", err)
+	}
+	if result["resultType"] != "complete" {
+		t.Errorf("resultType = %v, want complete", result["resultType"])
+	}
+	if len(result["tools"].([]any)) == 0 {
+		t.Error("tools/list returned no tools")
+	}
+}
+
+// 2026-07-28 requires ttlMs on cacheable list results. The SDK leaves it 0,
+// which tells clients the list is immediately stale, so ward-mcp stamps it.
+func TestToolsListCarriesCacheHints(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`)
+	decodeRPCResponse(t, initResp)
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
+	var result map[string]any
+	if err := json.Unmarshal(decodeRPCResponse(t, resp).Result, &result); err != nil {
+		t.Fatalf("result: %v", err)
+	}
+	if got, want := result["ttlMs"], float64(specListTTLMs); got != want {
+		t.Errorf("ttlMs = %v, want %v", got, want)
+	}
+	if got := result["cacheScope"]; got != "public" {
+		t.Errorf("cacheScope = %v, want public", got)
+	}
+}
+
+// A proxied list mirrors an upstream that can change under us, so it carries
+// the shorter hint.
+func TestProxyToolsListUsesShorterCacheHint(t *testing.T) {
+	upstreamTS := newUpstreamServer(t, upstreamTool(t, "browse", "browse upstream", `{"type":"object","properties":{}}`,
+		func(context.Context, *mcp.CallToolRequest, map[string]any) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{}, nil, nil
+		}))
+	defer upstreamTS.Close()
+	s, err := NewProxy(context.Background(), "proxy", "", upstreamTS.URL+"/mcp", []string{"browse"}, upstreamTS.Client())
+	if err != nil {
+		t.Fatalf("NewProxy: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	var result map[string]any
+	if err := json.Unmarshal(decodeRPCResponse(t, resp).Result, &result); err != nil {
+		t.Fatalf("result: %v", err)
+	}
+	if got, want := result["ttlMs"], float64(upstreamListTTLMs); got != want {
+		t.Errorf("ttlMs = %v, want %v", got, want)
+	}
+}
+
+// 2026-07-28 deprecates Logging, Roots, and Sampling. ward-mcp emits
+// OpenTelemetry instead, so it should not claim the deprecated capability.
+func TestCapabilitiesOmitDeprecatedLogging(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`)
+	var result map[string]any
+	if err := json.Unmarshal(decodeRPCResponse(t, resp).Result, &result); err != nil {
+		t.Fatalf("result: %v", err)
+	}
+	caps, _ := result["capabilities"].(map[string]any)
+	if _, ok := caps["logging"]; ok {
+		t.Errorf("capabilities still advertise deprecated logging: %v", caps)
+	}
+	// The inferred tools capability must survive dropping the default.
+	if _, ok := caps["tools"]; !ok {
+		t.Errorf("capabilities lost tools: %v", caps)
+	}
 }

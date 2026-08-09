@@ -160,11 +160,16 @@ func (s *Server) Close() error {
 // Handler exposes the runtime on /mcp using the official SDK streamable HTTP
 // handler, automatically projects each tool at /api/{tool-name}, and retains
 // the pod health probe plus operator admin endpoints.
+//
+// Stateless is required, not merely preferred: the SDK rejects a 2026-07-28
+// client outright on a session-backed handler. Older clients still negotiate
+// their own version here, they just stop receiving an `Mcp-Session-Id`.
+// ward-mcp holds no cross-call state of its own, so nothing is lost.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return s.sdk
-	}, &mcp.StreamableHTTPOptions{JSONResponse: true})
+	}, &mcp.StreamableHTTPOptions{JSONResponse: true, Stateless: true})
 	mux.Handle("/mcp", captureTransportSpan(mcpHandler))
 	mux.HandleFunc(apiPrefix, s.serveAPITool)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -207,9 +212,48 @@ func (s *Server) installMiddleware() {
 					}
 				}
 			}
+			if err == nil {
+				s.applyCacheTTL(res)
+			}
 			return res, err
 		}
 	})
+}
+
+// Cache TTLs for list results. 2026-07-28 requires `ttlMs` on every cacheable
+// list result, and the SDK leaves it at 0, which tells a client the response is
+// immediately stale and to re-list on every turn.
+//
+// A spec-driven surface is fixed for the process lifetime: the spec is baked
+// into the image and `/admin/reload` answers restart-required, so the list can
+// only change by the pod restarting. A proxied surface mirrors an upstream that
+// can change under us, so it re-lists far more often. A client holding a stale
+// list still fails closed, since an absent grant is an absent tool.
+const (
+	specListTTLMs     = 300_000
+	upstreamListTTLMs = 60_000
+)
+
+// applyCacheTTL stamps the freshness hint on list results. cacheScope is left
+// to the SDK, which defaults it to "public": a ward-mcp tool list is derived
+// from policy, identical for every caller of the server, and never per-user.
+func (s *Server) applyCacheTTL(res mcp.Result) {
+	ttl := specListTTLMs
+	if len(s.upstreams) > 0 {
+		ttl = upstreamListTTLMs
+	}
+	switch typed := res.(type) {
+	case *mcp.ListToolsResult:
+		typed.TTLMs = ttl
+	case *mcp.ListPromptsResult:
+		typed.TTLMs = ttl
+	case *mcp.ListResourcesResult:
+		typed.TTLMs = ttl
+	case *mcp.ListResourceTemplatesResult:
+		typed.TTLMs = ttl
+	case *mcp.ReadResourceResult:
+		typed.TTLMs = ttl
+	}
 }
 
 func (s *Server) registerTool(tool *mcp.Tool, handler mcp.ToolHandler) {
@@ -251,7 +295,16 @@ func cloneTool(tool *mcp.Tool) *mcp.Tool {
 func newSDKServer(name string, icons []mcp.Icon) *mcp.Server {
 	return mcp.NewServer(
 		&mcp.Implementation{Name: name, Version: "0.1.0", Icons: icons},
-		&mcp.ServerOptions{Instructions: serverInstructions},
+		&mcp.ServerOptions{
+			Instructions: serverInstructions,
+			// Empty rather than nil: nil means the SDK's historical
+			// {"logging":{}} default, and 2026-07-28 deprecates Logging along
+			// with Roots and Sampling. The suggested migration is
+			// OpenTelemetry, which this runtime already emits. tools,
+			// prompts, and resources are still inferred from what is
+			// registered, so this drops only the deprecated claim.
+			Capabilities: &mcp.ServerCapabilities{},
+		},
 	)
 }
 

@@ -213,9 +213,18 @@ func isDirectToolContext(ctx context.Context) bool {
 	return direct
 }
 
+// boundedMCPMethod keeps the method label to a fixed set so a caller cannot
+// drive the metric to unbounded cardinality. It spans both protocol eras:
+// 2026-07-28 removed `initialize`, `notifications/initialized`, and `ping`, and
+// added `server/discover` and `subscriptions/listen`. Pre-2026 clients still
+// negotiate here, so both sides stay named rather than collapsing to _OTHER.
 func boundedMCPMethod(method string) string {
 	switch method {
-	case "initialize", "notifications/initialized", "notifications/cancelled", "ping", "tools/list", "tools/call":
+	case "initialize", "notifications/initialized", "notifications/cancelled",
+		"ping", "tools/list", "tools/call",
+		"server/discover", "subscriptions/listen",
+		"prompts/list", "prompts/get",
+		"resources/list", "resources/read", "resources/templates/list":
 		return method
 	default:
 		return "_OTHER"
