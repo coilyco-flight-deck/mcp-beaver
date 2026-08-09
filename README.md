@@ -92,6 +92,39 @@ this path.
 
 The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_issue`, `close_issue` - each guarded, each scoped to `coilyco-*` / `kai` owners.
 
+## Validating an upstream allowlist
+
+`serve-upstream` has no spec file, so `lint-upstream` checks the allowlist
+itself. It is offline unless you point it at an upstream, and it shares the
+validation the serving path runs, so it cannot drift from what `serve-upstream`
+accepts:
+
+```sh
+$ ward-mcp lint-upstream --read-only heuristic --tool signoz_list_metrics --tool signoz_get_alert
+signoz_get_alert
+signoz_list_metrics
+```
+
+`--read-only heuristic` screens the names for mutation verbs. It is the offline
+gate for review: a consumer repo declaring a read-only allowlist runs this in
+CI, and a `create` / `update` / `delete` tool entering that list fails there,
+with no live connection and no consumer-side pattern check.
+
+It is a heuristic over names, so it can be wrong in both directions. When a
+live upstream is reachable, `--read-only strict` supersedes it and asks the
+upstream what is actually read-only:
+
+```sh
+$ ward-mcp lint-upstream --upstream http://127.0.0.1:8000/mcp --read-only strict --tool rotate_key
+ward-mcp: upstream "http://127.0.0.1:8000/mcp" does not annotate these allowlisted tools readOnlyHint: rotate_key
+```
+
+A tool the upstream leaves unannotated counts as mutable: the MCP default for
+`readOnlyHint` is false, so silence is not a promise. Because `--upstream`
+builds the same proxy `serve-upstream` builds, it also fails a tool the
+upstream does not expose at all. That connection makes it a rollout or smoke
+step, not a CI one.
+
 ## Opt-in OpenTelemetry
 
 ward-mcp emits OpenTelemetry traces and metrics when standard `OTEL_*`
@@ -199,7 +232,7 @@ owns public ingress, authentication, TLS, DNS, and rollout.
 
 ## Layout
 
-* [`cmd/ward-mcp`](cmd/ward-mcp) - the `serve` entrypoint: parse a spec, project tools, bind the SDK-backed HTTP listener. `lint` is the same path minus the listener and telemetry.
+* [`cmd/ward-mcp`](cmd/ward-mcp) - the `serve` entrypoint: parse a spec, project tools, bind the SDK-backed HTTP listener. `lint` is the same path minus the listener and telemetry, and `lint-upstream` is the allowlist counterpart for `serve-upstream`.
 * [`internal/mcpserver`](internal/mcpserver) - the thin shell: grant→MCP-tool and HTTP endpoint projection, the SDK-backed streamable HTTP/session layer, and the non-MCP `/healthz` plus `/admin/*` operator endpoints.
 * [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issues as an MCP. Its body is the frozen ward-mcp inline grammar (`opcore.ParseInline`), and it is the whole contract.
 * [`examples/skillsmp.mcp.kdl`](examples/skillsmp.mcp.kdl) - the first end-to-end target: two read tools over the SDK-backed transport against skillsmp.com.

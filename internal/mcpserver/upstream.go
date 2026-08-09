@@ -28,12 +28,9 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 	if strings.TrimSpace(upstreamURL) == "" {
 		return nil, fmt.Errorf("ward-mcp: upstream endpoint is empty")
 	}
-	if len(allowTools) == 0 {
-		return nil, fmt.Errorf("ward-mcp: upstream allowlist is empty")
-	}
-	allowlist := uniqueStrings(allowTools)
-	if len(allowlist) != len(allowTools) {
-		return nil, fmt.Errorf("ward-mcp: duplicate upstream tool allowlist entry")
+	allowlist, err := ValidateAllowlist(allowTools)
+	if err != nil {
+		return nil, err
 	}
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "ward-mcp", Version: "0.1.0"}, nil)
@@ -186,21 +183,4 @@ func findUpstreamTool(tools []*mcp.Tool, name string) (*mcp.Tool, error) {
 		}
 	}
 	return nil, fmt.Errorf("ward-mcp: upstream tool %q was not found or is no longer exposed", name)
-}
-
-func uniqueStrings(in []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(in))
-	for _, s := range in {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		out = append(out, s)
-	}
-	return out
 }

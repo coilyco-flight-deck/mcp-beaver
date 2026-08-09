@@ -130,6 +130,24 @@ func (s *Server) ToolNames() []string {
 	return projectedToolNames(s.tools)
 }
 
+// NotReadOnly returns the served tool names the upstream does not annotate
+// `readOnlyHint: true`, sorted. A tool with no annotations counts, since the
+// MCP default for the hint is false: an upstream that stays silent has not
+// promised anything, and a read-only allowlist must not assume one.
+func (s *Server) NotReadOnly() []string {
+	var out []string
+	for _, tool := range s.tools {
+		if tool == nil {
+			continue
+		}
+		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
+			out = append(out, tool.Name)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Close releases any upstream session resources. Local opcore-backed servers do
 // not hold additional runtime state, so Close is a no-op there.
 func (s *Server) Close() error {

@@ -73,6 +73,30 @@ exit. No network, so it runs in a sealed clone and in CI.
   `serve-ssm` policies use a separate grammar and are not lintable through
   this path.
 
+## `ward-mcp lint-upstream --tool <name>...`
+
+The validation surface for a `serve-upstream` allowlist, the counterpart to
+what `lint` gives a guardfile. An allowlist has no spec file to build, so the
+checks are the allowlist's own shape plus, optionally, upstream truth.
+
+* **Shared authority** - shape validation calls the same `ValidateAllowlist`
+  the serving path calls, so the check cannot drift from what `serve-upstream`
+  will accept. Empty entries, duplicates, and an empty list all fail.
+* **Offline by default** - no network unless `--upstream` is passed, so it runs
+  in CI and a sealed clone. A clean allowlist exits 0 and prints the names
+  sorted, one per line, the list a consumer diffs against a reviewed
+  expectation.
+* **`--read-only heuristic`** - screens tool names offline for mutation verbs
+  and fails naming any suspect. A naming heuristic, not upstream truth, but it
+  lives in the owning loader instead of being restated per consumer.
+* **`--read-only strict`** - requires `--upstream`, connects, and fails any
+  allowlisted tool the upstream does not annotate `readOnlyHint: true`. This is
+  authoritative and supersedes the heuristic, so it belongs in a rollout or
+  smoke path rather than offline CI. An unannotated tool counts as mutable: the
+  MCP default for the hint is false.
+* **Existence check** - passing `--upstream` builds the same proxy
+  `serve-upstream` builds, so a tool absent upstream fails there too.
+
 ## `ward-mcp serve-upstream --upstream <mcp-url> --tool <name>...`
 
 The guarded passthrough backend. It connects to a private streamable-HTTP MCP

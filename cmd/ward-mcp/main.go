@@ -5,6 +5,7 @@
 //
 //	ward-mcp serve /spec/<name>.mcp.kdl --http :8080
 //	ward-mcp lint /spec/<name>.mcp.kdl
+//	ward-mcp lint-upstream --tool <name> --read-only heuristic
 //
 // It parses the spec through cli-guard's opcore engine, projects one MCP tool
 // plus one POST /api/{tool-name} endpoint per grant, and binds one HTTP
@@ -21,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -50,7 +52,7 @@ func run(argv []string) error {
 
 func runContext(ctx context.Context, argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: ward-mcp serve <spec.mcp.kdl> [--http :8080] | ward-mcp serve-ssm <spec.mcp.kdl> [--http :8080] | ward-mcp serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...] | ward-mcp lint <spec.mcp.kdl>")
+		return fmt.Errorf("usage: ward-mcp serve <spec.mcp.kdl> [--http :8080] | ward-mcp serve-ssm <spec.mcp.kdl> [--http :8080] | ward-mcp serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...] | ward-mcp lint <spec.mcp.kdl> | ward-mcp lint-upstream --tool <name> [--read-only heuristic|strict] [--upstream <mcp-url>]")
 	}
 	switch argv[0] {
 	case "serve":
@@ -61,9 +63,122 @@ func runContext(ctx context.Context, argv []string) error {
 		return runServeSSM(ctx, argv[1:])
 	case "lint":
 		return runLint(os.Stdout, argv[1:])
+	case "lint-upstream":
+		return runLintUpstream(ctx, os.Stdout, argv[1:])
 	default:
-		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-upstream, lint)", argv[0])
+		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-upstream, lint, lint-upstream)", argv[0])
 	}
+}
+
+// runLintUpstream is the validation surface for a `serve-upstream` allowlist,
+// the counterpart to what `lint` gives a guardfile. An allowlist has no spec
+// file to build, so the checks are the allowlist's own shape plus, optionally,
+// what the upstream says about the tools it names.
+//
+// Offline by default so it runs in CI and a sealed clone: shape only, plus the
+// mutation-name heuristic behind --read-only. With --upstream it connects and
+// checks against upstream truth, which is a rollout or smoke step, not CI.
+func runLintUpstream(ctx context.Context, out io.Writer, argv []string) error {
+	fs := flag.NewFlagSet("lint-upstream", flag.ContinueOnError)
+	upstream := fs.String("upstream", "", "connect to this MCP upstream and check the allowlist against its advertised tools")
+	readOnly := fs.String("read-only", "", "assert the allowlist is read-only, as `mode`: heuristic screens tool names offline, strict requires --upstream and checks readOnlyHint")
+	connectTimeout := fs.Duration("connect-timeout", 0, "retry upstream startup until this timeout (0 fails immediately)")
+	var tools stringSliceFlag
+	fs.Var(&tools, "tool", "allowlisted upstream tool to check (repeatable)")
+	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("lint-upstream takes no positional arguments, only --tool entries")
+	}
+	mode, err := parseReadOnlyMode(*readOnly, *upstream)
+	if err != nil {
+		return err
+	}
+	// The same authority the serving path calls, so the offline check cannot
+	// drift from what serve-upstream will actually accept.
+	allowlist, err := mcpserver.ValidateAllowlist(tools)
+	if err != nil {
+		return err
+	}
+	if mode == readOnlyHeuristic {
+		if suspects := mcpserver.MutationSuspects(allowlist); len(suspects) > 0 {
+			return fmt.Errorf(
+				"read-only allowlist names mutation tools: %s. If these are genuinely read-only, re-run with --upstream and --read-only strict to check the upstream's own readOnlyHint instead of their names",
+				strings.Join(suspects, ", "),
+			)
+		}
+	}
+	if *upstream != "" {
+		if err := checkUpstreamAllowlist(ctx, *upstream, allowlist, mode, *connectTimeout); err != nil {
+			return err
+		}
+	}
+	for _, name := range sortedCopy(allowlist) {
+		if _, err := fmt.Fprintln(out, name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkUpstreamAllowlist builds the same proxy serve-upstream builds. That
+// connect already fails when an allowlisted tool is absent upstream, so the
+// only check added here is the readOnlyHint one.
+func checkUpstreamAllowlist(
+	ctx context.Context,
+	upstream string,
+	allowlist []string,
+	mode readOnlyMode,
+	connectTimeout time.Duration,
+) error {
+	srv, err := connectProxyWithRetry(ctx, connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
+		return mcpserver.NewProxy(ctx, "ward-mcp-lint", "", upstream, allowlist, nil)
+	})
+	if err != nil {
+		return fmt.Errorf("connect upstream %q: %w", upstream, err)
+	}
+	defer func() { _ = srv.Close() }()
+	if mode != readOnlyStrict {
+		return nil
+	}
+	if mutable := srv.NotReadOnly(); len(mutable) > 0 {
+		return fmt.Errorf(
+			"upstream %q does not annotate these allowlisted tools readOnlyHint: %s",
+			upstream, strings.Join(mutable, ", "),
+		)
+	}
+	return nil
+}
+
+type readOnlyMode int
+
+const (
+	readOnlyOff readOnlyMode = iota
+	readOnlyHeuristic
+	readOnlyStrict
+)
+
+func parseReadOnlyMode(value, upstream string) (readOnlyMode, error) {
+	switch value {
+	case "":
+		return readOnlyOff, nil
+	case "heuristic":
+		return readOnlyHeuristic, nil
+	case "strict":
+		if upstream == "" {
+			return readOnlyOff, fmt.Errorf("--read-only strict needs --upstream: readOnlyHint is upstream's to declare")
+		}
+		return readOnlyStrict, nil
+	default:
+		return readOnlyOff, fmt.Errorf("unknown --read-only mode %q (want: heuristic, strict)", value)
+	}
+}
+
+func sortedCopy(in []string) []string {
+	out := append([]string(nil), in...)
+	sort.Strings(out)
+	return out
 }
 
 // runLint is runServe minus serveHTTP and minus withTelemetry: it reads the
