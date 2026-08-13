@@ -1,6 +1,6 @@
 # mcp-beaver
 
-A guarded MCP server generator 
+A MCP server generator with a natural flow
 
 ## About
 
