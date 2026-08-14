@@ -1,7 +1,7 @@
 # ward-mcp features
 
 The living inventory of what ward-mcp ships today. Completes the
-README / AGENTS / docs/FEATURES trifecta. ward-mcp turns a cli-guard Guardfile
+README / AGENTS / docs/FEATURES trifecta. ward-mcp turns a umbra Guardfile
 into a guarded MCP server with an automatic matching HTTP tool API, distributed
 as a runtime image plus a generic Helm chart.
 
@@ -13,7 +13,7 @@ at `/mcp` and automatically exposes the identical tool arguments at
 `POST /api/{tool-name}`. No per-guardfile Go, no per-server handler. It never
 binds stdio - these run as remote pods reached by URL.
 
-* **Spec parse** - `opcore.ParseInline` (cli-guard `http/opcore`, pinned
+* **Spec parse** - `opcore.ParseInline` (umbra `http/opcore`, pinned
   `v0.131.0`) parses the ward-mcp inline grammar: `wrap` header, `base-url`,
   `auth`, `restrict`, and each
   `can <verb> <resource> { path/query/body/set }` grant. Flat body declarations

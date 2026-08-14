@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"forgejo.coilysiren.me/coilyco-flight-deck/cli-guard/http/opcore"
-	"forgejo.coilysiren.me/coilyco-flight-deck/cli-guard/pkg/valuesource"
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/pkg/valuesource"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"

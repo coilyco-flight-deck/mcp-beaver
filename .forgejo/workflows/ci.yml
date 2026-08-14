@@ -4,7 +4,7 @@
 # consumes that exact reference. One generic image is published when the
 # runtime source changes, not per guardfile (ward-mcp#6, mount-not-bake).
 #
-# cli-guard is a private forgejo module fetched anonymously, so GOPRIVATE keeps
+# umbra is a private forgejo module fetched anonymously, so GOPRIVATE keeps
 # it off the public proxy and sumdb (the go gate here and the Dockerfile build).
 name: ci
 on:

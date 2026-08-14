@@ -4,7 +4,7 @@ Tracking: [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/
 
 ## The one-line pitch
 
-**A cli-guard Guardfile, no handwritten code, becomes a Docker image that serves a working MCP and matching HTTP tool API.**
+**A umbra Guardfile, no handwritten code, becomes a Docker image that serves a working MCP and matching HTTP tool API.**
 
 `ward mcp build forgejo-issues.mcp.kdl` bakes the guardfile plus one generic runtime into an OCI image whose ENTRYPOINT serves the Model Context Protocol over the official MCP Go SDK's streamable HTTP transport and automatically projects the same tools over HTTP. The `.mcp.kdl` is the whole contract: every `can` grant becomes one MCP tool and one `POST /api/{tool-name}` endpoint, with method, path template, and typed params authored inline. No per-server Go, no per-server Dockerfile, no per-server handler, and - the part that surprises people - **no per-tool input schema**, because the engine derives it from the inline op definition.
 
@@ -24,25 +24,25 @@ are templated by the generic **chart** ward-mcp ships (see [Distribution](#distr
 
 The image serves MCP over the SDK-backed streamable HTTP transport and each tool over an ordinary JSON HTTP endpoint because the servers are meant to run always-on on kai-server's k3s cluster and be reached **by URL over the network** - like deploy's existing `steam-mcp`, `reddit-mcp`, `node-stats-mcp`, `repo-recall`. A remote pod cannot be driven over stdio, which co-locates server with client. So the interior always binds one HTTP listener, never a stdio loop. There is no transport fork to decide. (The *listener* is interior; the *route to it* is deploy's.)
 
-## Not built on ward. Not built on cli-mcp. Built on cli-guard.
+## Not built on ward. Not built on cli-mcp. Built on umbra.
 
-ward-mcp has **no relation to the ward codebase.** It is a driver over [cli-guard](https://github.com/coilysiren/cli-guard)'s three-layer spec engine. [cli-mcp](https://github.com/coilysiren/cli-mcp) is read as a **code reference only** - ward-mcp uses the official MCP Go SDK for transport/session plumbing and does not depend on cli-mcp.
+ward-mcp has **no relation to the ward codebase.** It is a driver over [umbra](https://github.com/coilysiren/cli-guard)'s three-layer spec engine. [cli-mcp](https://github.com/coilysiren/cli-mcp) is read as a **code reference only** - ward-mcp uses the official MCP Go SDK for transport/session plumbing and does not depend on cli-mcp.
 
-cli-guard already turns a Guardfile into a guarded surface, in three layers ([specverb.md](https://github.com/coilysiren/cli-guard/blob/main/docs/specverb.md)):
+umbra already turns a Guardfile into a guarded surface, in three layers ([specverb.md](https://github.com/coilysiren/cli-guard/blob/main/docs/specverb.md)):
 
-* **L0 - upstream spec.** In cli-guard generally, the vendor's OpenAPI/Swagger truth, embedded and pruned to the granted operations. In ward-mcp's inline mode, the `.mcp.kdl` itself is the authored source and no fetched OpenAPI is a build input.
+* **L0 - upstream spec.** In umbra generally, the vendor's OpenAPI/Swagger truth, embedded and pruned to the granted operations. In ward-mcp's inline mode, the `.mcp.kdl` itself is the authored source and no fetched OpenAPI is a build input.
 * **L1 - policy IR.** The compiled operation set. verb+resource resolves to an operation by convention; `op` overrides.
 * **L2 - Guardfile.** The human authoring layer, pure KDL data, parsed never evaluated.
 
-The engine carries zero upstream knowledge, so **one engine drives every spec, no code changes.** Its `specverb.Build` mounts each grant as a generic guarded action: path params become positionals, query and body fields become typed flags, all validated before the wire call. cli-guard's own `kdl-specs` driver renders that into a no-code **CLI**. ward-mcp renders the same engine's inline operation set into **MCP tools and matching HTTP endpoints** instead.
+The engine carries zero upstream knowledge, so **one engine drives every spec, no code changes.** Its `specverb.Build` mounts each grant as a generic guarded action: path params become positionals, query and body fields become typed flags, all validated before the wire call. umbra's own `kdl-specs` driver renders that into a no-code **CLI**. ward-mcp renders the same engine's inline operation set into **MCP tools and matching HTTP endpoints** instead.
 
-## What ward-mcp adds on top of cli-guard
+## What ward-mcp adds on top of umbra
 
-* cli-guard provides inline operation parsing, guards, request assembly, and authentication.
+* umbra provides inline operation parsing, guards, request assembly, and authentication.
 * ward-mcp provides grant-to-tool projection, derived MCP metadata, matching HTTP endpoint projection, the SDK-backed streamable HTTP transport, the runtime image, and the spec-opaque auth-neutral chart.
 * deploy composes the runtime contract with ingress, authentication, TLS, DNS, per-MCP values, and rollout.
 
-A tool call arrives over the SDK-backed MCP session or `POST /api/{tool-name}`, runs through the same registered handler and cli-guard guard (restrict gate, argv metachar gate on URL-bound inputs), resolves to an HTTP request, is signed with the injected upstream secret, and fires upstream. Both projections return the MCP `CallToolResult` JSON shape.
+A tool call arrives over the SDK-backed MCP session or `POST /api/{tool-name}`, runs through the same registered handler and umbra guard (restrict gate, argv metachar gate on URL-bound inputs), resolves to an HTTP request, is signed with the injected upstream secret, and fires upstream. Both projections return the MCP `CallToolResult` JSON shape.
 
 ## Automatic dual projection
 
@@ -92,7 +92,7 @@ A ward-mcp server **cannot exceed its guardfile**, because the guardfile is the 
 * Every `can` grant is one MCP tool and one matching HTTP endpoint. There is no way to declare a tool the guardfile does not grant.
 * An unwritten `delete issue` grant means no `delete_issue` tool is minted. In the frozen `opcore.ParseInline` grammar this is **deny-by-absence**: the served surface is exactly the `can` grants, so leaving a grant out is the deletion guard.
 * `restrict owner matches coilyco-*` bounds every `{owner}` path param.
-* The argv metachar gate runs on inputs that compose into the URL (path + query); body fields (issue titles, markdown) are exempt, as in cli-guard.
+* The argv metachar gate runs on inputs that compose into the URL (path + query); body fields (issue titles, markdown) are exempt, as in umbra.
 
 Handing a write-capable MCP to an agent (deploy#40's ask) is defensible: the blast radius is one small reviewable file, enforced at the transport, not trusted to the model.
 
@@ -105,7 +105,7 @@ MCP metadata that clients use for selection, display, and confirmation:
 * **Description** - the grant's `describe` note when present. Otherwise a
   user-goal sentence derived from the verb and resource.
 * **Safety annotations** - GET, HEAD, and OPTIONS are read-only. The standard
-  HTTP idempotent methods are marked idempotent. cli-guard's destructive grant
+  HTTP idempotent methods are marked idempotent. umbra's destructive grant
   bit controls `destructiveHint`. Local operations are open-world because they
   call a configured upstream service.
 * **Output schema** - generic HTTP operations advertise an object with one
@@ -158,9 +158,9 @@ A push touching a `.mcp.kdl` triggers the image build in CI, the way kai-server 
 
 ## The spec dialect
 
-The body is the frozen ward-mcp inline grammar parsed by `opcore.ParseInline` - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` grants (each with its `path`/`query`/`body`/`set`). Input schemas are derived from those inline op definitions, not authored separately. Flat `body "title" "body"` syntax remains shorthand for optional string fields. A `body { ... }` block adds typed scalars, scalar arrays, nested objects, required fields, raw object or array escape hatches, or exact nested-string input-to-output mappings. Mapped bodies emit only declared destination keys. Raw fields advertise their outer JSON type and `x-opcore-raw: true` while leaving the subtree unconstrained. The `.mcp.kdl` suffix marks the ward-mcp target and keeps the file out of cli-guard's CLI-discovery glob.
+The body is the frozen ward-mcp inline grammar parsed by `opcore.ParseInline` - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` grants (each with its `path`/`query`/`body`/`set`). Input schemas are derived from those inline op definitions, not authored separately. Flat `body "title" "body"` syntax remains shorthand for optional string fields. A `body { ... }` block adds typed scalars, scalar arrays, nested objects, required fields, raw object or array escape hatches, or exact nested-string input-to-output mappings. Mapped bodies emit only declared destination keys. Raw fields advertise their outer JSON type and `x-opcore-raw: true` while leaving the subtree unconstrained. The `.mcp.kdl` suffix marks the ward-mcp target and keeps the file out of umbra's CLI-discovery glob.
 
-Several constructs ride **beside** the frozen grammar rather than in it, stated as siblings of `wrap`. `opcore.ParseInline` reads only the `wrap` node, so a sibling never touches the frozen wrap-body grammar or the cli-guard pin; ward-mcp parses each itself, over the shared document parse in `internal/mcpserver/inlinedoc.go`. Every sibling is **optional and fails closed**: an unknown property or child is an error, and an absent node means an absent capability - the same deny-by-absence rule the `can` grants follow.
+Several constructs ride **beside** the frozen grammar rather than in it, stated as siblings of `wrap`. `opcore.ParseInline` reads only the `wrap` node, so a sibling never touches the frozen wrap-body grammar or the umbra pin; ward-mcp parses each itself, over the shared document parse in `internal/mcpserver/inlinedoc.go`. Every sibling is **optional and fails closed**: an unknown property or child is an error, and an absent node means an absent capability - the same deny-by-absence rule the `can` grants follow.
 
 * `icon "<src>"` (optional `mime=` / `sizes=`, repeatable, deploy#255) - served as `serverInfo.icons` on initialize, the mark connector tiles render. Prefer a `data:` URI: the gated deploys sit behind oauth2-proxy, where a hosted icon URL would 401 for the connecting client.
 * `resource "<name>" uri=...` with `text` children - static content served on `resources/read`. Content is inline only: a resource that proxied an upstream read would be a second, unguarded egress path beside the grants. Claude Code surfaces these as `@` mentions.
@@ -182,7 +182,7 @@ Several constructs ride **beside** the frozen grammar rather than in it, stated 
 
 ### Implemented (ward-mcp#7)
 
-The `ward-mcp serve <spec> --http :addr` runtime ships as a thin shell over cli-guard's `http/opcore` (pinned at `v0.127.0` in [`go.mod`](../go.mod)):
+The `ward-mcp serve <spec> --http :addr` runtime ships as a thin shell over umbra's `http/opcore` (pinned at `v0.127.0` in [`go.mod`](../go.mod)):
 
 * `internal/mcpserver.New` runs `opcore.ParseInline`, wires the value providers (env/file/literal), and registers each `Descriptor` as one MCP tool on the official Go SDK server plus one matching HTTP route. The name is `verb_resource`, `inputSchema` is the unchanged output of `Descriptor.InputSchema().JSONSchema()`, and client-facing metadata is derived as described above.
 * A `tools/call` maps the MCP arguments onto `opcore.Args` by the schema's neutral Location hint (path/query→URL, body→JSON) without flattening JSON values, then fires the self-guarding `opcore.Operation.Execute`. A guard or upstream failure returns as an MCP tool result with `isError` set, not a transport fault.

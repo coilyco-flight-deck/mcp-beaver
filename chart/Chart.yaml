@@ -12,7 +12,7 @@ sources:
   - https://forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
 keywords:
   - mcp
-  - cli-guard
+  - umbra
   - guardfile
 maintainers:
   - name: coilysiren
