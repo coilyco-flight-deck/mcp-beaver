@@ -176,6 +176,13 @@ func New(name, specPath string, src []byte) (*Server, error) {
 // the selected upstream tools. The outward contract preserves the upstream tool
 // schemas, descriptions, titles, and annotations where possible.
 func NewProxy(ctx context.Context, name, specPath, upstreamURL string, allowTools []string, httpClient *http.Client) (*Server, error) {
+	return NewProxyWithPins(ctx, name, specPath, upstreamURL, allowTools, nil, httpClient)
+}
+
+// NewProxyWithPins is NewProxy plus server-side argument pins, which bound the
+// scope a caller may reach when the scope rides in an argument rather than in
+// the tool name. See ArgPin.
+func NewProxyWithPins(ctx context.Context, name, specPath, upstreamURL string, allowTools []string, pins []ArgPin, httpClient *http.Client) (*Server, error) {
 	declaredTools := make([]*mcp.Tool, 0, len(allowTools))
 	for _, tool := range allowTools {
 		declaredTools = append(declaredTools, &mcp.Tool{Name: tool})
@@ -184,10 +191,17 @@ func NewProxy(ctx context.Context, name, specPath, upstreamURL string, allowTool
 	if err != nil {
 		return nil, fmt.Errorf("initialize telemetry: %w", err)
 	}
+	// Validated before connecting: a pin naming an unserved tool means the
+	// operator believes a surface is scoped while nothing applies it, and that
+	// belief should not survive startup.
+	if err := ValidatePins(pins, allowTools); err != nil {
+		return nil, err
+	}
 	proxy, err := newProxyBackend(ctx, upstreamURL, allowTools, httpClient, instrumentation)
 	if err != nil {
 		return nil, err
 	}
+	pinned := pinsByTool(pins)
 
 	s := &Server{
 		name:           name,
@@ -202,7 +216,7 @@ func NewProxy(ctx context.Context, name, specPath, upstreamURL string, allowTool
 	}
 	for _, tool := range proxy.selectedTools() {
 		t := cloneTool(tool)
-		s.registerTool(t, proxy.toolHandler(tool.Name))
+		s.registerTool(t, withArgPins(pinned[tool.Name], proxy.toolHandler(tool.Name)))
 	}
 	s.installMiddleware()
 	return s, nil

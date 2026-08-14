@@ -5,6 +5,7 @@
 //
 //	ward-mcp serve /spec/<name>.mcp.kdl --http :8080
 //	ward-mcp lint /spec/<name>.mcp.kdl [--methods]
+//	ward-mcp serve-upstream --upstream <url> --tool <name> [--pin <tool>.<arg>=<value>]
 //	ward-mcp lint-upstream --tool <name> --read-only heuristic
 //
 // It parses the spec through umbra's opcore engine, projects one MCP tool
@@ -318,6 +319,8 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 	requestTimeout := fs.Duration("request-timeout", mcpserver.DefaultRequestTimeout, "bound one request end to end, including its upstream call (0 disables)")
 	var tools stringSliceFlag
 	fs.Var(&tools, "tool", "allowlisted upstream tool to expose (repeatable)")
+	var pinFlags stringSliceFlag
+	fs.Var(&pinFlags, "pin", "fix one argument of one tool server-side, as `<tool>.<arg>=<value>` (repeatable)")
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
 		return err
 	}
@@ -327,9 +330,13 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 	if len(tools) == 0 {
 		return fmt.Errorf("serve-upstream needs at least one --tool allowlist entry")
 	}
+	pins, err := parseArgPins(pinFlags)
+	if err != nil {
+		return err
+	}
 	return withTelemetry(ctx, *name, func() error {
 		srv, err := connectProxyWithRetry(ctx, *connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
-			return mcpserver.NewProxy(ctx, *name, "", *upstream, tools, nil)
+			return mcpserver.NewProxyWithPins(ctx, *name, "", *upstream, tools, pins, nil)
 		})
 		if err != nil {
 			return fmt.Errorf("connect upstream %q: %w", *upstream, err)
@@ -494,6 +501,23 @@ func reorderFlagsFirst(argv []string) []string {
 		positional = append(positional, a)
 	}
 	return append(flags, positional...)
+}
+
+// parseArgPins lifts the repeatable --pin flag into the runtime's own type, so
+// the CLI never carries a second understanding of the pin format.
+func parseArgPins(raw []string) ([]mcpserver.ArgPin, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	out := make([]mcpserver.ArgPin, 0, len(raw))
+	for _, entry := range raw {
+		pin, err := mcpserver.ParseArgPin(entry)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, pin)
+	}
+	return out, nil
 }
 
 type stringSliceFlag []string

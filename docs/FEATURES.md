@@ -230,6 +230,29 @@ tool result.
   results, bodies, authorization headers, tokens, Guardfile contents, spec
   paths, and upstream URLs are never captured.
 
+## Server-side argument pins (upstream proxy)
+
+`--pin <tool>.<arg>=<value>` on `serve-upstream` fixes one argument of one
+proxied tool, applied by the wrapper rather than supplied by the caller.
+
+`upstream.tools` allowlists tool **names**, which is the whole authority only
+while the verb carries the scope. It fails whenever scope rides in an argument:
+allowlisting one Bluesky read tool grants every account, because the account is
+a parameter.
+
+* **Non-overridable** - a caller naming the pinned argument with a different
+  value is **refused**, not silently corrected. Quiet rewriting would let a
+  model believe it read one scope while reading another, and a refusal is the
+  outcome a prompt injection cannot widen. Supplying the pinned value passes.
+* **Validated at startup** - a pin naming a tool outside the allowlist is a
+  startup error. An operator believing a surface is scoped while nothing
+  applies it is the failure worth refusing to boot over.
+* **Exact values only.** Conjunctive pinning of free-form filter *expressions*
+  is deliberately not implemented. AND-ing expressions needs the upstream's
+  query language, and a wrong conjunction does not fail loudly - it silently
+  widens, against a consumer whose output surface is public. Exact-value
+  pinning either matches or refuses, with no such ambiguity.
+
 ## Request bounds
 
 Nothing on this axis was bound before: `http.Server` was built with no
