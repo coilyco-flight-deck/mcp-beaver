@@ -73,7 +73,7 @@ exit. No network, so it runs in a sealed clone and in CI.
   `serve-ssm` policies use a separate grammar and are not lintable through
   this path.
 
-## Guardfile siblings: resources, prompts, server-info, confirmations
+## Guardfile siblings: resources, prompts, server-info, withheld verbs, confirmations
 
 Top-level nodes stated beside `wrap`, outside the frozen inline grammar
 `opcore.ParseInline` owns. Each fails closed on an unknown property or child.
@@ -95,6 +95,13 @@ All are opt-in except `server-info`, which is on by default and opts out.
   some servers lets an agent read no meaning from its absence on the rest.
   `server-info name="status"` renames it, `server-info disabled` removes it.
   It counts itself, so `lint` and `tools/list` report the same surface.
+* **Withheld verbs** - `withhold "<tool-name>" { reason ...; alternative ... }`
+  mints a discoverable stub for a verb left out on purpose. It appears in
+  `tools/list`, states why in its description, names a substitute where one
+  exists, and refuses every call with a structured `verb_withheld` payload
+  while reaching no upstream. A `coilyco.io/withheld` marker in `_meta` lets a
+  client separate stubs from live tools without reading prose. Absence
+  otherwise means four different things and an agent has to guess which.
 * **Confirmations** - `confirm "<tool-name>"` gates one tool behind a Multi
   Round-Trip Request: the first call returns an input request, and the tool
   runs only on a retry carrying an explicit accept. Anything else never

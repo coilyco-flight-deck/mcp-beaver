@@ -258,6 +258,9 @@ func lintPrintMethods(out io.Writer, srv *mcpserver.Server) error {
 	for _, m := range srv.ToolMethods() {
 		methods[m.Tool] = m.Method
 	}
+	for _, name := range srv.WithheldTools() {
+		methods[name] = "WITHHELD"
+	}
 	for _, name := range srv.ToolNames() {
 		method, ok := methods[name]
 		if !ok {

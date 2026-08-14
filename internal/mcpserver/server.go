@@ -59,9 +59,10 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Top-level `icon`, `resource`, `prompt`, and `server-info` nodes ride
-	// beside `wrap`, outside the frozen inline grammar opcore owns
-	// (deploy#255) - parsed here, projected onto the served surface below.
+	// Top-level `icon`, `resource`, `prompt`, `server-info`, `confirm`, and
+	// `withhold` nodes ride beside `wrap`, outside the frozen inline grammar
+	// opcore owns (deploy#255) - parsed here, projected onto the served
+	// surface below.
 	icons, err := parseIcons(src)
 	if err != nil {
 		return nil, err
@@ -82,6 +83,10 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	stubs, err := parseWithheld(src)
+	if err != nil {
+		return nil, err
+	}
 	// Built before telemetry and folded into the tool list, so the info tool
 	// is a first-class member of the served surface: bounded in metrics like
 	// any grant, and reported by ToolNames and `ward-mcp lint`.
@@ -91,8 +96,15 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	}
 	if infoTool != nil {
 		tools = append(tools, infoTool)
-		sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
 	}
+	// Validated against the grant-backed surface plus the info tool, so a stub
+	// cannot shadow anything the spec actually serves.
+	stubTools, err := withheldTools(stubs, tools)
+	if err != nil {
+		return nil, err
+	}
+	tools = append(tools, stubTools...)
+	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
 	if err := validateConfirmations(confirmations, tools); err != nil {
 		return nil, err
 	}
@@ -125,6 +137,7 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	s.registerResources(resources)
 	s.registerPrompts(prompts)
 	s.registerServerInfo(infoTool)
+	s.registerWithheld(stubs, stubTools)
 	s.installMiddleware()
 	return s, nil
 }
@@ -207,6 +220,23 @@ func (s *Server) ToolMethods() []ToolMethod {
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Tool < out[j].Tool })
+	return out
+}
+
+// WithheldTools returns the served tool names that are `withhold` stubs. A
+// stub and the info tool both resolve no HTTP method, so an operator reading
+// lint needs the two told apart: one is policy, the other is plumbing.
+func (s *Server) WithheldTools() []string {
+	var out []string
+	for _, tool := range s.tools {
+		if tool == nil {
+			continue
+		}
+		if marked, _ := tool.GetMeta()[withheldMetaKey].(bool); marked {
+			out = append(out, tool.Name)
+		}
+	}
+	sort.Strings(out)
 	return out
 }
 

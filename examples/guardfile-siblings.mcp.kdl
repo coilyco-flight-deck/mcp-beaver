@@ -1,5 +1,5 @@
-// guardfile-siblings.mcp.kdl - the worked reference for the optional nodes that
-// ride BESIDE `wrap`: `server-info`, `confirm`, `resource`, and `prompt`.
+// guardfile-siblings.mcp.kdl - the worked reference for the nodes that ride
+// BESIDE `wrap`: `server-info`, `withhold`, `confirm`, `resource`, `prompt`.
 //
 // `opcore.ParseInline` reads only the `wrap` node, so none of these touch the
 // frozen inline grammar or the umbra pin. Every one fails closed. All are
@@ -13,6 +13,17 @@
 // `server-info name="status"` to rename the tool, or `server-info disabled`
 // to drop it.
 server-info
+
+// State a verb that is left out ON PURPOSE, so an agent stops inferring from
+// silence. Absence otherwise means four things at once - withheld by policy,
+// unimplemented, not offered upstream, or simply not matched by the agent's
+// search - and the guesses go wrong in both directions. The stub appears in
+// discovery, refuses every call, and reaches no upstream. Naming a tool this
+// spec DOES mint is an error.
+withhold "delete_thing" {
+    reason "Deletion is withheld on this surface: the upstream has no undo, and nothing here needs it."
+    alternative "create_thing"
+}
 
 // Gate the one mutation behind a Multi Round-Trip Request. The first call
 // returns an input request instead of acting; the tool runs only on a retry
