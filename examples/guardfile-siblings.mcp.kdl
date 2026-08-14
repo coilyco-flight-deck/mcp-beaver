@@ -2,12 +2,16 @@
 // ride BESIDE `wrap`: `server-info`, `confirm`, `resource`, and `prompt`.
 //
 // `opcore.ParseInline` reads only the `wrap` node, so none of these touch the
-// frozen inline grammar or the umbra pin. Every one is opt-in and fails
-// closed - a guardfile that states none serves exactly its grants, which is
-// what every other example here does. See docs/DESIGN.md.
+// frozen inline grammar or the umbra pin. Every one fails closed. All are
+// opt-in except `server-info`, which is on by default. See docs/DESIGN.md.
 
 // One read-only tool reporting this server's own shape. Also the liveness
 // probe clients lost when MCP 2026-07-28 removed the protocol-level `ping`.
+//
+// Stating this node changes nothing - it is on by default, and it is written
+// out here to be read rather than to switch anything on. Use
+// `server-info name="status"` to rename the tool, or `server-info disabled`
+// to drop it.
 server-info
 
 // Gate the one mutation behind a Multi Round-Trip Request. The first call

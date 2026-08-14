@@ -16,16 +16,35 @@ func infoServer(t *testing.T, node string) *httptest.Server {
 	return httptest.NewServer(s.Handler())
 }
 
-// Deny-by-absence: no node, no tool. This is the property that makes the tool
-// safe to ship without changing any existing guardfile's served surface.
-func TestServerInfoAbsentByDefault(t *testing.T) {
+// On by default: a guardfile that says nothing gets the tool. Fleet
+// consistency is the whole point - an agent can only read meaning from the
+// tool's absence if absence means one thing everywhere.
+func TestServerInfoMintedByDefault(t *testing.T) {
 	ts := newTestServer(t)
+	defer ts.Close()
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	var found bool
+	for _, tool := range toolList(t, decodeRPCResponse(t, resp)) {
+		if tool["name"] == defaultServerInfoTool {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("%s not minted for a guardfile with no `server-info` node", defaultServerInfoTool)
+	}
+}
+
+// The opt-out is the escape hatch that keeps the default honest: a deployment
+// that genuinely wants the tool gone can still say so.
+func TestServerInfoOptOut(t *testing.T) {
+	ts := infoServer(t, "server-info disabled")
 	defer ts.Close()
 
 	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
 	for _, tool := range toolList(t, decodeRPCResponse(t, resp)) {
 		if tool["name"] == defaultServerInfoTool {
-			t.Fatalf("%s minted without a `server-info` node", defaultServerInfoTool)
+			t.Fatalf("%s served despite `server-info disabled`", defaultServerInfoTool)
 		}
 	}
 }
@@ -91,7 +110,7 @@ func TestServerInfoHonoursNameOverride(t *testing.T) {
 // The info tool must appear in ToolNames, since `ward-mcp lint` prints that as
 // the surface a consumer diffs. A served-but-unlisted tool would under-report.
 func TestServerInfoAppearsInToolNames(t *testing.T) {
-	s, err := New("test", "test.mcp.kdl", []byte("server-info\n\n"+roundTripSpec("http://127.0.0.1:1")))
+	s, err := New("test", "test.mcp.kdl", []byte(roundTripSpec("http://127.0.0.1:1")))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -100,11 +119,25 @@ func TestServerInfoAppearsInToolNames(t *testing.T) {
 	}
 }
 
+// Opting out must drop the tool from lint too, or lint and tools/list report
+// different surfaces and the opt-out becomes invisible to a consumer.
+func TestServerInfoOptOutLeavesToolNames(t *testing.T) {
+	s, err := New("test", "test.mcp.kdl", []byte("server-info disabled\n\n"+roundTripSpec("http://127.0.0.1:1")))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if contains(s.ToolNames(), defaultServerInfoTool) {
+		t.Fatalf("ToolNames = %v, still lists the opted-out info tool", s.ToolNames())
+	}
+}
+
 func TestServerInfoFailsClosed(t *testing.T) {
 	for name, node := range map[string]string{
 		"collides with a grant": `server-info name="get_thing"`,
 		"unknown property":      `server-info colour="red"`,
-		"positional argument":   `server-info "status"`,
+		"unknown argument":      `server-info "status"`,
+		"too many arguments":    `server-info disabled extra`,
+		"named while disabled":  `server-info disabled name="status"`,
 		"empty name":            `server-info name=""`,
 		"duplicate node":        "server-info\nserver-info",
 	} {

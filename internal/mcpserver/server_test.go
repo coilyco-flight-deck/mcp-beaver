@@ -225,7 +225,9 @@ func TestToolsListFromSpec(t *testing.T) {
 			got[name] = true
 		}
 	}
-	want := []string{"create_issue", "get_issue", "list_issue", "comment_issue", "close_issue"}
+	// The info tool rides along on every spec-mode server by default; it is
+	// the one non-grant entry, and it reaches no upstream.
+	want := []string{"create_issue", "get_issue", "list_issue", "comment_issue", "close_issue", defaultServerInfoTool}
 	for _, w := range want {
 		if !got[w] {
 			t.Errorf("missing tool %q; got %v", w, got)
@@ -545,8 +547,8 @@ func TestAdminDescribe(t *testing.T) {
 		t.Errorf("server.specPath = %v, want test.mcp.kdl", server["specPath"])
 	}
 	projection, _ := body["projection"].(map[string]any)
-	if got, _ := projection["toolCount"].(float64); got != 2 {
-		t.Errorf("toolCount = %v, want 2", got)
+	if got, _ := projection["toolCount"].(float64); got != 3 {
+		t.Errorf("toolCount = %v, want 3 (two grants plus the default info tool)", got)
 	}
 	transport, _ := body["transport"].(map[string]any)
 	if transport["mode"] != transportMode {

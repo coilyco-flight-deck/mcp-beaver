@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	kdl "github.com/calico32/kdl-go"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -32,56 +33,90 @@ var serverInfoOutputSchema = json.RawMessage(`{
 	"additionalProperties":false
 }`)
 
-// serverInfoConfig is the parsed `server-info` node, or nil when the guardfile
-// does not declare one.
+// serverInfoDisabledArg is the one accepted `server-info` argument, the
+// explicit opt-out for a deployment that wants the tool gone.
+const serverInfoDisabledArg = "disabled"
+
+// serverInfoConfig is the resolved `server-info` state, or nil when the
+// guardfile opts out.
 type serverInfoConfig struct {
 	toolName string
 }
 
 // parseServerInfo reads the optional top-level `server-info` node:
 //
-//	server-info                       // mints `ward_mcp_info`
+//	(no node)                         // mints `ward_mcp_info` - the default
 //	server-info name="status"         // mints `status` instead
+//	server-info disabled              // mints nothing
 //
-// Opt-in on purpose. ward-mcp's security model is deny-by-absence: the served
-// surface is exactly what the guardfile grants. A tool minted into every server
-// regardless of its spec would be the first exception to that, and a
-// locked-down deployment has a legitimate reason to refuse to describe its own
-// shape. Absent node, no tool.
+// On by default. This is the one documented exception to deny-by-absence, and
+// it is narrow enough to be worth the words it costs to explain. Every field
+// the payload returns is already obtainable by any caller who can reach the
+// endpoint at all - `server` from `initialize`, `tools` from `tools/list`,
+// the counts from `resources/list` and `prompts/list` - so opting out
+// withholds no information and only removes a convenience. Deny-by-absence
+// still governs everything that reaches an upstream, which is every grant.
 //
 // It also fills a real gap rather than being decoration: 2026-07-28 removed
-// the protocol-level `ping`, so a client has no built-in liveness probe left.
+// the protocol-level `ping`, so a client has no built-in liveness probe left,
+// and an inventory reported BY the server is the grounded answer to an agent
+// describing its own capabilities. Both only pay off if it is reliably there:
+// present-on-some-servers is worse than either extreme, because absence then
+// carries no meaning an agent can read.
 func parseServerInfo(src []byte) (*serverInfoConfig, error) {
 	doc, err := parseInlineDoc(src, "server-info")
 	if err != nil {
 		return nil, err
 	}
-	var cfg *serverInfoConfig
+	cfg := &serverInfoConfig{toolName: defaultServerInfoTool}
+	seen := false
 	for _, n := range doc.Nodes {
 		if n.Name() != "server-info" {
 			continue
 		}
-		if cfg != nil {
+		if seen {
 			return nil, fmt.Errorf("ward-mcp: duplicate `server-info` node")
 		}
-		if len(n.Arguments()) != 0 {
-			return nil, fmt.Errorf("ward-mcp: `server-info` takes no arguments, only an optional name= property")
+		seen = true
+		disabled, err := serverInfoDisabled(n)
+		if err != nil {
+			return nil, err
 		}
-		out := &serverInfoConfig{toolName: defaultServerInfoTool}
 		for key, value := range n.Properties() {
 			switch key {
 			case "name":
 				if value.String() == "" {
 					return nil, fmt.Errorf("ward-mcp: `server-info` name must be non-empty")
 				}
-				out.toolName = value.String()
+				cfg.toolName = value.String()
 			default:
 				return nil, fmt.Errorf("ward-mcp: unknown `server-info` property %q (want name; fail-closed)", key)
 			}
 		}
-		cfg = out
+		if disabled {
+			if len(n.Properties()) > 0 {
+				return nil, fmt.Errorf("ward-mcp: `server-info disabled` takes no properties: naming a tool that is not minted reads as a live override")
+			}
+			return nil, nil
+		}
 	}
 	return cfg, nil
+}
+
+// serverInfoDisabled reads the opt-out argument, failing closed on any other
+// argument so a typo suppresses nothing silently.
+func serverInfoDisabled(n *kdl.Node) (bool, error) {
+	switch len(n.Arguments()) {
+	case 0:
+		return false, nil
+	case 1:
+		if arg := n.Arg(0).String(); arg != serverInfoDisabledArg {
+			return false, fmt.Errorf("ward-mcp: unknown `server-info` argument %q (want %s, or no argument; fail-closed)", arg, serverInfoDisabledArg)
+		}
+		return true, nil
+	default:
+		return false, fmt.Errorf("ward-mcp: `server-info` takes at most one argument (%s), plus an optional name= property", serverInfoDisabledArg)
+	}
 }
 
 // serverInfoTool builds the tool spec. It is built before telemetry so the
@@ -94,7 +129,13 @@ func serverInfoTool(cfg *serverInfoConfig, granted []*mcp.Tool) (*mcp.Tool, erro
 	}
 	for _, tool := range granted {
 		if tool != nil && tool.Name == cfg.toolName {
-			return nil, fmt.Errorf("ward-mcp: `server-info` tool name %q collides with a granted tool", cfg.toolName)
+			// Reachable without a `server-info` node now that the tool is on
+			// by default, so the message has to carry both migrations rather
+			// than assuming the author opted in and can just back it out.
+			return nil, fmt.Errorf(
+				"ward-mcp: `server-info` tool name %q collides with a granted tool: rename it with `server-info name=\"...\"`, or state `server-info %s`",
+				cfg.toolName, serverInfoDisabledArg,
+			)
 		}
 	}
 	readOnly, destructive, openWorld := true, false, false

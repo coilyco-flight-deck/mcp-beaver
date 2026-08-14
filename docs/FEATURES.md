@@ -75,9 +75,9 @@ exit. No network, so it runs in a sealed clone and in CI.
 
 ## Guardfile siblings: resources, prompts, server-info, confirmations
 
-Optional top-level nodes stated beside `wrap`, outside the frozen inline
-grammar `opcore.ParseInline` owns. Each is opt-in and fails closed, so a
-guardfile that declares none serves exactly what it served before.
+Top-level nodes stated beside `wrap`, outside the frozen inline grammar
+`opcore.ParseInline` owns. Each fails closed on an unknown property or child.
+All are opt-in except `server-info`, which is on by default and opts out.
 
 * **Resources** - `resource "<name>" uri=... { text ... }` serves static
   content on `resources/read`. Inline only by design: a resource proxying an
@@ -87,11 +87,14 @@ guardfile that declares none serves exactly what it served before.
   template on `prompts/get` with `{arg}` substitution. A missing required
   argument is an error, since a half-filled prompt reads as a complete one.
   Claude Code surfaces these as slash commands.
-* **Server info** - `server-info` mints one read-only tool reporting the
-  server's identity, mode, and tool inventory. It reaches no upstream and
-  restores the liveness probe 2026-07-28 removed along with `ping`. Opt-in
-  because deny-by-absence is the model. It counts itself, so `lint` and
-  `tools/list` report the same surface.
+* **Server info** - one read-only tool reporting the server's identity, mode,
+  and tool inventory. It reaches no upstream and restores the liveness probe
+  2026-07-28 removed along with `ping`. **On by default**: every field it
+  returns is already reachable through `initialize`, `tools/list`, and the
+  list methods, so opting out withholds nothing, and a probe present on only
+  some servers lets an agent read no meaning from its absence on the rest.
+  `server-info name="status"` renames it, `server-info disabled` removes it.
+  It counts itself, so `lint` and `tools/list` report the same surface.
 * **Confirmations** - `confirm "<tool-name>"` gates one tool behind a Multi
   Round-Trip Request: the first call returns an input request, and the tool
   runs only on a retry carrying an explicit accept. Anything else never
@@ -225,10 +228,14 @@ for operators, not MCP tools:
   reports restart required instead.
 
 Supported MCP methods: `initialize`, `notifications/initialized`,
-`notifications/cancelled`, `ping`, `tools/list`, `tools/call`. Any future
-resource or prompt support must stay on the generic MCP surface
-(`resources/list`, `resources/read`, `prompts/list`, `prompts/get`) and must not
-grow Ward-specific admin, lifecycle, reload, or control verbs.
+`notifications/cancelled`, `ping`, `tools/list`, `tools/call`, `prompts/list`,
+`prompts/get`, `resources/list`, `resources/read`, `resources/templates/list`,
+and the 2026-07-28 `server/discover` and `subscriptions/listen`.
+
+Resource and prompt support rides that generic MCP surface and adds no runtime
+specific admin, lifecycle, reload, or control verb. That constraint is the one
+to preserve as the surface grows: operator control stays on the `/admin`
+endpoints above, off the protocol.
 
 ## Image
 

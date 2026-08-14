@@ -22,8 +22,9 @@ func TestLintPrintsProjectedToolNames(t *testing.T) {
 		t.Fatalf("runLint: %v", err)
 	}
 	// Sorted, one per line: the list a consumer diffs against a reviewed
-	// expectation instead of reimplementing the parse to derive it.
-	if got, want := out.String(), "get_issue\nlist_issue\n"; got != want {
+	// expectation instead of reimplementing the parse to derive it. The info
+	// tool is on by default and counts itself, so lint and tools/list agree.
+	if got, want := out.String(), "get_issue\nlist_issue\nward_mcp_info\n"; got != want {
 		t.Fatalf("runLint stdout = %q, want %q", got, want)
 	}
 }
