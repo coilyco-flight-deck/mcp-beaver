@@ -171,6 +171,45 @@ func (s *Server) ToolNames() []string {
 	return projectedToolNames(s.tools)
 }
 
+// ToolMethod is one projected tool's resolved HTTP method, plus whether the
+// verb reached it by an explicit entry in opcore's table or by the unknown-verb
+// POST fallthrough.
+type ToolMethod struct {
+	Tool        string
+	Verb        string
+	Method      string
+	Fallthrough bool
+}
+
+// ToolMethods reports the resolved method behind each grant-backed tool.
+//
+// The method is otherwise invisible from every surface this project exposes:
+// `lint` printed names only, and the MCP tool schema carries no method, so a
+// grant whose verb resolved wrongly minted a tool that looked identical to a
+// working one and failed at call time (#55). An unknown verb still produces a
+// tool - that is the fallthrough working as designed for child sub-collections
+// - so the fact worth surfacing is which of the two happened.
+//
+// Tools with no descriptor (the info tool, proxy grants) are omitted rather
+// than reported with an empty method: they have no verb to resolve.
+func (s *Server) ToolMethods() []ToolMethod {
+	out := make([]ToolMethod, 0, len(s.descs))
+	for _, d := range s.descs {
+		if d.Proxy != nil {
+			continue
+		}
+		_, known := opcore.MethodForVerb(d.Leaf)
+		out = append(out, ToolMethod{
+			Tool:        toolName(d),
+			Verb:        d.Leaf,
+			Method:      d.Method,
+			Fallthrough: !known,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Tool < out[j].Tool })
+	return out
+}
+
 // NotReadOnly returns the served tool names the upstream does not annotate
 // `readOnlyHint: true`, sorted. A tool with no annotations counts, since the
 // MCP default for the hint is false: an upstream that stays silent has not

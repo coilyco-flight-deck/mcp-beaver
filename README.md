@@ -133,9 +133,11 @@ the whole security model.
 `server-info` mints one read-only tool that reports the server's identity,
 mode, and tool inventory without reaching any upstream. It also restores a
 liveness probe, which clients otherwise lost when MCP 2026-07-28 removed the
-protocol-level `ping`. It is opt-in rather than always-on because deny-by-
-absence is the rule here, and a locked-down deployment has a fair reason to
-refuse to describe its own shape.
+protocol-level `ping`. It is on by default: every field it returns is already
+reachable through `initialize`, `tools/list`, and the list methods, so
+withholding it protects nothing, and a probe present on only some servers
+teaches an agent nothing from its absence on the rest. Rename it with
+`server-info name="status"`, or remove it with `server-info disabled`.
 
 `confirm` names a **projected tool name** and gates it behind a Multi
 Round-Trip Request: the first call returns an input request rather than acting,

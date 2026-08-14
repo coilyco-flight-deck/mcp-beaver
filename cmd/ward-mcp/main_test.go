@@ -29,6 +29,89 @@ func TestLintPrintsProjectedToolNames(t *testing.T) {
 	}
 }
 
+// #55: an unknown verb still mints a tool, so lint has to say which tools got
+// their method from the table and which fell through to POST. Warnings go to
+// stderr precisely so this stays true - stdout is unchanged.
+func TestLintWarnsOnVerbFallthrough(t *testing.T) {
+	var out, warn bytes.Buffer
+	if err := runLintTo(&out, &warn, []string{filepath.Join("testdata", "fallthrough-verb.mcp.kdl")}); err != nil {
+		t.Fatalf("runLintTo: %v", err)
+	}
+	if got, want := out.String(), "close_issue\npin_issue\nward_mcp_info\n"; got != want {
+		t.Errorf("stdout = %q, want %q: a warning must not edit the diffable surface", got, want)
+	}
+	warning := warn.String()
+	if !strings.Contains(warning, "pin_issue") || !strings.Contains(warning, "fallthrough") {
+		t.Errorf("stderr = %q, want it to name pin_issue and the fallthrough", warning)
+	}
+	if !strings.Contains(warning, "POST") {
+		t.Errorf("stderr = %q, want it to name the method the verb resolved to", warning)
+	}
+	if strings.Contains(warning, "close_issue") {
+		t.Errorf("stderr = %q, want no warning for a verb with an explicit table entry", warning)
+	}
+}
+
+// The control: a spec whose verbs are all in the table warns about nothing.
+func TestLintSilentWhenEveryVerbIsMapped(t *testing.T) {
+	var out, warn bytes.Buffer
+	if err := runLintTo(&out, &warn, []string{filepath.Join("testdata", "valid.mcp.kdl")}); err != nil {
+		t.Fatalf("runLintTo: %v", err)
+	}
+	if warn.Len() != 0 {
+		t.Errorf("stderr = %q, want silence for get and list", warn.String())
+	}
+}
+
+// --methods is the other half: the resolved method was invisible from every
+// surface this project exposed, including the MCP tool schema.
+func TestLintMethodsColumn(t *testing.T) {
+	var out, warn bytes.Buffer
+	if err := runLintTo(&out, &warn, []string{"--methods", filepath.Join("testdata", "fallthrough-verb.mcp.kdl")}); err != nil {
+		t.Fatalf("runLintTo: %v", err)
+	}
+	// close is the case #55 was filed over: reopen and close share an endpoint
+	// and a method, and only one of them was in the table at the time.
+	want := "close_issue\tPATCH\npin_issue\tPOST\nward_mcp_info\t-\n"
+	if got := out.String(); got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+}
+
+// reopen was the verb that prompted #55: it fell through to POST while Forgejo
+// wants the same PATCH close already used. It is in the table now, and this
+// pins that so the regression cannot return silently.
+func TestReopenResolvesToPatch(t *testing.T) {
+	spec := `wrap ward mcp reopen-fixture {
+    base-url "example.invalid/api/v1"
+    auth bearer { value env "LINT_FIXTURE_TOKEN" }
+    can reopen issue {
+        path "/repos/{owner}/{repo}/issues/{index}"
+        set state="open"
+    }
+}`
+	srv, err := mcpserver.New("reopen-fixture", "reopen.mcp.kdl", []byte(spec))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	var found bool
+	for _, m := range srv.ToolMethods() {
+		if m.Tool != "reopen_issue" {
+			continue
+		}
+		found = true
+		if m.Method != "PATCH" {
+			t.Errorf("reopen_issue method = %s, want PATCH", m.Method)
+		}
+		if m.Fallthrough {
+			t.Error("reopen resolved by fallthrough, want an explicit table entry")
+		}
+	}
+	if !found {
+		t.Fatal("reopen_issue not minted")
+	}
+}
+
 func TestLintRejectsMalformedSpec(t *testing.T) {
 	var out bytes.Buffer
 	err := runLint(&out, []string{filepath.Join("testdata", "malformed.mcp.kdl")})

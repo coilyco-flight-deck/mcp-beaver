@@ -4,7 +4,7 @@
 // varies. There is no per-guardfile Go and no per-server handler.
 //
 //	ward-mcp serve /spec/<name>.mcp.kdl --http :8080
-//	ward-mcp lint /spec/<name>.mcp.kdl
+//	ward-mcp lint /spec/<name>.mcp.kdl [--methods]
 //	ward-mcp lint-upstream --tool <name> --read-only heuristic
 //
 // It parses the spec through umbra's opcore engine, projects one MCP tool
@@ -191,7 +191,15 @@ func sortedCopy(in []string) []string {
 // parse, so the check covers what the runtime will actually mint rather than
 // only what the file says.
 func runLint(out io.Writer, argv []string) error {
+	return runLintTo(out, os.Stderr, argv)
+}
+
+// runLintTo splits the two streams so the warning channel is testable. stdout
+// stays the machine-readable surface a consumer diffs; warnings go to stderr
+// so adding one never edits that diff.
+func runLintTo(out, warn io.Writer, argv []string) error {
 	fs := flag.NewFlagSet("lint", flag.ContinueOnError)
+	methods := fs.Bool("methods", false, "print the resolved HTTP method beside each tool, as `name<TAB>METHOD`")
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
 		return err
 	}
@@ -210,8 +218,53 @@ func runLint(out io.Writer, argv []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid spec %q: %w", specPath, err)
 	}
+	if err := lintWarnFallthrough(warn, srv.ToolMethods()); err != nil {
+		return err
+	}
+	if *methods {
+		return lintPrintMethods(out, srv)
+	}
 	for _, name := range srv.ToolNames() {
 		if _, err := fmt.Fprintln(out, name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// lintWarnFallthrough is the always-on half of #55. An unknown verb silently
+// becoming POST is the defect: the tool mints, lint reads identically to the
+// working case, and the grant fails only when something calls it. Warning is
+// not an error because the fallthrough is legitimate for a child
+// sub-collection - the author just has to be the one deciding that.
+func lintWarnFallthrough(warn io.Writer, methods []mcpserver.ToolMethod) error {
+	for _, m := range methods {
+		if !m.Fallthrough {
+			continue
+		}
+		_, err := fmt.Fprintf(warn,
+			"ward-mcp: warning: %s: verb %q is not in opcore's method table and resolved to %s by fallthrough. Confirm the upstream expects %s on this path.\n",
+			m.Tool, m.Verb, m.Method, m.Method,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func lintPrintMethods(out io.Writer, srv *mcpserver.Server) error {
+	methods := make(map[string]string)
+	for _, m := range srv.ToolMethods() {
+		methods[m.Tool] = m.Method
+	}
+	for _, name := range srv.ToolNames() {
+		method, ok := methods[name]
+		if !ok {
+			// The info tool and proxy grants reach no upstream by verb.
+			method = "-"
+		}
+		if _, err := fmt.Fprintf(out, "%s\t%s\n", name, method); err != nil {
 			return err
 		}
 	}

@@ -50,8 +50,14 @@ wrap ward mcp things {
 
     restrict owner matches "coilyco-*"
 
+    // `describe` overrides the derived "Use this when the user wants to get
+    // thing through the configured upstream service." Worth authoring whenever
+    // a server ships a tool a model could confuse with a neighbour: say what
+    // the tool covers AND what it does not, so the model can rule it out
+    // rather than guess. Absent, the derived sentence still applies.
     can get thing {
         path "/owners/{owner}/things/{id}"
+        describe "Fetch one thing by id, with its metadata. Returns the record only - does NOT create or modify anything; use create_thing for that."
     }
 
     can create thing {

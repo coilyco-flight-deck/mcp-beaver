@@ -1,0 +1,22 @@
+// fallthrough-verb.mcp.kdl - pins the #55 warning. `pin` is not in opcore's
+// verb table, so it resolves to POST by the unknown-verb fallthrough and still
+// mints a tool. `close` sits beside it as the control: an explicit table entry
+// resolving to PATCH, which must not warn.
+//
+// The failure this guards against is that both cases printed identically, so a
+// grant that could never work looked exactly like a delivered one.
+wrap ward mcp fallthrough-fixture {
+    base-url "example.invalid/api/v1"
+
+    auth bearer {
+        value env "LINT_FIXTURE_TOKEN"
+    }
+
+    can pin issue {
+        path "/repos/{owner}/{repo}/issues/{index}/pin"
+    }
+    can close issue {
+        path "/repos/{owner}/{repo}/issues/{index}"
+        set state="closed"
+    }
+}
