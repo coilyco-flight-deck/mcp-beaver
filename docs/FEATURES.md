@@ -95,6 +95,16 @@ All are opt-in except `server-info`, which is on by default and opts out.
   some servers lets an agent read no meaning from its absence on the rest.
   `server-info name="status"` renames it, `server-info disabled` removes it.
   It counts itself, so `lint` and `tools/list` report the same surface.
+* **Query pins** - `pin "<tool>" { query "<name>" env "<VAR>" }` fixes an
+  outgoing query parameter server-side, resolved at call time from `env`,
+  `file`, or `literal`. The pinned name is absent from the tool schema, so a
+  caller can neither supply nor override it. This is the spec-mode counterpart
+  to the proxy's `--pin`, and it exists because `set` writes fixed **body**
+  values only, leaving a GET whose scope rides in the query string nowhere to
+  put it. Pinning a parameter the grant also declares as a caller input is a
+  build error, and an unresolvable pin fails the call rather than sending an
+  unscoped request. The concrete case is Steam's `steamid`, where a declared
+  field would turn "this account's library" into "any account's library".
 * **Rate limit** - `rate-limit "1/1s"` states a per-server, process-wide
   outbound bucket in `<count>/<duration>` form. It serialises rather than
   rejecting: a queued tool call is slower, a 503 is a failed turn. The pod has

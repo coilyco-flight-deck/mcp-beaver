@@ -1,0 +1,72 @@
+// steam-web-api.mcp.kdl - the authenticated Steam Web API half of steam-ops,
+// as a guardfile (mcp-beaver#52).
+//
+// TWO guardfiles, not one. The Web API lives on api.steampowered.com and the
+// storefront on store.steampowered.com, and one guardfile has one `base-url`.
+// Multi-upstream single-spec is ruled out on purpose, so the storefront half
+// is examples/steam-storefront.mcp.kdl and deploys as a second server.
+//
+// WHAT THIS DOES NOT COVER. steam-ops also exposes `get_account_licenses` and
+// `get_pics_product_info`. Both ride Steam's authenticated CLIENT plane - PICS,
+// refresh-token first - which is a binary session protocol, not HTTP REST.
+// This runtime maps a request to an HTTP upstream; it cannot speak that. Those
+// two tools stay in the bespoke server, or move behind a PICS-speaking sidecar
+// (see examples/sidecar.mcp.kdl). They are stated here as `withhold` stubs so
+// an agent reading this surface is told, rather than left inferring from a hole.
+//
+// Kai's steamid64 is NOT written here. It is an opaque account identifier, so
+// it is pinned from the environment like the API key.
+
+// Deletion, writes, and anything outside the two read endpoints below are
+// absent, which is the guard. These two are stated because their absence would
+// otherwise be indistinguishable from an oversight.
+withhold "get_account_licenses" {
+    reason "Steam package licenses come from the authenticated client plane (PICS), which is a binary session protocol this HTTP runtime cannot speak."
+    alternative "get_owned_games"
+}
+
+withhold "get_pics_product_info" {
+    reason "PICS product metadata comes from the authenticated client plane, which is a binary session protocol this HTTP runtime cannot speak."
+    alternative "get_owned_games"
+}
+
+// The Web API is generous but this is a personal reader behind one pod IP.
+rate-limit "2/1s"
+
+// steamid scopes every call to one account. It is pinned rather than declared
+// as a query field on purpose: a declared field would let the model ask for
+// ANY steamid64, turning "Kai's library" into "anyone's library". Pinned
+// parameters are absent from the tool schema, so a caller cannot supply or
+// override them.
+pin "get_owned_games" {
+    query "steamid" env "STEAM_STEAMID64"
+    // Without these the API returns bare appids and omits free games, which is
+    // the difference between a useful answer and a list of numbers.
+    query "include_appinfo" literal "1"
+    query "include_played_free_games" literal "1"
+}
+
+pin "get_recently_played" {
+    query "steamid" env "STEAM_STEAMID64"
+}
+
+wrap ward mcp steam-web-api {
+    base-url "api.steampowered.com"
+
+    // Steam authenticates with `?key=`, which is exactly this scheme.
+    auth query-param {
+        param "key" {
+            value env "STEAM_API_KEY"
+        }
+    }
+
+    can get owned_games {
+        path "/IPlayerService/GetOwnedGames/v1/"
+        describe "List the full Steam library for this server's configured account, including play time and free games played. Covers OWNED titles only - does NOT search the store or return storefront pricing; use the storefront server for that. Takes no arguments: the account is fixed server-side."
+    }
+
+    can get recently_played {
+        path "/IPlayerService/GetRecentlyPlayedGames/v1/"
+        describe "List games this server's configured account has played in the last two weeks, a recent-activity signal rather than a full library. Use get_owned_games for everything owned. Takes no arguments: the account is fixed server-side."
+    }
+}

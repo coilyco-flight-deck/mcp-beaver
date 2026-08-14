@@ -1,0 +1,49 @@
+// steam-storefront.mcp.kdl - the public, unauthenticated storefront half of
+// steam-ops, as a guardfile (mcp-beaver#52).
+//
+// Separate from examples/steam-web-api.mcp.kdl because the storefront is a
+// different host, and one guardfile has one `base-url`. Two servers, two
+// releases. That is the intended shape, not a workaround: the two halves have
+// different credentials, different risk, and different rate profiles.
+//
+// This one holds NO account credential at all and reads only public data.
+
+// The storefront publishes no limit and is not an API you are invited to
+// hammer. One request per second is a courtesy rate, not a measured ceiling.
+rate-limit "1/1s"
+
+wrap ward mcp steam-storefront {
+    base-url "store.steampowered.com/api"
+
+    // The grammar requires an `auth` block and offers no `none` scheme, so a
+    // genuinely credential-free upstream still has to name one. A literal
+    // placeholder is the least-bad option: the storefront ignores the header,
+    // and nothing secret is written here. This is the second consumer of that
+    // gap after examples/sidecar.mcp.kdl, which is worth knowing if anyone
+    // weighs adding `auth none` upstream.
+    auth bearer {
+        value literal "unused-public-storefront"
+    }
+
+    can get store_app_details {
+        path "/appdetails"
+        describe "Fetch public storefront metadata for ONE Steam app by id - name, description, release date, price, genres. Public data only: does NOT read any account, library, or ownership state, and does NOT search. Use get_store_search_results to find an appid from a name."
+        // Steam spells it `appids` even for a single lookup; `upstream=` maps
+        // the readable local name onto the wire name.
+        query "appid" upstream="appids"
+        // Storefront pricing and availability are region-dependent, so this is
+        // a real input rather than decoration. Unset means Steam's own default.
+        query "country_code" upstream="cc"
+    }
+
+    can get store_search_results {
+        path "/storesearch"
+        describe "Search the public Steam storefront by name and return a small result set with appids. The lookup step before get_store_app_details. Public data only: does NOT read any account or library state."
+        // Named `term`, not `query`: `query` is one of opcore's reserved
+        // engine flag names (with dry-run, output, body-file) and fails
+        // closed. The bespoke server calls this parameter `query`, so this is
+        // the one caller-visible difference in the whole migration.
+        query "term"
+        query "country_code" upstream="cc"
+    }
+}

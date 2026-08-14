@@ -26,6 +26,17 @@ case "$action" in
   serve-example)
     go run ./cmd/ward-mcp serve examples/skillsmp.mcp.kdl --http "${1:-:18080}"
     ;;
+  lint-examples)
+    # Every committed example is a reference someone copies, so a broken one is
+    # worse than a missing one. --methods also surfaces the verb-fallthrough
+    # warnings on stderr as it goes.
+    status=0
+    for spec in examples/*.mcp.kdl; do
+      echo "== ${spec}"
+      go run ./cmd/ward-mcp lint --methods "${spec}" || status=1
+    done
+    exit "${status}"
+    ;;
   pin-umbra)
     ref="${1:-v0.122.0}"
     go get "forgejo.coilysiren.me/coilyco-flight-deck/umbra@${ref}"

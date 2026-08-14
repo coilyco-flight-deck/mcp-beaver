@@ -112,6 +112,13 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	queryPins, err := parseQueryPins(src)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateQueryPins(queryPins, descs); err != nil {
+		return nil, err
+	}
 	// Built before telemetry and folded into the tool list, so the info tool
 	// is a first-class member of the served surface: bounded in metrics like
 	// any grant, and reported by ToolNames and `ward-mcp lint`.
@@ -154,7 +161,7 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	for _, d := range descs {
 		desc := d
 		spec := toolSpec(desc)
-		handler := toolHandler(rt, desc)
+		handler := toolHandler(rt, desc, queryPins[spec.Name])
 		// Inside the confirmation gate: a call awaiting a human's accept must
 		// not hold an upstream slot, and a declined call must not have spent
 		// one. The bucket is for requests that actually go out.
@@ -554,7 +561,7 @@ func toolSpec(d opcore.Descriptor) *mcp.Tool {
 	}
 }
 
-func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor) mcp.ToolHandler {
+func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin) mcp.ToolHandler {
 	schema := desc.InputSchema()
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var rawArgs map[string]any
@@ -564,6 +571,18 @@ func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor) mcp.ToolHandler {
 			}
 		}
 		args := splitArgs(schema, rawArgs)
+		// Applied after splitArgs, which drops anything the schema does not
+		// name. A pinned parameter is absent from the schema, so the caller
+		// cannot supply it and this assignment cannot be contested.
+		if len(pins) > 0 {
+			resolved, err := resolveQueryPins(ctx, pins)
+			if err != nil {
+				return toolError(err), nil
+			}
+			for name, value := range resolved {
+				args.Query[name] = value
+			}
+		}
 		resp, err := (&opcore.Operation{Desc: desc, RT: rt}).Execute(ctx, args)
 		if err != nil {
 			return toolError(err), nil
