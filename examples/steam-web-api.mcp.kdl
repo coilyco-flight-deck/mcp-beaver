@@ -20,10 +20,12 @@ wrap ward mcp steam-web-api {
     can get owned_games {
         path "/IPlayerService/GetOwnedGames/v1/"
         describe "THINGS"
+        query "steamid" env "STEAM_STEAMID64"
     }
 
     can get recently_played {
         path "/IPlayerService/GetRecentlyPlayedGames/v1/"
         describe "STUFF"
+        query "steamid"
     }
 }
