@@ -2,7 +2,7 @@
 // ride BESIDE `wrap`: `server-info`, `confirm`, `resource`, and `prompt`.
 //
 // `opcore.ParseInline` reads only the `wrap` node, so none of these touch the
-// frozen inline grammar or the cli-guard pin. Every one is opt-in and fails
+// frozen inline grammar or the umbra pin. Every one is opt-in and fails
 // closed - a guardfile that states none serves exactly its grants, which is
 // what every other example here does. See docs/DESIGN.md.
 

@@ -1,5 +1,5 @@
-forgejo.coilysiren.me/coilyco-flight-deck/cli-guard v0.131.0 h1:0C+YbUv3TfNvFgMnOAmNeL/RgEBWYRq8oBb4HK5+8Pk=
-forgejo.coilysiren.me/coilyco-flight-deck/cli-guard v0.131.0/go.mod h1:Pzz+QJWnzkoVdkqoq5vFLaVUVezqufl7ieIB9ZGL6kg=
+forgejo.coilysiren.me/coilyco-flight-deck/umbra v0.139.0 h1:FMtx3PLx6LObxGU8CSQSMIv7d2YqJzEaMhL1DknBIgM=
+forgejo.coilysiren.me/coilyco-flight-deck/umbra v0.139.0/go.mod h1:tWjTSMyRqzBEsMoPXn0mCGfMCLtEEWN0pvePx5zmpbI=
 github.com/aws/aws-sdk-go-v2 v1.41.3 h1:4kQ/fa22KjDt13QCy1+bYADvdgcxpfH18f0zP542kZA=
 github.com/aws/aws-sdk-go-v2 v1.41.3/go.mod h1:mwsPRE8ceUUpiTgF7QmQIJ7lgsKUPQOUl3o72QBrE1o=
 github.com/aws/aws-sdk-go-v2/config v1.32.7 h1:vxUyWGUwmkQ2g19n7JY/9YL8MfAIl7bTesIUykECXmY=

@@ -20,9 +20,9 @@ commands:
   check-publish:
     run: bash -n scripts/publish-image.sh
     description: Validate the trusted Forgejo OCI publisher shell contract.
-  pin-cli-guard:
-    run: bash scripts/ward-command.sh pin-cli-guard
-    description: Pin cli-guard and reconcile Go module dependencies. Pass an optional version after `--`.
+  pin-umbra:
+    run: bash scripts/ward-command.sh pin-umbra
+    description: Pin umbra and reconcile Go module dependencies. Pass an optional version after `--`.
   serve-example:
     run: bash scripts/ward-command.sh serve-example
     description: Serve the skillsmp example spec on localhost:18080 for local MCP handshake checks.

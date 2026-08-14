@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"forgejo.coilysiren.me/coilyco-flight-deck/cli-guard/http/opcore"
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
 )
 
 func structuredBodySpec(baseURL string) string {

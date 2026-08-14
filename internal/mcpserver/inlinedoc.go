@@ -9,7 +9,7 @@ import (
 
 // parseInlineDoc parses a `.mcp.kdl` document for the nodes that ride BESIDE
 // `wrap` at the top level. `opcore.ParseInline` reads only the `wrap` node, so
-// these siblings never touch the frozen wrap-body grammar or the cli-guard pin.
+// these siblings never touch the frozen wrap-body grammar or the umbra pin.
 // See docs/DESIGN.md for the rule and the nodes that use it.
 func parseInlineDoc(src []byte, what string) (*kdl.Document, error) {
 	// Mirror opcore's normalizeInlineBooleans: the wrap body spells booleans

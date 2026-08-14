@@ -2,9 +2,8 @@ module forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
 
 go 1.25.5
 
-require forgejo.coilysiren.me/coilyco-flight-deck/cli-guard v0.131.0
-
 require (
+	forgejo.coilysiren.me/coilyco-flight-deck/umbra v0.139.0
 	github.com/aws/aws-sdk-go-v2 v1.41.3
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	go.opentelemetry.io/contrib/exporters/autoexport v0.69.0

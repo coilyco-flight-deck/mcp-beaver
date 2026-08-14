@@ -16,7 +16,7 @@ import (
 // Grammar - ONE construct past the frozen inline grammar (ward-mcp#6), ruled
 // in on deploy#255. The node rides BESIDE `wrap` at the document top level,
 // which `opcore.ParseInline` never inspects (it reads only the `wrap` node),
-// so the frozen wrap-body grammar and the cli-guard pin are untouched:
+// so the frozen wrap-body grammar and the umbra pin are untouched:
 //
 //	icon "data:image/png;base64,..."
 //	icon "https://static.example/icon.svg" mime="image/svg+xml" sizes="any"

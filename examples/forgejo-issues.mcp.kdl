@@ -1,14 +1,14 @@
 // forgejo-issues.mcp.kdl - the worked "hello world" ward-mcp spec.
 //
 // The body is the FROZEN ward-mcp inline grammar (ward-mcp#6), parsed by
-// cli-guard's `opcore.ParseInline` - stated directly from KDL, with no vendored
+// umbra's `opcore.ParseInline` - stated directly from KDL, with no vendored
 // OpenAPI or lock file in the build. The `.mcp.kdl` suffix marks this as a
 // ward-mcp target - the interior of a Docker image that serves an HTTP/SSE MCP
-// server - and keeps it out of cli-guard's CLI-discovery glob. This spec
+// server - and keeps it out of umbra's CLI-discovery glob. This spec
 // configures ONLY the image interior. Exposing the container (k3s Service,
 // route, Secret wiring) is the deploy repo's job, never this file's.
 //
-// ward-mcp has NO relation to the ward codebase. It drives cli-guard's opcore
+// ward-mcp has NO relation to the ward codebase. It drives umbra's opcore
 // engine directly. cli-mcp is read as a CODE REFERENCE only; ward-mcp
 // implements its own SSE/HTTP MCP server and does not depend on cli-mcp.
 //
@@ -20,7 +20,7 @@
 wrap ward mcp forgejo {
     base-url "forgejo.coilysiren.me/api/v1"
 
-    // Secret resolved at RUN time through cli-guard's value-provider registry
+    // Secret resolved at RUN time through umbra's value-provider registry
     // (the `env` builtin), never baked into the image. How the env reaches the
     // container is the deployer's concern, outside this spec.
     auth header-token {
@@ -30,7 +30,7 @@ wrap ward mcp forgejo {
     }
 
     // Scope gate: every {owner} path leaf must match a coilyco-* / kai owner.
-    // Enforced on the MCP surface exactly as cli-guard enforces it on a CLI.
+    // Enforced on the MCP surface exactly as umbra enforces it on a CLI.
     restrict owner matches "coilyco-*" "kai"
 
     // ---- the exposed surface ----------------------------------------------

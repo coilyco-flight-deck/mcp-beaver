@@ -4,7 +4,7 @@ A MCP server generator with a natural flow
 
 ## About
 
-ward-mcp renders a [cli-guard](https://github.com/coilysiren/cli-guard) Guardfile into a guarded MCP server and HTTP tool API, baked into an OCI image. One generic runtime, many guardfiles. No per-server Go, no per-server Dockerfile, no per-server MCP or HTTP handler - and no per-tool input schema, because cli-guard's engine derives it from the inline operation definition in the `.mcp.kdl`.
+ward-mcp renders a [umbra](https://github.com/coilysiren/cli-guard) Guardfile into a guarded MCP server and HTTP tool API, baked into an OCI image. One generic runtime, many guardfiles. No per-server Go, no per-server Dockerfile, no per-server MCP or HTTP handler - and no per-tool input schema, because umbra's engine derives it from the inline operation definition in the `.mcp.kdl`.
 
 The spec configures **only the image interior**: which upstream, which outbound auth, which grants become which tools. The image serves MCP over the official Go SDK's streamable HTTP transport at `/mcp` and automatically exposes each tool at `POST /api/{tool-name}` (never stdio - these run as remote k3s pods reached by URL). ward-mcp has **no relation to the ward codebase**, and uses [cli-mcp](https://github.com/coilysiren/cli-mcp) as a code reference only, not a dependency.
 
@@ -206,7 +206,7 @@ bodies, authorization headers, tokens, Guardfile contents, spec paths, or
 upstream URLs. Export failures do not change tool results. Graceful process
 shutdown flushes active providers within a five-second bound.
 
-The runtime is a **thin shell** over cli-guard's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/cli-guard) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, exact nested-string body mapping, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool and one HTTP endpoint, and every call fires through the same self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, outbound auth). ward-mcp retains MCP JSON types when routing arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. ward-mcp adds only the grant→tool projection and transport layers.
+The runtime is a **thin shell** over umbra's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, exact nested-string body mapping, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool and one HTTP endpoint, and every call fires through the same self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, outbound auth). ward-mcp retains MCP JSON types when routing arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. ward-mcp adds only the grant→tool projection and transport layers.
 
 ## Authoring request bodies
 

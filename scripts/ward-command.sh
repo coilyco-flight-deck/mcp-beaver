@@ -26,9 +26,9 @@ case "$action" in
   serve-example)
     go run ./cmd/ward-mcp serve examples/skillsmp.mcp.kdl --http "${1:-:18080}"
     ;;
-  pin-cli-guard)
+  pin-umbra)
     ref="${1:-v0.122.0}"
-    go get "forgejo.coilysiren.me/coilyco-flight-deck/cli-guard@${ref}"
+    go get "forgejo.coilysiren.me/coilyco-flight-deck/umbra@${ref}"
     go mod tidy
     ;;
   *)

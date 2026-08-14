@@ -17,9 +17,9 @@ moving :release aos dev-base image, which already ships Go and the Docker CLI.
 
 * **checkout + dev-base container** - `actions/checkout@v4`, then
   `container: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:release`.
-* **`GOPRIVATE=forgejo.coilysiren.me`** - cli-guard is a private forgejo module
+* **`GOPRIVATE=forgejo.coilysiren.me`** - umbra is a private forgejo module
   fetched anonymously, so `GOPRIVATE` keeps it off the public proxy and sumdb.
-  The Dockerfile build sets the same var for its own cli-guard fetch.
+  The Dockerfile build sets the same var for its own umbra fetch.
 * **build / vet / test** - `go build ./...`, `go vet ./...`, `go test ./...`. A
   red gate here is a real build or test breakage to fix in source.
 

@@ -1,6 +1,6 @@
 ---
 name: repo-ward-mcp
-description: MCP runtime that turns cli-guard policy files into guarded streamable HTTP services and container images. Triggers - ward-mcp, automation, mcp, model-context-protocol, security
+description: MCP runtime that turns umbra policy files into guarded streamable HTTP services and container images. Triggers - ward-mcp, automation, mcp, model-context-protocol, security
 ---
 
 # repo-ward-mcp

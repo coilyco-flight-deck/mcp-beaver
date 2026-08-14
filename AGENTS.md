@@ -2,13 +2,13 @@
 
 ## Scope
 
-`ward-mcp` turns a cli-guard Guardfile into a guarded MCP server with an
+`ward-mcp` turns a umbra Guardfile into a guarded MCP server with an
 automatic matching HTTP tool API, and ships the generic runtime as an OCI
 image plus Helm chart.
 
 ## Boundaries
 
-Keep the runtime spec-driven and deny by absence. `cli-guard` owns guarded HTTP
+Keep the runtime spec-driven and deny by absence. `umbra` owns guarded HTTP
 execution. `ward-mcp` owns MCP and HTTP tool projection plus transport.
 `deploy` owns service configuration, inbound identity and authentication,
 ingress, credentials, and rollout.

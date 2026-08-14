@@ -7,7 +7,7 @@
 //	ward-mcp lint /spec/<name>.mcp.kdl
 //	ward-mcp lint-upstream --tool <name> --read-only heuristic
 //
-// It parses the spec through cli-guard's opcore engine, projects one MCP tool
+// It parses the spec through umbra's opcore engine, projects one MCP tool
 // plus one POST /api/{tool-name} endpoint per grant, and binds one HTTP
 // listener. It never binds stdio: these run as remote pods reached by URL.
 package main
@@ -44,7 +44,7 @@ func main() {
 
 // run dispatches the subcommand. The serving verbs bind a listener; `lint` is
 // the one offline verb, so a consumer can validate a guardfile without starting
-// anything. The pipeline's build/lock steps remain cli-guard's and deploy's,
+// anything. The pipeline's build/lock steps remain umbra's and deploy's,
 // not this runtime's.
 func run(argv []string) error {
 	return runContext(context.Background(), argv)

@@ -3,7 +3,7 @@ package mcpserver
 import (
 	"fmt"
 
-	"forgejo.coilysiren.me/coilyco-flight-deck/cli-guard/http/opcore"
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
