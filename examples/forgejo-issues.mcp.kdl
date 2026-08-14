@@ -37,9 +37,22 @@ wrap ward mcp forgejo {
     // verb + resource -> HTTP method by convention -> one MCP tool.
     // Tool name is verb_resource; input schema is derived from path/query/body.
 
+    // The flat `body "title" "body"` shorthand mints optional string fields
+    // and nothing else. A `body { ... }` block is what carries required flags
+    // and typed arrays - which is how labels ride along on creation instead of
+    // costing a second `add issue-label` call per issue.
+    //
+    // items="integer" because Forgejo's CreateIssueOption takes label IDs.
+    // Declaring them as strings parses fine and then silently labels nothing,
+    // since the ids arrive quoted. `milestone` and `assignees` have the same
+    // shape if a deployment wants them.
     can create issue {
         path "/repos/{owner}/{repo}/issues"   // POST -> tool `create_issue`
-        body "title" "body"
+        body {
+            field "title" type="string" required=#true
+            field "body" type="string"
+            array "labels" items="integer"
+        }
     }
     can get issue {
         path "/repos/{owner}/{repo}/issues/{index}"   // GET -> tool `get_issue`

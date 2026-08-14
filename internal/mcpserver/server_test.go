@@ -196,6 +196,16 @@ func TestInitializeHandshake(t *testing.T) {
 	}
 }
 
+// containsAny reports whether a JSON-decoded `required` list names a field.
+func containsAny(list []any, name string) bool {
+	for _, item := range list {
+		if item == name {
+			return true
+		}
+	}
+	return false
+}
+
 // TestToolsListFromSpec proves the tool list is derived from a `.mcp.kdl`: the
 // committed forgejo example projects exactly its five grants, one tool each,
 // named verb_resource, with no delete tool (deny-by-absence).
@@ -248,25 +258,46 @@ func TestToolsListFromSpec(t *testing.T) {
 		t.Fatalf("create_issue schema not JSON: %v", err)
 	}
 	props, _ := schema["properties"].(map[string]any)
-	for _, field := range []string{"owner", "repo", "title", "body"} {
+	for _, field := range []string{"owner", "repo", "title", "body", "labels"} {
 		if _, ok := props[field]; !ok {
 			t.Errorf("create_issue schema missing property %q; got %v", field, props)
 		}
 	}
-	for _, field := range []string{"title", "body"} {
-		prop, _ := props[field].(map[string]any)
-		if prop["type"] != "string" {
-			t.Errorf("flat body property %q = %v, want optional string", field, prop)
-		}
+	// The block body form carries what the flat shorthand cannot: a required
+	// flag and a typed array. labels rides along on creation so filing is one
+	// call rather than two (#53).
+	labels, _ := props["labels"].(map[string]any)
+	if labels["type"] != "array" {
+		t.Errorf("labels = %v, want an array", labels)
+	}
+	if items, _ := labels["items"].(map[string]any); items["type"] != "integer" {
+		t.Errorf("labels items = %v, want integer ids: string ids arrive quoted and label nothing", items)
 	}
 	required, _ := schema["required"].([]any)
-	for _, name := range required {
-		if name == "title" || name == "body" {
-			t.Errorf("flat body property %q became required: %v", name, required)
-		}
+	if !containsAny(required, "title") {
+		t.Errorf("required = %v, want title required", required)
+	}
+	if containsAny(required, "body") || containsAny(required, "labels") {
+		t.Errorf("required = %v, want body and labels optional", required)
 	}
 	assertToolMetadata(t, create, "Create issue", false, false, false, true)
 	assertResultOutputSchema(t, create)
+
+	// The flat `body "..."` shorthand still mints optional strings. Pinned on
+	// comment_issue, which is the grant in this example that still uses it.
+	comment := findTool(t, tools, "comment_issue")
+	var commentSchema map[string]any
+	if err := toJSON(comment["inputSchema"], &commentSchema); err != nil {
+		t.Fatalf("comment_issue schema not JSON: %v", err)
+	}
+	commentProps, _ := commentSchema["properties"].(map[string]any)
+	if prop, _ := commentProps["body"].(map[string]any); prop["type"] != "string" {
+		t.Errorf("flat body property = %v, want optional string", prop)
+	}
+	commentRequired, _ := commentSchema["required"].([]any)
+	if containsAny(commentRequired, "body") {
+		t.Errorf("flat body property became required: %v", commentRequired)
+	}
 
 	get := findTool(t, tools, "get_issue")
 	assertToolMetadata(t, get, "Get issue", true, false, true, true)
