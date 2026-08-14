@@ -68,7 +68,7 @@ The chart is buildable against the pinned runtime contract below, in parallel wi
   `2m` by default.
 - **`extraContainers`** - optional upstream or support containers appended to
   the pod. A loopback-only upstream keeps its unfiltered surface off the
-  network.
+  network. **Not gated on `runtime.mode`** - see "Sidecar shape" below.
 
 ### Image
 
@@ -124,6 +124,48 @@ variants. `OTEL_SDK_DISABLED=true`, `OTEL_TRACES_EXPORTER=none`, and
 `OTEL_METRICS_EXPORTER=none` are honored. Leaving all selectors and endpoints
 unset keeps startup a no-network no-op.
 
+## Sidecar shape: wrapping a co-located non-MCP process
+
+`extraContainers` works in **both** modes. The chart appends it to the pod's
+container list with no mode condition; only the runtime args, the `/spec`
+volumeMount, and the volumes are mode-conditional. Only upstream mode was ever
+documented, which made a supported shape look unavailable.
+
+The two modes co-locate for different reasons:
+
+- **Upstream mode** wraps a sidecar that already speaks MCP. `serve-upstream`
+  snapshots its tool list at startup and proxies an allowlist.
+- **Spec mode** wraps a sidecar that speaks **plain HTTP JSON**. There is no
+  upstream MCP to snapshot; `base-url` simply points at `127.0.0.1`, because
+  containers in a pod share a network namespace. This is the shape for serving
+  a bundled dataset, and it removes a whole class of external dependency: no
+  third-party rate limit, no third-party uptime, no per-request caching
+  problem. `restrict` still bounds the surface exactly as it would remotely.
+
+Reference: [`examples/sidecar.mcp.kdl`](../examples/sidecar.mcp.kdl) with
+[`examples/sidecar.values.yaml`](../examples/sidecar.values.yaml), rendered by
+`ward exec helm-template-sidecar`.
+
+### Readiness is the one real decision
+
+Spec mode never connects at startup - it resolves `base-url` per request - so
+unlike upstream mode there is **no crash-loop risk** from a slow sidecar. The
+cost is the opposite failure: ward-mcp binds immediately and answers
+`tools/list` correctly while the sidecar is still loading, so the pod reports
+Ready with its data plane down and takes traffic that errors.
+
+The chart's default `readinessProbe` checks ward-mcp's own port, which is right
+for upstream mode and wrong for this one. The reference values gate readiness
+on the sidecar's port instead, which a probe may target directly because the
+containers share a namespace. Liveness stays on ward-mcp: a wedged sidecar
+should fail readiness and stop taking traffic, not restart the pod out from
+under a healthy runtime.
+
+Accepting the default and letting early requests fail is defensible for a
+sidecar that starts fast. It is not the default here, because "fails briefly
+after every rollout" is the kind of error that gets attributed to the wrong
+component.
+
 ## Exposure belongs to the consumer
 
 The product chart does not choose between public, private, or tailnet access. It also carries no fleet identity provider or ingress-controller assumptions. The MCP and automatic HTTP tool API share that boundary and receive no runtime-owned inbound authentication. CoilyCo deployments that need a public authenticated surface use deploy's `charts/ingress-public-authed` chart. Other consumers bring an equivalent composition for their environment.
@@ -136,6 +178,8 @@ Run the tracked Ward verbs:
 * `ward exec helm-template-clusterip`
 * `ward exec helm-template-nodeport`
 * `ward exec helm-template-upstream`
+* `ward exec helm-template-sidecar`
 
-The renders prove both Service shapes and the allowlisted upstream shape.
+The renders prove both Service shapes, the allowlisted upstream shape, and the
+spec-mode sidecar shape.
 Exposure-layer verification belongs to the consuming deployment.

@@ -1,0 +1,44 @@
+// sidecar.mcp.kdl - the worked reference for wrapping a co-located NON-MCP
+// process with ordinary spec mode (ward-mcp#59).
+//
+// The sidecar here speaks plain HTTP JSON, not MCP. That is the whole reason
+// this is spec mode rather than `serve-upstream`: `serve-upstream` snapshots an
+// upstream MCP's tool list, and there is no upstream MCP to snapshot. Spec mode
+// does not care, because `base-url` is just a URL - and here it points at
+// localhost, where the containers in this pod share a network namespace.
+//
+// The value is that it removes a whole class of external dependency: no third
+// party rate limit, no third party uptime, no per-request caching problem. The
+// data ships in the sidecar image. `restrict` still bounds the surface exactly
+// as it would against a remote host.
+//
+// See examples/sidecar.values.yaml for the pod shape, and docs/chart.md for
+// the readiness decision this shape forces.
+wrap ward mcp gazetteer {
+    // The co-located container, reached over the pod's loopback.
+    base-url "127.0.0.1:8001"
+
+    // The grammar requires an `auth` block, and offers no `none` scheme, so a
+    // loopback upstream that needs no credential still has to name one. The
+    // sidecar here is configured to accept this token; it never leaves the
+    // pod. Relaxing this for a loopback base-url is tracked separately - it is
+    // a umbra grammar change, not a runtime one.
+    auth bearer {
+        value env "GAZETTEER_LOCAL_TOKEN"
+    }
+
+    // Bounds the surface to the one published dataset even though the sidecar
+    // may carry several. Deny-by-absence does the rest.
+    restrict dataset matches "gazetteer"
+
+    can search place {
+        path "/{dataset}/places.json"
+        describe "Search the bundled gazetteer for populated places by name. Returns coordinates, country, and population. Local data only - does NOT reach any external geocoding service, and does NOT resolve street addresses."
+        query "name" "country" "_size"
+    }
+
+    can get place {
+        path "/{dataset}/places/{id}.json"
+        describe "Fetch one gazetteer place by its dataset id. Use search_place first when you only have a name."
+    }
+}

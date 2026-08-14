@@ -304,7 +304,10 @@ and publish walkthrough plus the Actions-unit enablement gotcha (ward-mcp#10).
 The auth-neutral distribution vehicle (ward-mcp#8). One chart, one runtime
 image, many releases. `runtime.mode: spec` mounts a `.mcp.kdl` ConfigMap.
 `runtime.mode: upstream` runs an exact passthrough allowlist, omits the
-guardfile, and can co-locate a private MCP through `extraContainers`. The chart
+guardfile, and can co-locate a private MCP through `extraContainers`.
+`extraContainers` is not gated on the mode: spec mode uses the same field to
+wrap a co-located process that speaks plain HTTP JSON rather than MCP, with
+`base-url` pointing at loopback. The chart
 templates the Deployment, ClusterIP or optional NodePort Service, application
 Secret wiring, and startup protection for sidecar-backed proxies. See
 [chart.md](chart.md).

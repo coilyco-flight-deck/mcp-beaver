@@ -38,4 +38,7 @@ commands:
   helm-template-upstream:
     run: helm template ward-mcp chart --namespace ward-mcp -f examples/upstream.values.yaml
     description: Render the allowlisted upstream-proxy chart shape.
+  helm-template-sidecar:
+    run: helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/sidecar.mcp.kdl -f examples/sidecar.values.yaml
+    description: Render the spec-mode sidecar shape, wrapping a co-located non-MCP process.
 

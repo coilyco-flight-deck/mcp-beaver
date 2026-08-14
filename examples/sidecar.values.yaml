@@ -1,0 +1,78 @@
+# sidecar.values.yaml - spec mode wrapping a co-located NON-MCP process
+# (ward-mcp#59). Pairs with examples/sidecar.mcp.kdl.
+#
+# `extraContainers` is NOT gated on runtime.mode. The chart appends it to the
+# pod's container list unconditionally (chart/templates/deployment.yaml), and
+# only the runtime args, the /spec volumeMount, and the volumes are
+# mode-conditional. So this shape needed no chart change - it needed saying.
+#
+# Unlike upstream mode there is no crash-loop risk from a slow sidecar: spec
+# mode never connects at startup, it resolves base-url per request. The cost is
+# the opposite failure, which is the readiness note below.
+
+runtime:
+  mode: spec
+  injectSecrets: true
+
+# The wrap grammar requires an `auth` block and has no `none` scheme, so even a
+# loopback upstream that needs no credential must name one. This is a pod-local
+# shared secret that never leaves the pod.
+secret:
+  GAZETTEER_LOCAL_TOKEN: gazetteer-local-token
+
+# Mounted at /spec/<release>.mcp.kdl. Supply with:
+#   --set-file spec=examples/sidecar.mcp.kdl
+spec: ""
+
+extraContainers:
+  - name: dataset
+    image: datasetteproject/datasette:latest
+    args:
+      - datasette
+      - serve
+      - /data/gazetteer.db
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8001"
+    ports:
+      - name: dataset-http
+        containerPort: 8001
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+# THE READINESS DECISION.
+#
+# The chart's default readinessProbe checks ward-mcp's own port. In upstream
+# mode that is sufficient, because the runtime cannot finish starting until it
+# has reached its upstream. In spec mode it is not: ward-mcp binds immediately
+# and answers tools/list correctly while the sidecar is still loading, so the
+# pod would report Ready with its data plane down and take traffic that errors.
+#
+# This gates readiness on the sidecar instead. Containers in a pod share a
+# network namespace, so a probe may target the sidecar's port directly. The pod
+# goes Ready only once the data is actually servable.
+#
+# The alternative - keep the default and accept that early requests fail - is
+# defensible for a sidecar that starts fast. It is not the default here,
+# because "fails briefly after every rollout" is exactly the kind of error
+# that gets attributed to the wrong component.
+readinessProbe:
+  httpGet:
+    path: /-/health
+    port: 8001
+  initialDelaySeconds: 3
+  periodSeconds: 5
+
+# Liveness stays on ward-mcp: a wedged sidecar should fail readiness and stop
+# taking traffic, not restart the whole pod out from under a healthy runtime.
+livenessProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 30
