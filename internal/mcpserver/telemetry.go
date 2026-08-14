@@ -78,6 +78,14 @@ func (i *instrumentation) serverMiddleware(next mcp.MethodHandler) mcp.MethodHan
 		tool := i.boundedTool(toolFromRequest(req))
 		attrs := i.operationAttributes(method, tool, "mcp")
 
+		// Stamp the method onto the enclosing HTTP span before dispatching.
+		// #49's hung request was diagnosed from a transport span naming no MCP
+		// method, which is the difference between "an MCP call hung" and "this
+		// tool hung". The child span below carries it too, but a request that
+		// never returns is read from the transport span - so the attribute has
+		// to be set going in, not on the way out.
+		annotateTransportSpan(ctx, method, tool)
+
 		ambient := transportSpanContext(req)
 		if !ambient.IsValid() {
 			ambient = trace.SpanContextFromContext(ctx)
@@ -291,6 +299,22 @@ func requestParams(req mcp.Request, method string, create bool) mcp.Params {
 		return nil
 	}
 	return params
+}
+
+// annotateTransportSpan adds the MCP method, and the tool where there is one,
+// to whatever span is already active - in the serving path that is otelhttp's
+// server span for POST /mcp. Both values are already bounded to closed sets by
+// their callers, so this adds no cardinality a caller can drive.
+func annotateTransportSpan(ctx context.Context, method, tool string) {
+	span := trace.SpanFromContext(ctx)
+	if !span.SpanContext().IsValid() {
+		return
+	}
+	attrs := []attribute.KeyValue{attribute.String("mcp.method.name", method)}
+	if tool != "" {
+		attrs = append(attrs, attribute.String("gen_ai.tool.name", tool))
+	}
+	span.SetAttributes(attrs...)
 }
 
 func mcpSpanName(method, tool string) string {

@@ -279,6 +279,7 @@ func lintPrintMethods(out io.Writer, srv *mcpserver.Server) error {
 func runServe(ctx context.Context, argv []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
+	requestTimeout := fs.Duration("request-timeout", mcpserver.DefaultRequestTimeout, "bound one request end to end, including its upstream call (0 disables)")
 	// The documented entrypoint writes the spec before --http
 	// (`serve /spec/x.mcp.kdl --http :8080`), so reorder the flags ahead of the
 	// positional - flag.Parse stops at the first non-flag argument otherwise.
@@ -299,8 +300,9 @@ func runServe(ctx context.Context, argv []string) error {
 		if err != nil {
 			return fmt.Errorf("parse spec %q: %w", specPath, err)
 		}
+		srv.SetRequestTimeout(*requestTimeout)
 
-		fmt.Fprintf(os.Stderr, "ward-mcp: serving %s on %s (MCP /mcp, HTTP tools /api/{tool-name})\n", specPath, *addr)
+		fmt.Fprintf(os.Stderr, "ward-mcp: serving %s on %s (MCP /mcp, HTTP tools /api/{tool-name}, %s request bound)\n", specPath, *addr, *requestTimeout)
 		return serveHTTP(ctx, *addr, srv.Handler())
 	})
 }
@@ -313,6 +315,7 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 	name := fs.String("name", "ward-mcp-upstream", "MCP server name")
 	upstream := fs.String("upstream", "", "streamable-HTTP MCP upstream endpoint")
 	connectTimeout := fs.Duration("connect-timeout", 0, "retry upstream startup until this timeout (0 fails immediately)")
+	requestTimeout := fs.Duration("request-timeout", mcpserver.DefaultRequestTimeout, "bound one request end to end, including its upstream call (0 disables)")
 	var tools stringSliceFlag
 	fs.Var(&tools, "tool", "allowlisted upstream tool to expose (repeatable)")
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
@@ -332,7 +335,8 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 			return fmt.Errorf("connect upstream %q: %w", *upstream, err)
 		}
 		defer func() { _ = srv.Close() }()
-		fmt.Fprintf(os.Stderr, "ward-mcp: serving upstream proxy %s on %s (%d MCP and HTTP tools)\n", *upstream, *addr, len(tools))
+		srv.SetRequestTimeout(*requestTimeout)
+		fmt.Fprintf(os.Stderr, "ward-mcp: serving upstream proxy %s on %s (%d MCP and HTTP tools, %s request bound)\n", *upstream, *addr, len(tools), *requestTimeout)
 		return serveHTTP(ctx, *addr, srv.Handler())
 	})
 }
@@ -419,8 +423,27 @@ func withTelemetry(ctx context.Context, serviceName string, run func() error) (e
 	return run()
 }
 
+// readHeaderTimeout bounds how long a client may take to send its request
+// headers. Separate from the per-request deadline, which covers work the
+// runtime does once it has a request: this one covers a peer that connects and
+// then stalls, and it is the guard against a slow-loris holding a connection.
+const readHeaderTimeout = 10 * time.Second
+
+// idleTimeout bounds a kept-alive connection between requests. Without it a
+// pod accumulates idle sockets from callers that never close.
+const idleTimeout = 120 * time.Second
+
 func serveHTTP(ctx context.Context, addr string, handler http.Handler) error {
-	server := &http.Server{Addr: addr, Handler: handler}
+	// No WriteTimeout on purpose: it is absolute from the start of the request
+	// and would cut a legitimately slow upstream mid-response. The per-request
+	// context deadline in mcpserver.Handler is the bound on that axis, and it
+	// aborts the outbound call rather than only the write.
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		IdleTimeout:       idleTimeout,
+	}
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- server.ListenAndServe()

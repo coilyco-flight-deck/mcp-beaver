@@ -72,13 +72,14 @@ func newSSMServer(name, specPath string, policy ssmPolicy, client ssmGetter) (*S
 		return nil, fmt.Errorf("initialize telemetry: %w", err)
 	}
 	s := &Server{
-		name:      name,
-		specPath:  specPath,
-		tools:     tools,
-		handlers:  make(map[string]mcp.ToolHandler, len(tools)),
-		upstreams: []adminUpstreamResponse{{Kind: "aws-ssm", Mode: "sdk"}},
-		sdk:       newSDKServer(name, nil),
-		telemetry: instrumentation,
+		name:           name,
+		specPath:       specPath,
+		tools:          tools,
+		handlers:       make(map[string]mcp.ToolHandler, len(tools)),
+		upstreams:      []adminUpstreamResponse{{Kind: "aws-ssm", Mode: "sdk"}},
+		sdk:            newSDKServer(name, nil),
+		telemetry:      instrumentation,
+		requestTimeout: DefaultRequestTimeout,
 	}
 	parameterHandler := ssmToolHandler(client, policy, true)
 	tokenHandler := ssmToolHandler(client, policy, false)

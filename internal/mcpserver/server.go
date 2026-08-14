@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/pkg/valuesource"
@@ -27,21 +28,41 @@ var resultOutputSchema = json.RawMessage(`{
 	"additionalProperties":false
 }`)
 
+// DefaultRequestTimeout bounds one inbound MCP or HTTP tool request end to
+// end, including the upstream call it makes.
+//
+// The runtime previously bound nothing on this axis: `http.Server` was
+// constructed with no timeouts and the proxy client was nil, so a wedged
+// upstream held a request open for as long as the caller would wait. #49
+// recorded one that ran 180.002s inside two healthy pods and outlived the turn
+// that issued it. 60s is chosen to sit far enough under any caller's own
+// budget that the error arrives as a tool failure the model can react to,
+// rather than as the caller's timeout with nothing attributable behind it.
+const DefaultRequestTimeout = 60 * time.Second
+
 // Server is a guarded MCP runtime backed by either local opcore grants or an
 // allowlisted upstream streamable-HTTP MCP server.
 type Server struct {
-	name      string
-	specPath  string
-	descs     []opcore.Descriptor
-	cfg       opcore.RuntimeConfig
-	tools     []*mcp.Tool
-	resources []mcp.Resource
-	prompts   []mcp.Prompt
-	handlers  map[string]mcp.ToolHandler
-	upstreams []adminUpstreamResponse
-	sdk       *mcp.Server
-	telemetry *instrumentation
-	closeFn   func() error
+	name           string
+	specPath       string
+	descs          []opcore.Descriptor
+	cfg            opcore.RuntimeConfig
+	tools          []*mcp.Tool
+	resources      []mcp.Resource
+	prompts        []mcp.Prompt
+	handlers       map[string]mcp.ToolHandler
+	upstreams      []adminUpstreamResponse
+	sdk            *mcp.Server
+	telemetry      *instrumentation
+	requestTimeout time.Duration
+	closeFn        func() error
+}
+
+// SetRequestTimeout overrides the per-request bound. A non-positive value
+// disables it, which is the escape hatch for a genuinely long-running upstream
+// - stated deliberately rather than reached by forgetting to set one.
+func (s *Server) SetRequestTimeout(d time.Duration) {
+	s.requestTimeout = d
 }
 
 // New parses a `.mcp.kdl` source and builds the SDK-backed server: one MCP tool
@@ -115,14 +136,15 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	}
 
 	s := &Server{
-		name:      name,
-		specPath:  specPath,
-		descs:     descs,
-		cfg:       cfg,
-		tools:     tools,
-		handlers:  make(map[string]mcp.ToolHandler, len(descs)),
-		sdk:       newSDKServer(name, icons),
-		telemetry: instrumentation,
+		name:           name,
+		specPath:       specPath,
+		descs:          descs,
+		cfg:            cfg,
+		tools:          tools,
+		handlers:       make(map[string]mcp.ToolHandler, len(descs)),
+		sdk:            newSDKServer(name, icons),
+		telemetry:      instrumentation,
+		requestTimeout: DefaultRequestTimeout,
 	}
 
 	for _, d := range descs {
@@ -160,14 +182,15 @@ func NewProxy(ctx context.Context, name, specPath, upstreamURL string, allowTool
 	}
 
 	s := &Server{
-		name:      name,
-		specPath:  specPath,
-		tools:     proxy.selectedTools(),
-		handlers:  make(map[string]mcp.ToolHandler, len(allowTools)),
-		upstreams: []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http"}},
-		sdk:       newSDKServer(name, nil),
-		telemetry: instrumentation,
-		closeFn:   proxy.Close,
+		name:           name,
+		specPath:       specPath,
+		tools:          proxy.selectedTools(),
+		handlers:       make(map[string]mcp.ToolHandler, len(allowTools)),
+		upstreams:      []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http"}},
+		sdk:            newSDKServer(name, nil),
+		telemetry:      instrumentation,
+		requestTimeout: DefaultRequestTimeout,
+		closeFn:        proxy.Close,
 	}
 	for _, tool := range proxy.selectedTools() {
 		t := cloneTool(tool)
@@ -279,7 +302,20 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return s.sdk
-	}, &mcp.StreamableHTTPOptions{JSONResponse: true, Stateless: true})
+	}, &mcp.StreamableHTTPOptions{
+		JSONResponse: true,
+		Stateless:    true,
+		// Ties the in-flight handler to the originating HTTP request, so a
+		// caller that has gone away stops work here instead of leaving it
+		// running against an upstream with nowhere to deliver the answer.
+		// That abandoned-but-still-running shape is what #49 caught: a root
+		// span with no parent, outliving the turn that issued it.
+		//
+		// The SDK applies this only to >= 2026-07-28 clients, where the POST
+		// is the whole request lifecycle. Older clients are unaffected, which
+		// is why the per-call bound below is not redundant with it.
+		PropagateRequestCancellation: true,
+	})
 	mux.Handle("/mcp", captureTransportSpan(mcpHandler))
 	mux.HandleFunc(apiPrefix, s.serveAPITool)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -288,9 +324,48 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc(adminDescribePath, s.serveAdminDescribe)
 	mux.HandleFunc(adminReloadPath, s.serveAdminReload)
-	return otelhttp.NewHandler(mux, "ward-mcp HTTP",
+	return otelhttp.NewHandler(withRequestDeadline(s.transportDeadline(), mux), "ward-mcp HTTP",
 		otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/healthz" }),
 	)
+}
+
+// responseGrace is the headroom the transport deadline keeps over the per-call
+// one, so the tool is always what expires first.
+//
+// Without it both deadlines fire on the same tick and the request context dies
+// while the runtime is still serializing the timeout error, so the caller gets
+// an empty body rather than a stated failure - a wedged upstream would then be
+// indistinguishable from a crashed pod, which is the confusion #49 started in.
+const responseGrace = 5 * time.Second
+
+func (s *Server) transportDeadline() time.Duration {
+	if s.requestTimeout <= 0 {
+		return 0
+	}
+	return s.requestTimeout + responseGrace
+}
+
+// withRequestDeadline bounds every request but the health probe. The deadline
+// rides the request context, so it reaches the outbound upstream call rather
+// than only cutting the response: opcore's Execute and the proxy client both
+// take this context, and both abort on it. That is the difference between a
+// bounded tool error and a socket the runtime holds until the caller gives up.
+//
+// /healthz is exempt because a liveness probe that can be failed by a wedged
+// upstream turns one slow dependency into a pod restart loop.
+func withRequestDeadline(timeout time.Duration, next http.Handler) http.Handler {
+	if timeout <= 0 {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		defer cancel()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func captureTransportSpan(next http.Handler) http.Handler {
@@ -368,8 +443,36 @@ func (s *Server) applyCacheTTL(res mcp.Result) {
 
 func (s *Server) registerTool(tool *mcp.Tool, handler mcp.ToolHandler) {
 	handler = s.telemetry.toolHandler(tool.Name, handler)
+	handler = s.withToolDeadline(handler)
 	s.handlers[tool.Name] = handler
 	s.sdk.AddTool(tool, handler)
+}
+
+// withToolDeadline bounds one tool call at the handler, independent of how the
+// call arrived.
+//
+// The transport-level deadline is not sufficient on its own. The SDK
+// propagates HTTP request cancellation only for >= 2026-07-28 clients, so an
+// older client's call would otherwise run unbounded no matter what the inbound
+// request said - which is the case #49 hit, and the reason a bound written
+// only at the edge would have looked correct and done nothing.
+//
+// The deadline is read at call time rather than captured at registration, so
+// SetRequestTimeout works after the tools are wired.
+func (s *Server) withToolDeadline(next mcp.ToolHandler) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		timeout := s.requestTimeout
+		if timeout <= 0 {
+			return next(ctx, req)
+		}
+		// Never extend a deadline the caller already set tighter than ours.
+		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= timeout {
+			return next(ctx, req)
+		}
+		ctx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		return next(ctx, req)
+	}
 }
 
 func localTools(descs []opcore.Descriptor) ([]*mcp.Tool, error) {

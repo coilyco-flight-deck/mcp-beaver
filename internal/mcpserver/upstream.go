@@ -8,9 +8,34 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// upstreamClientTimeout bounds one request to the proxied upstream MCP.
+//
+// The serving path passed a nil client, which the transport resolves to
+// http.DefaultClient - and that has no timeout at all. Spec mode was already
+// bounded, because opcore's default client carries one; proxy mode was the
+// unbounded half. It sits under the inbound request deadline so the upstream
+// call is what fails, and the runtime still has room to say so.
+const upstreamClientTimeout = 45 * time.Second
+
+// boundedUpstreamClient gives a caller-supplied client a timeout only when it
+// declared none. A caller that set one has made a deliberate choice, and this
+// must not quietly override it.
+func boundedUpstreamClient(client *http.Client) *http.Client {
+	if client == nil {
+		return &http.Client{Timeout: upstreamClientTimeout}
+	}
+	if client.Timeout == 0 {
+		bounded := *client
+		bounded.Timeout = upstreamClientTimeout
+		return &bounded
+	}
+	return client
+}
 
 type proxyBackend struct {
 	mu         sync.Mutex
@@ -32,6 +57,8 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 	if err != nil {
 		return nil, err
 	}
+
+	httpClient = boundedUpstreamClient(httpClient)
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "ward-mcp", Version: "0.1.0"}, nil)
 	client.AddSendingMiddleware(telemetry.clientMiddleware)
