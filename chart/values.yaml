@@ -47,7 +47,11 @@ upstream:
   connectTimeout: 2m
 
 image:
-  repository: forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
+  # The publish path followed the forge rename: scripts/publish-image.sh writes
+  # to .../mcp-beaver, so the old .../ward-mcp package receives no new tags.
+  # Existing pins on the old path still resolve, since that package is
+  # retained - but a consumer bumping to a post-rename sha has to move here.
+  repository: forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver
   tag: ""
   pullPolicy: Always
 

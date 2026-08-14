@@ -314,7 +314,7 @@ line - the same binary drives every `.mcp.kdl`. Building the image is a CI
 consequence of a landed commit: the `publish` job in
 [`.forgejo/workflows/ci.yml`](../.forgejo/workflows/ci.yml) builds the Dockerfile
 on every push to `main` and publishes the private single-architecture image as
-`forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp:<full-source-sha>`
+`forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver:<full-source-sha>`
 (mount-not-bake, so one image serves every guardfile and publishes only when
 runtime source changes). The source gate runs in the moving :release aos
 dev-base image. The trusted deploy runner owns the package-write credential,
