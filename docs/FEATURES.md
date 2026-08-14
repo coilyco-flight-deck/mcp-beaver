@@ -95,6 +95,14 @@ All are opt-in except `server-info`, which is on by default and opts out.
   some servers lets an agent read no meaning from its absence on the rest.
   `server-info name="status"` renames it, `server-info disabled` removes it.
   It counts itself, so `lint` and `tools/list` report the same surface.
+* **Rate limit** - `rate-limit "1/1s"` states a per-server, process-wide
+  outbound bucket in `<count>/<duration>` form. It serialises rather than
+  rejecting: a queued tool call is slower, a 503 is a failed turn. The pod has
+  one IP, so a public-good API otherwise sees one caller whose request rate is
+  the sum of a whole community's traffic. Grant-backed tools only - the info
+  tool and withheld stubs reach no upstream and are not charged. A call that
+  would queue past the request deadline fails with a stated timeout rather than
+  holding a slot.
 * **Withheld verbs** - `withhold "<tool-name>" { reason ...; alternative ... }`
   mints a discoverable stub for a verb left out on purpose. It appears in
   `tools/list`, states why in its description, names a substitute where one

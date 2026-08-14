@@ -108,6 +108,10 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	limiter, err := parseRateLimit(src)
+	if err != nil {
+		return nil, err
+	}
 	// Built before telemetry and folded into the tool list, so the info tool
 	// is a first-class member of the served surface: bounded in metrics like
 	// any grant, and reported by ToolNames and `ward-mcp lint`.
@@ -151,6 +155,10 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		desc := d
 		spec := toolSpec(desc)
 		handler := toolHandler(rt, desc)
+		// Inside the confirmation gate: a call awaiting a human's accept must
+		// not hold an upstream slot, and a declined call must not have spent
+		// one. The bucket is for requests that actually go out.
+		handler = withRateLimit(limiter, handler)
 		if message, gated := confirmations[spec.Name]; gated {
 			handler = withConfirmation(message, handler)
 		}

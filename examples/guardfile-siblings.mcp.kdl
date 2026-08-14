@@ -14,6 +14,12 @@
 // to drop it.
 server-info
 
+// A per-server, process-wide outbound bucket. The pod has ONE IP, so a
+// public-good upstream sees one caller whose request rate is the sum of every
+// user behind this server. Calls queue rather than being rejected: a slower
+// tool call beats a failed turn. Omit the node for no limit at all.
+rate-limit "1/1s"
+
 // State a verb that is left out ON PURPOSE, so an agent stops inferring from
 // silence. Absence otherwise means four things at once - withheld by policy,
 // unimplemented, not offered upstream, or simply not matched by the agent's
