@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The publish path follows the forge rename to mcp-beaver. Only the registry
+# path moves here: the Go module, the binary, the ENTRYPOINT, and the chart name
+# are all still ward-mcp, and renaming those is a breaking change for every
+# chart consumer rather than a packaging one. Images already published under
+# coilyco-flight-deck/ward-mcp are untouched and still pullable, so deploy
+# adopts this path on its own schedule instead of at the moment of this commit.
 registry="forgejo.coilysiren.me"
-image_name="coilyco-flight-deck/ward-mcp"
+image_name="coilyco-flight-deck/mcp-beaver"
 
 if [ -z "${REGISTRY_TOKEN:-}" ]; then
   echo "REGISTRY_TOKEN is required for the trusted image-publish lane." >&2
@@ -12,12 +18,12 @@ fi
 sha="${GITHUB_SHA:-$(git rev-parse HEAD)}"
 case "${sha}" in
   *[!0-9a-f]*|"")
-    echo "ward-mcp source sha is not a lowercase hexadecimal commit id." >&2
+    echo "mcp-beaver source sha is not a lowercase hexadecimal commit id." >&2
     exit 1
     ;;
 esac
 if [ "${#sha}" -ne 40 ]; then
-  echo "ward-mcp source sha must be a full 40-character commit id." >&2
+  echo "mcp-beaver source sha must be a full 40-character commit id." >&2
   exit 1
 fi
 
