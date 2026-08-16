@@ -275,6 +275,28 @@ func (s *Server) ToolMethods() []ToolMethod {
 	return out
 }
 
+// ResourcesWithoutAudience names each resource whose spec states no audience.
+//
+// A host decides on its own whether to pull a resource into a model's context,
+// and the annotation is what it reads to decide. Absence is not a statement, so
+// a host that gates on it cannot tell a resource written for a model from one
+// written for a person and skips both. The resource then serves correctly,
+// lints identically to a working one, and is read by nobody.
+//
+// An explicit audience is not reported, whichever roles it names: an author who
+// wrote `audience "user"` has already answered the question.
+func (s *Server) ResourcesWithoutAudience() []string {
+	out := make([]string, 0, len(s.resources))
+	for _, res := range s.resources {
+		if res.Annotations != nil && len(res.Annotations.Audience) > 0 {
+			continue
+		}
+		out = append(out, res.Name)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // WithheldTools returns the served tool names that are `withhold` stubs. A
 // stub and the info tool both resolve no HTTP method, so an operator reading
 // lint needs the two told apart: one is policy, the other is plumbing.

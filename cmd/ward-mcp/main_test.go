@@ -418,3 +418,48 @@ func TestLintUpstreamRejectsToolMissingUpstream(t *testing.T) {
 		t.Fatalf("error = %q, want it to name the missing tool", err)
 	}
 }
+
+// A resource with no `audience` serves correctly and is pulled in by no host
+// that gates on the annotation, which is how one landed correct and unread.
+func TestLintWarnsOnAResourceWithNoAudience(t *testing.T) {
+	var out, warn bytes.Buffer
+	if err := runLintTo(&out, &warn, []string{
+		filepath.Join("testdata", "resource-audience.mcp.kdl"),
+	}); err != nil {
+		t.Fatalf("runLintTo: %v", err)
+	}
+	if got, want := out.String(), "get_issue\nward_mcp_info\n"; got != want {
+		t.Errorf("stdout = %q, want %q: a warning must not edit the diffable surface", got, want)
+	}
+	warning := warn.String()
+	// `priority` alone builds the annotations block and answers nobody, which
+	// is the state most likely to be mistaken for a configured resource.
+	for _, name := range []string{"says-nothing", "ordered-only"} {
+		if !strings.Contains(warning, name) {
+			t.Errorf("stderr = %q, want it to name %q", warning, name)
+		}
+	}
+	// Both exits, so the author is told how to make the silence deliberate
+	// rather than only how to make the resource readable.
+	for _, role := range []string{"assistant", "user"} {
+		if !strings.Contains(warning, role) {
+			t.Errorf("stderr = %q, want it to offer %q", warning, role)
+		}
+	}
+}
+
+// An author who stated an audience answered the question, whichever role they
+// named. Warning there would train a reader to skip the one that matters.
+func TestLintIsSilentOnAnyStatedAudience(t *testing.T) {
+	var out, warn bytes.Buffer
+	if err := runLintTo(&out, &warn, []string{
+		filepath.Join("testdata", "resource-audience.mcp.kdl"),
+	}); err != nil {
+		t.Fatalf("runLintTo: %v", err)
+	}
+	for _, name := range []string{"for-the-model", "for-people"} {
+		if strings.Contains(warn.String(), name) {
+			t.Errorf("stderr = %q, want no warning for %q", warn.String(), name)
+		}
+	}
+}

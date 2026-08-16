@@ -1,0 +1,42 @@
+// resource-audience.mcp.kdl - three resources covering every audience state,
+// used to pin the warning that a resource nobody will read looks exactly like
+// one that works. See the `audience` note on parseResources.
+wrap ward mcp resource-fixture {
+    base-url "example.invalid/api/v1"
+
+    auth bearer {
+        value env "RESOURCE_FIXTURE_TOKEN"
+    }
+
+    can get issue {
+        path "/repos/{owner}/{repo}/issues/{index}"
+    }
+}
+
+// Stated for the model. Included, and nothing to warn about.
+resource "for-the-model" uri="ward://fixture/model" mime="text/markdown" {
+    audience "assistant"
+    description "Reference material a turn answers from"
+    text "The build starts in the afternoon."
+}
+
+// Stated for people. Skipped by a host that gates on audience, and that is the
+// author's own decision, so it warns about nothing either.
+resource "for-people" uri="ward://fixture/people" mime="text/markdown" {
+    audience "user"
+    description "Something an operator opens by hand"
+    text "Run the rollout script from the deploy checkout."
+}
+
+// Says nothing. Serves correctly, is read by nobody, and is the whole point.
+resource "says-nothing" uri="ward://fixture/silent" mime="text/markdown" {
+    description "Written for a model and never reaching one"
+    text "Emit the markup and let the client localise it."
+}
+
+// Ordered but unaddressed. `priority` builds the annotations block without
+// saying who reads it, so this is the state most likely to look configured.
+resource "ordered-only" uri="ward://fixture/ordered" mime="text/markdown" priority=0.9 {
+    description "Ranked first among resources no host will include"
+    text "The rollout waits for the pod to report ready."
+}

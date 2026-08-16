@@ -222,6 +222,9 @@ func runLintTo(out, warn io.Writer, argv []string) error {
 	if err := lintWarnFallthrough(warn, srv.ToolMethods()); err != nil {
 		return err
 	}
+	if err := lintWarnResourceAudience(warn, srv.ResourcesWithoutAudience()); err != nil {
+		return err
+	}
 	if *methods {
 		return lintPrintMethods(out, srv)
 	}
@@ -246,6 +249,30 @@ func lintWarnFallthrough(warn io.Writer, methods []mcpserver.ToolMethod) error {
 		_, err := fmt.Fprintf(warn,
 			"ward-mcp: warning: %s: verb %q is not in opcore's method table and resolved to %s by fallthrough. Confirm the upstream expects %s on this path.\n",
 			m.Tool, m.Verb, m.Method, m.Method,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// lintWarnResourceAudience is the fallthrough warning's shape applied to
+// resources. A resource with no `audience` serves correctly and is included by
+// no host that gates on the annotation, so it reads identically to a working
+// one from every surface this project exposes.
+//
+// Warning rather than error, because a resource meant for a person to open by
+// hand is legitimate. The author just has to be the one deciding that, which is
+// why `audience "user"` silences this and silence alone does not.
+func lintWarnResourceAudience(warn io.Writer, resources []string) error {
+	for _, name := range resources {
+		_, err := fmt.Fprintf(warn,
+			"ward-mcp: warning: resource %q states no `audience`, so a host that "+
+				"decides context inclusion from it will skip this resource. Add "+
+				"`audience \"assistant\"` for a model to read it, or `audience "+
+				"\"user\"` to state it is for people.\n",
+			name,
 		)
 		if err != nil {
 			return err

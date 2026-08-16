@@ -87,6 +87,12 @@ search_skills
 A spec that does not parse, or that projects two grants onto one tool name,
 exits non-zero with the failure on stderr and prints nothing to stdout.
 
+Two things warn rather than fail, because both are legitimate choices an author
+has to be the one making: a verb that resolved to POST by fallthrough, and a
+`resource` that states no `audience`. Neither is visible from any other
+surface, so a spec carrying one reads exactly like a working spec. Warnings go
+to stderr, so adding one never edits the list a consumer diffs.
+
 The tool-name output matters as much as the exit code. A consumer repo diffing
 that list against a reviewed expectation is invoking the owning loader. A
 consumer reimplementing the parse to derive the same list is the antipattern

@@ -69,6 +69,11 @@ exit. No network, so it runs in a sealed clone and in CI.
   served surface off the owning loader instead of writing a second parser for
   the same guardfile. A rejected spec exits non-zero with the failure on
   stderr and writes nothing to stdout.
+* **Warnings on stderr** - two facts that are invisible from every other
+  surface, so a spec carrying one lints identically to a working spec. An
+  unknown verb resolving to POST by fallthrough, and a `resource` stating no
+  `audience`. Both are legitimate choices, so both warn rather than fail, and
+  both keep off stdout so a warning never edits the diffable surface.
 * **Scope** - the `wrap` inline grammar the serving runtime renders.
   `serve-ssm` policies use a separate grammar and are not lintable through
   this path.
@@ -82,9 +87,11 @@ All are opt-in except `server-info`, which is on by default and opts out.
 * **Resources** - `resource "<name>" uri=... { text ... }` serves static
   content on `resources/read`. Inline only by design: a resource proxying an
   upstream read would be a second, unguarded egress path beside the grants.
-  Claude Code surfaces these as `@` mentions. Optional `audience "assistant"`
-  and `priority=0.9` emit the MCP annotations an agent harness gates on when
-  deciding to pull a resource into a model's context unprompted.
+  Claude Code surfaces these as `@` mentions. `audience "assistant"` and
+  `priority=0.9` emit the MCP annotations an agent harness gates on when
+  deciding to pull a resource into a model's context unprompted. Stating no
+  audience means no such harness includes the resource, so `lint` warns:
+  serving correctly and reaching nobody are the same thing from outside.
 * **Prompts** - `prompt "<name>" { argument ...; text ... }` serves a message
   template on `prompts/get` with `{arg}` substitution. A missing required
   argument is an error, since a half-filled prompt reads as a complete one.
