@@ -108,7 +108,8 @@ fails closed: declare none and the server behaves exactly as before.
 server-info                                   // mints `ward_mcp_info`
 confirm "create_issue" message="Create this issue upstream?"
 
-resource "oncall" uri="ward://runbook/oncall" mime="text/markdown" {
+resource "oncall" uri="ward://runbook/oncall" mime="text/markdown" priority=0.9 {
+    audience "assistant"
     description "First response for an upstream 5xx"
     text "1. Call ward_mcp_info to confirm the pod is serving."
     text "2. Check the upstream status page."
@@ -129,6 +130,13 @@ wrap ward mcp forgejo {
 commands. Resource content is inline only: a resource that proxied an upstream
 read would be a second egress path beside the `can` grants, and the grants are
 the whole security model.
+
+A resource's `audience` and `priority` are the MCP annotations an agent harness
+reads to decide whether to pull the content into a model's context without
+being asked. A harness that gates on `audience` treats an unannotated resource
+as not meant for the model and skips it, so reference material written for an
+agent needs `audience "assistant"` stated. Both are optional, and a resource
+declaring neither serves exactly the bytes it did before.
 
 `server-info` mints one read-only tool that reports the server's identity,
 mode, and tool inventory without reaching any upstream. It also restores a

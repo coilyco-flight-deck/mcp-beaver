@@ -9,7 +9,8 @@ import (
 
 // specWithSiblings exercises `resource` and `prompt` riding beside `wrap`.
 func specWithSiblings() string {
-	return `resource "oncall-runbook" uri="ward://runbook/oncall" mime="text/markdown" {
+	return `resource "oncall-runbook" uri="ward://runbook/oncall" mime="text/markdown" priority=0.9 {
+    audience "assistant"
     description "First response for an upstream 5xx"
     text "1. Check /healthz on the pod."
     text "2. Check the upstream status page."
@@ -69,6 +70,97 @@ func TestResourcesListAndRead(t *testing.T) {
 	text, _ := contents[0].(map[string]any)["text"].(string)
 	if !strings.Contains(text, "1. Check /healthz") || !strings.Contains(text, "2. Check the upstream") {
 		t.Errorf("text = %q, want both declared lines joined", text)
+	}
+}
+
+// A host decides whether to pull a resource into a model's context by reading
+// `annotations` off `resources/list`, so assert the wire shape rather than the
+// parsed struct. Dropping either field here is invisible to the server and
+// silently makes the resource unreachable for the agent it was written for.
+func TestResourceAnnotationsReachTheWire(t *testing.T) {
+	ts := siblingServer(t)
+	defer ts.Close()
+
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"resources/list"}`)
+	var list map[string]any
+	if err := json.Unmarshal(decodeRPCResponse(t, resp).Result, &list); err != nil {
+		t.Fatalf("list result: %v", err)
+	}
+	items, _ := list["resources"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("resources = %v", list["resources"])
+	}
+	annotations, ok := items[0].(map[string]any)["annotations"].(map[string]any)
+	if !ok {
+		t.Fatalf("resource carries no annotations: %v", items[0])
+	}
+	audience, _ := annotations["audience"].([]any)
+	if len(audience) != 1 || audience[0] != "assistant" {
+		t.Errorf("audience = %v, want the declared assistant", annotations["audience"])
+	}
+	if priority, _ := annotations["priority"].(float64); priority != 0.9 {
+		t.Errorf("priority = %v, want the declared 0.9", annotations["priority"])
+	}
+}
+
+// Annotations stay opt-in, so a spec written before they existed serves the
+// same bytes it did and never gains an audience it did not ask for.
+func TestResourceWithoutAnnotationsOmitsThem(t *testing.T) {
+	resources, err := parseResources([]byte(`resource "r" uri="ward://r" { text "x" }`))
+	if err != nil {
+		t.Fatalf("parseResources: %v", err)
+	}
+	if resources[0].tool.Annotations != nil {
+		t.Errorf("annotations = %+v, want nil for an unannotated resource", resources[0].tool.Annotations)
+	}
+}
+
+// KDL types `priority=1` as Int and `priority=0.9` as Float, and the accessors
+// panic across kinds, so a whole number is the case that would crash rather
+// than the one that obviously works.
+func TestResourcePriorityAcceptsWholeNumbers(t *testing.T) {
+	resources, err := parseResources([]byte(`resource "r" uri="ward://r" priority=1 { text "x" }`))
+	if err != nil {
+		t.Fatalf("parseResources: %v", err)
+	}
+	if got := resources[0].tool.Annotations.Priority; got != 1 {
+		t.Errorf("priority = %v, want 1", got)
+	}
+}
+
+func TestResourceAnnotationsFailClosed(t *testing.T) {
+	for name, spec := range map[string]string{
+		"unknown audience role": `resource "r" uri="ward://r" { audience "operator"` + "\n" + `text "x" }`,
+		"empty audience":        `resource "r" uri="ward://r" { audience` + "\n" + `text "x" }`,
+		"repeated role":         `resource "r" uri="ward://r" { audience "user" "user"` + "\n" + `text "x" }`,
+		"priority not a number": `resource "r" uri="ward://r" priority="high" { text "x" }`,
+		"unknown child":         `resource "r" uri="ward://r" { audiance "assistant"` + "\n" + `text "x" }`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parseResources([]byte(spec)); err == nil {
+				t.Fatal("parseResources accepted a malformed annotation")
+			}
+		})
+	}
+}
+
+// An out-of-range priority must be rejected AS out of range. Asserting only
+// that some error came back let these pass while `0.9` was still failing as a
+// type error, which hid the real BigFloat bug behind a green test.
+func TestResourcePriorityRangeIsEnforcedAsRange(t *testing.T) {
+	for name, spec := range map[string]string{
+		"above one":  `resource "r" uri="ward://r" priority=1.5 { text "x" }`,
+		"below zero": `resource "r" uri="ward://r" priority=-0.1 { text "x" }`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := parseResources([]byte(spec))
+			if err == nil {
+				t.Fatal("parseResources accepted an out-of-range priority")
+			}
+			if !strings.Contains(err.Error(), "outside 0..1") {
+				t.Errorf("error = %q, want it to name the range rather than the type", err)
+			}
+		})
 	}
 }
 

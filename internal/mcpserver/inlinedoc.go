@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 
 	kdl "github.com/calico32/kdl-go"
@@ -51,6 +52,30 @@ func boolProp(value kdl.Value, node, key string) (bool, error) {
 		return false, fmt.Errorf("ward-mcp: `%s` property %q wants a boolean (#true or #false), got %s", node, key, value.String())
 	}
 	return value.Bool(), nil
+}
+
+// floatProp reads a KDL numeric property. kdl-go spreads numbers across four
+// kinds and every accessor panics on the other three, so all four are handled
+// rather than the two an author would guess: a plain `priority=1` arrives as
+// Int, but the decimal `priority=0.9` arrives as BigFloat, not Float. Missing
+// that reads a well-formed number as a type error. A genuine non-number still
+// fails closed, because annotating as zero would mean "least important"
+// instead of saying the spec is wrong.
+func floatProp(value kdl.Value, node, key string) (float64, error) {
+	switch value.Kind() {
+	case kdl.Int:
+		return float64(value.Int()), nil
+	case kdl.Float:
+		return value.Float(), nil
+	case kdl.BigInt:
+		got, _ := new(big.Float).SetInt(value.BigInt()).Float64()
+		return got, nil
+	case kdl.BigFloat:
+		got, _ := value.BigFloat().Float64()
+		return got, nil
+	default:
+		return 0, fmt.Errorf("ward-mcp: `%s` property %q wants a number, got %s", node, key, value.String())
+	}
 }
 
 // joinTextChildren collects repeated `text "..."` children into one body.

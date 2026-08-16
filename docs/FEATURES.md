@@ -82,7 +82,9 @@ All are opt-in except `server-info`, which is on by default and opts out.
 * **Resources** - `resource "<name>" uri=... { text ... }` serves static
   content on `resources/read`. Inline only by design: a resource proxying an
   upstream read would be a second, unguarded egress path beside the grants.
-  Claude Code surfaces these as `@` mentions.
+  Claude Code surfaces these as `@` mentions. Optional `audience "assistant"`
+  and `priority=0.9` emit the MCP annotations an agent harness gates on when
+  deciding to pull a resource into a model's context unprompted.
 * **Prompts** - `prompt "<name>" { argument ...; text ... }` serves a message
   template on `prompts/get` with `{arg}` substitution. A missing required
   argument is an error, since a half-filled prompt reads as a complete one.
