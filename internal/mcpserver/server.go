@@ -121,7 +121,7 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	}
 	// Built before telemetry and folded into the tool list, so the info tool
 	// is a first-class member of the served surface: bounded in metrics like
-	// any grant, and reported by ToolNames and `ward-mcp lint`.
+	// any grant, and reported by ToolNames and `mcp-beaver lint`.
 	infoTool, err := serverInfoTool(infoCfg, tools)
 	if err != nil {
 		return nil, err
@@ -230,7 +230,7 @@ func NewProxyWithPins(ctx context.Context, name, specPath, upstreamURL string, a
 }
 
 // ToolNames returns the projected tool names in the order the runtime serves
-// them. `ward-mcp lint` prints these so a consumer can read the minted surface
+// them. `mcp-beaver lint` prints these so a consumer can read the minted surface
 // off the owning loader instead of writing a second parser for the same file.
 func (s *Server) ToolNames() []string {
 	return projectedToolNames(s.tools)
@@ -348,7 +348,7 @@ func (s *Server) Close() error {
 // Stateless is required, not merely preferred: the SDK rejects a 2026-07-28
 // client outright on a session-backed handler. Older clients still negotiate
 // their own version here, they just stop receiving an `Mcp-Session-Id`.
-// ward-mcp holds no cross-call state of its own, so nothing is lost.
+// mcp-beaver holds no cross-call state of its own, so nothing is lost.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
@@ -375,7 +375,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc(adminDescribePath, s.serveAdminDescribe)
 	mux.HandleFunc(adminReloadPath, s.serveAdminReload)
-	return otelhttp.NewHandler(withRequestDeadline(s.transportDeadline(), mux), "ward-mcp HTTP",
+	return otelhttp.NewHandler(withRequestDeadline(s.transportDeadline(), mux), "mcp-beaver HTTP",
 		otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/healthz" }),
 	)
 }
@@ -471,7 +471,7 @@ const (
 )
 
 // applyCacheTTL stamps the freshness hint on list results. cacheScope is left
-// to the SDK, which defaults it to "public": a ward-mcp tool list is derived
+// to the SDK, which defaults it to "public": a mcp-beaver tool list is derived
 // from policy, identical for every caller of the server, and never per-user.
 func (s *Server) applyCacheTTL(res mcp.Result) {
 	ttl := specListTTLMs
@@ -533,7 +533,7 @@ func localTools(descs []opcore.Descriptor) ([]*mcp.Tool, error) {
 	for _, d := range descs {
 		tname := toolName(d)
 		if seen[tname] {
-			return nil, fmt.Errorf("ward-mcp: duplicate tool name %q from grant %q", tname, d.Grant)
+			return nil, fmt.Errorf("mcp-beaver: duplicate tool name %q from grant %q", tname, d.Grant)
 		}
 		seen[tname] = true
 		out = append(out, toolSpec(d))

@@ -1,8 +1,8 @@
-// skillsmp.mcp.kdl - the first end-to-end target (ward-mcp#7): skillsmp's two
+// skillsmp.mcp.kdl - the first end-to-end target (mcp-beaver#7): skillsmp's two
 // read tools served over SSE against skillsmp.com. This is the narrowest slice
 // that proves parse -> project -> serve -> guarded-execute with no writes.
 //
-// The body is the frozen ward-mcp inline grammar (opcore.ParseInline). Each
+// The body is the frozen mcp-beaver inline grammar (opcore.ParseInline). Each
 // `can` grant becomes one MCP tool named `verb_resource`; the token is resolved
 // at run time from SKILLSMP_API_KEY via the `env` value provider.
 //
@@ -12,7 +12,7 @@
 // projection with an arbitrary vendor tool name is a naming follow-up (see
 // DESIGN.md "Still open"), not a runtime concern. The guarded surface is
 // correct either way - two read-only GETs, no write grants minted.
-// ward-mcp advertises that read-only classification, idempotence, the
+// mcp-beaver advertises that read-only classification, idempotence, the
 // open-world upstream boundary, and the structured result output schema in
 // each MCP tool definition.
 //

@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The publish path follows the forge rename to mcp-beaver. Only the registry
-# path moves here: the Go module, the binary, the ENTRYPOINT, and the chart name
-# are all still ward-mcp, and renaming those is a breaking change for every
-# chart consumer rather than a packaging one. Images already published under
-# coilyco-flight-deck/ward-mcp are untouched and still pullable, so deploy
-# adopts this path on its own schedule instead of at the moment of this commit.
+# The registry path moved to mcp-beaver first and the rest of the name followed
+# later, so images published either side of that are all under this path and all
+# still pullable. A deploy values file pins a source SHA rather than a tag, so
+# nothing here decides when a consumer adopts a new build.
 registry="forgejo.coilysiren.me"
 image_name="coilyco-flight-deck/mcp-beaver"
 

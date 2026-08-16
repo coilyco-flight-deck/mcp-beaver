@@ -1,12 +1,12 @@
-// Command ward-mcp is the generic runtime that renders one `.mcp.kdl` spec into
+// Command mcp-beaver is the generic runtime that renders one `.mcp.kdl` spec into
 // a guarded MCP server and matching HTTP tool API. It is the single static
-// binary baked into every ward-mcp image; the spec is the only thing that
+// binary baked into every mcp-beaver image; the spec is the only thing that
 // varies. There is no per-guardfile Go and no per-server handler.
 //
-//	ward-mcp serve /spec/<name>.mcp.kdl --http :8080
-//	ward-mcp lint /spec/<name>.mcp.kdl [--methods]
-//	ward-mcp serve-upstream --upstream <url> --tool <name> [--pin <tool>.<arg>=<value>]
-//	ward-mcp lint-upstream --tool <name> --read-only heuristic
+//	mcp-beaver serve /spec/<name>.mcp.kdl --http :8080
+//	mcp-beaver lint /spec/<name>.mcp.kdl [--methods]
+//	mcp-beaver serve-upstream --upstream <url> --tool <name> [--pin <tool>.<arg>=<value>]
+//	mcp-beaver lint-upstream --tool <name> --read-only heuristic
 //
 // It parses the spec through umbra's opcore engine, projects one MCP tool
 // plus one POST /api/{tool-name} endpoint per grant, and binds one HTTP
@@ -28,8 +28,8 @@ import (
 	"syscall"
 	"time"
 
-	"forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp/internal/mcpserver"
-	internaltelemetry "forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp/internal/telemetry"
+	"forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/mcpserver"
+	internaltelemetry "forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/telemetry"
 )
 
 const shutdownTimeout = 5 * time.Second
@@ -38,7 +38,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := runContext(ctx, os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "ward-mcp:", err)
+		fmt.Fprintln(os.Stderr, "mcp-beaver:", err)
 		os.Exit(1)
 	}
 }
@@ -53,7 +53,7 @@ func run(argv []string) error {
 
 func runContext(ctx context.Context, argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: ward-mcp serve <spec.mcp.kdl> [--http :8080] | ward-mcp serve-ssm <spec.mcp.kdl> [--http :8080] | ward-mcp serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...] | ward-mcp lint <spec.mcp.kdl> | ward-mcp lint-upstream --tool <name> [--read-only heuristic|strict] [--upstream <mcp-url>]")
+		return fmt.Errorf("usage: mcp-beaver serve <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-ssm <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...] | mcp-beaver lint <spec.mcp.kdl> | mcp-beaver lint-upstream --tool <name> [--read-only heuristic|strict] [--upstream <mcp-url>]")
 	}
 	switch argv[0] {
 	case "serve":
@@ -134,7 +134,7 @@ func checkUpstreamAllowlist(
 	connectTimeout time.Duration,
 ) error {
 	srv, err := connectProxyWithRetry(ctx, connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
-		return mcpserver.NewProxy(ctx, "ward-mcp-lint", "", upstream, allowlist, nil)
+		return mcpserver.NewProxy(ctx, "mcp-beaver-lint", "", upstream, allowlist, nil)
 	})
 	if err != nil {
 		return fmt.Errorf("connect upstream %q: %w", upstream, err)
@@ -247,7 +247,7 @@ func lintWarnFallthrough(warn io.Writer, methods []mcpserver.ToolMethod) error {
 			continue
 		}
 		_, err := fmt.Fprintf(warn,
-			"ward-mcp: warning: %s: verb %q is not in opcore's method table and resolved to %s by fallthrough. Confirm the upstream expects %s on this path.\n",
+			"mcp-beaver: warning: %s: verb %q is not in opcore's method table and resolved to %s by fallthrough. Confirm the upstream expects %s on this path.\n",
 			m.Tool, m.Verb, m.Method, m.Method,
 		)
 		if err != nil {
@@ -268,7 +268,7 @@ func lintWarnFallthrough(warn io.Writer, methods []mcpserver.ToolMethod) error {
 func lintWarnResourceAudience(warn io.Writer, resources []string) error {
 	for _, name := range resources {
 		_, err := fmt.Fprintf(warn,
-			"ward-mcp: warning: resource %q states no `audience`, so a host that "+
+			"mcp-beaver: warning: resource %q states no `audience`, so a host that "+
 				"decides context inclusion from it will skip this resource. Add "+
 				"`audience \"assistant\"` for a model to read it, or `audience "+
 				"\"user\"` to state it is for people.\n",
@@ -330,7 +330,7 @@ func runServe(ctx context.Context, argv []string) error {
 		}
 		srv.SetRequestTimeout(*requestTimeout)
 
-		fmt.Fprintf(os.Stderr, "ward-mcp: serving %s on %s (MCP /mcp, HTTP tools /api/{tool-name}, %s request bound)\n", specPath, *addr, *requestTimeout)
+		fmt.Fprintf(os.Stderr, "mcp-beaver: serving %s on %s (MCP /mcp, HTTP tools /api/{tool-name}, %s request bound)\n", specPath, *addr, *requestTimeout)
 		return serveHTTP(ctx, *addr, srv.Handler())
 	})
 }
@@ -340,7 +340,7 @@ func runServe(ctx context.Context, argv []string) error {
 func runServeUpstream(ctx context.Context, argv []string) error {
 	fs := flag.NewFlagSet("serve-upstream", flag.ContinueOnError)
 	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
-	name := fs.String("name", "ward-mcp-upstream", "MCP server name")
+	name := fs.String("name", "mcp-beaver-upstream", "MCP server name")
 	upstream := fs.String("upstream", "", "streamable-HTTP MCP upstream endpoint")
 	connectTimeout := fs.Duration("connect-timeout", 0, "retry upstream startup until this timeout (0 fails immediately)")
 	requestTimeout := fs.Duration("request-timeout", mcpserver.DefaultRequestTimeout, "bound one request end to end, including its upstream call (0 disables)")
@@ -370,7 +370,7 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 		}
 		defer func() { _ = srv.Close() }()
 		srv.SetRequestTimeout(*requestTimeout)
-		fmt.Fprintf(os.Stderr, "ward-mcp: serving upstream proxy %s on %s (%d MCP and HTTP tools, %s request bound)\n", *upstream, *addr, len(tools), *requestTimeout)
+		fmt.Fprintf(os.Stderr, "mcp-beaver: serving upstream proxy %s on %s (%d MCP and HTTP tools, %s request bound)\n", *upstream, *addr, len(tools), *requestTimeout)
 		return serveHTTP(ctx, *addr, srv.Handler())
 	})
 }
@@ -437,7 +437,7 @@ func runServeSSM(ctx context.Context, argv []string) error {
 		if err != nil {
 			return fmt.Errorf("parse SSM spec %q: %w", specPath, err)
 		}
-		fmt.Fprintf(os.Stderr, "ward-mcp: serving guarded SSM reader %s on %s (MCP and HTTP tools)\n", specPath, *addr)
+		fmt.Fprintf(os.Stderr, "mcp-beaver: serving guarded SSM reader %s on %s (MCP and HTTP tools)\n", specPath, *addr)
 		return serveHTTP(ctx, *addr, srv.Handler())
 	})
 }
@@ -565,7 +565,7 @@ func serverName(specPath string) string {
 	base = strings.TrimSuffix(base, ".kdl")
 	base = strings.TrimSuffix(base, ".mcp")
 	if base == "" {
-		return "ward-mcp"
+		return "mcp-beaver"
 	}
 	return base
 }

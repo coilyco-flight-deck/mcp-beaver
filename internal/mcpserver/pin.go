@@ -43,21 +43,21 @@ type ArgPin struct {
 func ParseArgPin(raw string) (ArgPin, error) {
 	spec, value, found := strings.Cut(raw, "=")
 	if !found {
-		return ArgPin{}, fmt.Errorf("ward-mcp: pin %q must be <tool>.<arg>=<value>", raw)
+		return ArgPin{}, fmt.Errorf("mcp-beaver: pin %q must be <tool>.<arg>=<value>", raw)
 	}
 	tool, arg, found := strings.Cut(strings.TrimSpace(spec), ".")
 	if !found {
-		return ArgPin{}, fmt.Errorf("ward-mcp: pin %q must name the tool and the argument, as <tool>.<arg>=<value>", raw)
+		return ArgPin{}, fmt.Errorf("mcp-beaver: pin %q must name the tool and the argument, as <tool>.<arg>=<value>", raw)
 	}
 	pin := ArgPin{Tool: strings.TrimSpace(tool), Arg: strings.TrimSpace(arg), Value: value}
 	switch {
 	case pin.Tool == "":
-		return ArgPin{}, fmt.Errorf("ward-mcp: pin %q names an empty tool", raw)
+		return ArgPin{}, fmt.Errorf("mcp-beaver: pin %q names an empty tool", raw)
 	case pin.Arg == "":
-		return ArgPin{}, fmt.Errorf("ward-mcp: pin %q names an empty argument", raw)
+		return ArgPin{}, fmt.Errorf("mcp-beaver: pin %q names an empty argument", raw)
 	case pin.Value == "":
 		// An empty pin would read as "unscoped" while looking configured.
-		return ArgPin{}, fmt.Errorf("ward-mcp: pin %q has an empty value; a pin that scopes to nothing is not a scope", raw)
+		return ArgPin{}, fmt.Errorf("mcp-beaver: pin %q has an empty value; a pin that scopes to nothing is not a scope", raw)
 	}
 	return pin, nil
 }
@@ -73,11 +73,11 @@ func ValidatePins(pins []ArgPin, allowlist []string) error {
 	seen := map[string]string{}
 	for _, pin := range pins {
 		if !served[pin.Tool] {
-			return fmt.Errorf("ward-mcp: pin names tool %q, which is not in the allowlist: nothing would apply it", pin.Tool)
+			return fmt.Errorf("mcp-beaver: pin names tool %q, which is not in the allowlist: nothing would apply it", pin.Tool)
 		}
 		key := pin.Tool + "." + pin.Arg
 		if prior, dup := seen[key]; dup && prior != pin.Value {
-			return fmt.Errorf("ward-mcp: conflicting pins for %s (%q and %q)", key, prior, pin.Value)
+			return fmt.Errorf("mcp-beaver: conflicting pins for %s (%q and %q)", key, prior, pin.Value)
 		}
 		seen[key] = pin.Value
 	}
@@ -120,7 +120,7 @@ func withArgPins(pins []ArgPin, next mcp.ToolHandler) mcp.ToolHandler {
 			if supplied, ok := args[pin.Arg]; ok {
 				if fmt.Sprintf("%v", supplied) != pin.Value {
 					return toolError(fmt.Errorf(
-						"ward-mcp: %s is pinned to %q on this server and cannot be set to %v",
+						"mcp-beaver: %s is pinned to %q on this server and cannot be set to %v",
 						pin.Arg, pin.Value, supplied,
 					)), nil
 				}

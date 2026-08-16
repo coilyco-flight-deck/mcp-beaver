@@ -66,25 +66,25 @@ func parseResources(src []byte) ([]inlineResource, error) {
 					return nil, err
 				}
 				if priority < 0 || priority > 1 {
-					return nil, fmt.Errorf("ward-mcp: `resource` %q priority %v is outside 0..1", name, priority)
+					return nil, fmt.Errorf("mcp-beaver: `resource` %q priority %v is outside 0..1", name, priority)
 				}
 				resourceAnnotations(&res).Priority = priority
 			default:
-				return nil, fmt.Errorf("ward-mcp: unknown `resource` property %q (want uri | mime | title | priority; fail-closed)", key)
+				return nil, fmt.Errorf("mcp-beaver: unknown `resource` property %q (want uri | mime | title | priority; fail-closed)", key)
 			}
 		}
 		if res.URI == "" {
-			return nil, fmt.Errorf("ward-mcp: `resource` %q needs a non-empty uri", name)
+			return nil, fmt.Errorf("mcp-beaver: `resource` %q needs a non-empty uri", name)
 		}
 		if seen[res.URI] {
-			return nil, fmt.Errorf("ward-mcp: duplicate `resource` uri %q", res.URI)
+			return nil, fmt.Errorf("mcp-beaver: duplicate `resource` uri %q", res.URI)
 		}
 		seen[res.URI] = true
 		for _, child := range n.Children().Nodes {
 			switch child.Name() {
 			case "description":
 				if len(child.Arguments()) != 1 {
-					return nil, fmt.Errorf("ward-mcp: `resource` %q child `description` wants exactly one argument", name)
+					return nil, fmt.Errorf("mcp-beaver: `resource` %q child `description` wants exactly one argument", name)
 				}
 				res.Description = child.Arg(0).String()
 			case "audience":
@@ -96,7 +96,7 @@ func parseResources(src []byte) ([]inlineResource, error) {
 			case "text":
 				// Collected by joinTextChildren below.
 			default:
-				return nil, fmt.Errorf("ward-mcp: unknown `resource` child %q on %q (want description | audience | text; fail-closed)", child.Name(), name)
+				return nil, fmt.Errorf("mcp-beaver: unknown `resource` child %q on %q (want description | audience | text; fail-closed)", child.Name(), name)
 			}
 		}
 		body, err := joinTextChildren(n, "resource")
@@ -104,7 +104,7 @@ func parseResources(src []byte) ([]inlineResource, error) {
 			return nil, err
 		}
 		if body == "" {
-			return nil, fmt.Errorf("ward-mcp: `resource` %q has no `text` content", name)
+			return nil, fmt.Errorf("mcp-beaver: `resource` %q has no `text` content", name)
 		}
 		if res.MIMEType == "" {
 			res.MIMEType = "text/plain"
@@ -130,17 +130,17 @@ func resourceAnnotations(res *mcp.Resource) *mcp.Annotations {
 // this node exists to remove rather than reproduce.
 func audienceRoles(n *kdl.Node, resourceName string) ([]mcp.Role, error) {
 	if len(n.Arguments()) == 0 {
-		return nil, fmt.Errorf("ward-mcp: `resource` %q child `audience` wants at least one role", resourceName)
+		return nil, fmt.Errorf("mcp-beaver: `resource` %q child `audience` wants at least one role", resourceName)
 	}
 	roles := make([]mcp.Role, 0, len(n.Arguments()))
 	seen := map[mcp.Role]bool{}
 	for i := range n.Arguments() {
 		role := mcp.Role(n.Arg(i).String())
 		if role != "assistant" && role != "user" {
-			return nil, fmt.Errorf("ward-mcp: `resource` %q audience role %q is not assistant or user (fail-closed)", resourceName, role)
+			return nil, fmt.Errorf("mcp-beaver: `resource` %q audience role %q is not assistant or user (fail-closed)", resourceName, role)
 		}
 		if seen[role] {
-			return nil, fmt.Errorf("ward-mcp: `resource` %q repeats audience role %q", resourceName, role)
+			return nil, fmt.Errorf("mcp-beaver: `resource` %q repeats audience role %q", resourceName, role)
 		}
 		seen[role] = true
 		roles = append(roles, role)

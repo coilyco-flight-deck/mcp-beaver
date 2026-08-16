@@ -107,7 +107,7 @@ func TestServerInfoHonoursNameOverride(t *testing.T) {
 	}
 }
 
-// The info tool must appear in ToolNames, since `ward-mcp lint` prints that as
+// The info tool must appear in ToolNames, since `mcp-beaver lint` prints that as
 // the surface a consumer diffs. A served-but-unlisted tool would under-report.
 func TestServerInfoAppearsInToolNames(t *testing.T) {
 	s, err := New("test", "test.mcp.kdl", []byte(roundTripSpec("http://127.0.0.1:1")))

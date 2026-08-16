@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	internaltelemetry "forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp/internal/telemetry"
+	internaltelemetry "forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/telemetry"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel"
@@ -18,7 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const instrumentationScope = "forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp"
+const instrumentationScope = "forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver"
 
 const transportTraceparentHeader = "X-Ward-Mcp-Transport-Traceparent"
 
@@ -174,8 +174,8 @@ func (i *instrumentation) toolHandler(name string, next mcp.ToolHandler) mcp.Too
 		attrs := []attribute.KeyValue{
 			attribute.String("gen_ai.operation.name", "execute_tool"),
 			attribute.String("gen_ai.tool.name", name),
-			attribute.String("ward_mcp.transport", "http"),
-			attribute.String("ward_mcp.mode", i.mode),
+			attribute.String("mcp_beaver.transport", "http"),
+			attribute.String("mcp_beaver.mode", i.mode),
 		}
 		ctx, span := i.tracer.Start(ctx, "execute_tool "+name, trace.WithAttributes(attrs...))
 		defer span.End()
@@ -190,8 +190,8 @@ func (i *instrumentation) operationAttributes(method, tool, transport string) []
 		attribute.String("mcp.method.name", method),
 		attribute.String("network.protocol.name", "http"),
 		attribute.String("network.transport", "tcp"),
-		attribute.String("ward_mcp.transport", transport),
-		attribute.String("ward_mcp.mode", i.mode),
+		attribute.String("mcp_beaver.transport", transport),
+		attribute.String("mcp_beaver.mode", i.mode),
 	}
 	if tool != "" {
 		attrs = append(attrs,

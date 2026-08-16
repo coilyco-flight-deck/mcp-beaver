@@ -2,13 +2,13 @@
 # Public ingress and authentication are deliberately absent. A deployment
 # composes this runtime with its own exposure layer. Consume as:
 #
-#   helm upgrade --install skillsmp ward-mcp \
+#   helm upgrade --install skillsmp mcp-beaver \
 #     -f skillsmp.values.yaml \
 #     --set-file spec=skillsmp.mcp.kdl \
 #     --set image.tag=<built-runtime-sha>
 #
 # spec rides in via --set-file (the .mcp.kdl body); image.tag is the built
-# ward-mcp runtime sha the rollout resolves.
+# mcp-beaver runtime sha the rollout resolves.
 specName: skillsmp
 
 # Pull the runtime token the guardfile names (`value env SKILLSMP_API_KEY`)

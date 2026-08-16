@@ -9,7 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const defaultServerInfoTool = "ward_mcp_info"
+const defaultServerInfoTool = "mcp_beaver_info"
 
 var serverInfoInputSchema = json.RawMessage(`{
 	"type":"object",
@@ -45,7 +45,7 @@ type serverInfoConfig struct {
 
 // parseServerInfo reads the optional top-level `server-info` node:
 //
-//	(no node)                         // mints `ward_mcp_info` - the default
+//	(no node)                         // mints `mcp_beaver_info` - the default
 //	server-info name="status"         // mints `status` instead
 //	server-info disabled              // mints nothing
 //
@@ -75,7 +75,7 @@ func parseServerInfo(src []byte) (*serverInfoConfig, error) {
 			continue
 		}
 		if seen {
-			return nil, fmt.Errorf("ward-mcp: duplicate `server-info` node")
+			return nil, fmt.Errorf("mcp-beaver: duplicate `server-info` node")
 		}
 		seen = true
 		disabled, err := serverInfoDisabled(n)
@@ -86,16 +86,16 @@ func parseServerInfo(src []byte) (*serverInfoConfig, error) {
 			switch key {
 			case "name":
 				if value.String() == "" {
-					return nil, fmt.Errorf("ward-mcp: `server-info` name must be non-empty")
+					return nil, fmt.Errorf("mcp-beaver: `server-info` name must be non-empty")
 				}
 				cfg.toolName = value.String()
 			default:
-				return nil, fmt.Errorf("ward-mcp: unknown `server-info` property %q (want name; fail-closed)", key)
+				return nil, fmt.Errorf("mcp-beaver: unknown `server-info` property %q (want name; fail-closed)", key)
 			}
 		}
 		if disabled {
 			if len(n.Properties()) > 0 {
-				return nil, fmt.Errorf("ward-mcp: `server-info disabled` takes no properties: naming a tool that is not minted reads as a live override")
+				return nil, fmt.Errorf("mcp-beaver: `server-info disabled` takes no properties: naming a tool that is not minted reads as a live override")
 			}
 			return nil, nil
 		}
@@ -111,11 +111,11 @@ func serverInfoDisabled(n *kdl.Node) (bool, error) {
 		return false, nil
 	case 1:
 		if arg := n.Arg(0).String(); arg != serverInfoDisabledArg {
-			return false, fmt.Errorf("ward-mcp: unknown `server-info` argument %q (want %s, or no argument; fail-closed)", arg, serverInfoDisabledArg)
+			return false, fmt.Errorf("mcp-beaver: unknown `server-info` argument %q (want %s, or no argument; fail-closed)", arg, serverInfoDisabledArg)
 		}
 		return true, nil
 	default:
-		return false, fmt.Errorf("ward-mcp: `server-info` takes at most one argument (%s), plus an optional name= property", serverInfoDisabledArg)
+		return false, fmt.Errorf("mcp-beaver: `server-info` takes at most one argument (%s), plus an optional name= property", serverInfoDisabledArg)
 	}
 }
 
@@ -133,7 +133,7 @@ func serverInfoTool(cfg *serverInfoConfig, granted []*mcp.Tool) (*mcp.Tool, erro
 			// by default, so the message has to carry both migrations rather
 			// than assuming the author opted in and can just back it out.
 			return nil, fmt.Errorf(
-				"ward-mcp: `server-info` tool name %q collides with a granted tool: rename it with `server-info name=\"...\"`, or state `server-info %s`",
+				"mcp-beaver: `server-info` tool name %q collides with a granted tool: rename it with `server-info name=\"...\"`, or state `server-info %s`",
 				cfg.toolName, serverInfoDisabledArg,
 			)
 		}

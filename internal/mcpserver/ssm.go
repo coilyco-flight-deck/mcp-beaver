@@ -43,7 +43,7 @@ func NewSSM(ctx context.Context, name, specPath string, src []byte) (*Server, er
 	}
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(policy.Region))
 	if err != nil {
-		return nil, fmt.Errorf("ward-mcp: load AWS config: %w", err)
+		return nil, fmt.Errorf("mcp-beaver: load AWS config: %w", err)
 	}
 	return newSSMServer(name, specPath, policy, ssm.NewFromConfig(cfg))
 }
@@ -111,7 +111,7 @@ func ssmToolHandler(client ssmGetter, policy ssmPolicy, callerNamesParameter boo
 				return toolError(fmt.Errorf("invalid tool arguments: %w", err)), nil
 			}
 			if args.Name != policy.Parameter {
-				return toolError(fmt.Errorf("ward-mcp: parameter %q is outside the ward policy", args.Name)), nil
+				return toolError(fmt.Errorf("mcp-beaver: parameter %q is outside the ward policy", args.Name)), nil
 			}
 			name = args.Name
 		}
@@ -151,15 +151,15 @@ func ssmToolSuccess(parameter *types.Parameter) *mcp.CallToolResult {
 func parseSSMPolicy(src []byte) (ssmPolicy, error) {
 	doc, err := kdl.ParseString(string(src))
 	if err != nil {
-		return ssmPolicy{}, fmt.Errorf("ward-mcp: parse SSM KDL: %w", err)
+		return ssmPolicy{}, fmt.Errorf("mcp-beaver: parse SSM KDL: %w", err)
 	}
 	wrap := doc.GetNode("wrap")
 	if wrap == nil {
-		return ssmPolicy{}, fmt.Errorf("ward-mcp: missing top-level `wrap` node")
+		return ssmPolicy{}, fmt.Errorf("mcp-beaver: missing top-level `wrap` node")
 	}
 	args := wrap.Arguments()
 	if len(args) != 4 || args[0].String() != "ward" || args[1].String() != "mcp" || args[2].String() != "aws" || args[3].String() != "ssm" {
-		return ssmPolicy{}, fmt.Errorf("ward-mcp: SSM spec must start `wrap ward mcp aws ssm`")
+		return ssmPolicy{}, fmt.Errorf("mcp-beaver: SSM spec must start `wrap ward mcp aws ssm`")
 	}
 	policy := ssmPolicy{Region: "us-east-1"}
 	seenGrants := map[string]bool{}
@@ -167,33 +167,33 @@ func parseSSMPolicy(src []byte) (ssmPolicy, error) {
 		switch node.Name() {
 		case "region":
 			if len(node.Arguments()) != 1 {
-				return ssmPolicy{}, fmt.Errorf("ward-mcp: `region` needs one value")
+				return ssmPolicy{}, fmt.Errorf("mcp-beaver: `region` needs one value")
 			}
 			policy.Region = node.Arguments()[0].String()
 		case "parameter":
 			if len(node.Arguments()) != 1 {
-				return ssmPolicy{}, fmt.Errorf("ward-mcp: `parameter` needs one path")
+				return ssmPolicy{}, fmt.Errorf("mcp-beaver: `parameter` needs one path")
 			}
 			policy.Parameter = node.Arguments()[0].String()
 		case "can":
 			grant := node.Arguments()
 			if len(grant) != 2 {
-				return ssmPolicy{}, fmt.Errorf("ward-mcp: SSM `can` needs verb and resource")
+				return ssmPolicy{}, fmt.Errorf("mcp-beaver: SSM `can` needs verb and resource")
 			}
 			key := grant[0].String() + " " + grant[1].String()
 			if key != "get parameter" && key != "get forgejo-read-token" {
-				return ssmPolicy{}, fmt.Errorf("ward-mcp: unsupported SSM grant %q", key)
+				return ssmPolicy{}, fmt.Errorf("mcp-beaver: unsupported SSM grant %q", key)
 			}
 			seenGrants[key] = true
 		default:
-			return ssmPolicy{}, fmt.Errorf("ward-mcp: unknown SSM policy node %q", node.Name())
+			return ssmPolicy{}, fmt.Errorf("mcp-beaver: unknown SSM policy node %q", node.Name())
 		}
 	}
 	if policy.Parameter == "" {
-		return ssmPolicy{}, fmt.Errorf("ward-mcp: SSM policy needs an exact `parameter` path")
+		return ssmPolicy{}, fmt.Errorf("mcp-beaver: SSM policy needs an exact `parameter` path")
 	}
 	if !seenGrants["get parameter"] || !seenGrants["get forgejo-read-token"] || len(seenGrants) != 2 {
-		return ssmPolicy{}, fmt.Errorf("ward-mcp: SSM policy must grant exactly both read tools")
+		return ssmPolicy{}, fmt.Errorf("mcp-beaver: SSM policy must grant exactly both read tools")
 	}
 	return policy, nil
 }

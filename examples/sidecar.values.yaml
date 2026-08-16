@@ -1,5 +1,5 @@
 # sidecar.values.yaml - spec mode wrapping a co-located NON-MCP process
-# (ward-mcp#59). Pairs with examples/sidecar.mcp.kdl.
+# (mcp-beaver#59). Pairs with examples/sidecar.mcp.kdl.
 #
 # `extraContainers` is NOT gated on runtime.mode. The chart appends it to the
 # pod's container list unconditionally (chart/templates/deployment.yaml), and
@@ -48,9 +48,9 @@ extraContainers:
 
 # THE READINESS DECISION.
 #
-# The chart's default readinessProbe checks ward-mcp's own port. In upstream
+# The chart's default readinessProbe checks mcp-beaver's own port. In upstream
 # mode that is sufficient, because the runtime cannot finish starting until it
-# has reached its upstream. In spec mode it is not: ward-mcp binds immediately
+# has reached its upstream. In spec mode it is not: mcp-beaver binds immediately
 # and answers tools/list correctly while the sidecar is still loading, so the
 # pod would report Ready with its data plane down and take traffic that errors.
 #
@@ -69,7 +69,7 @@ readinessProbe:
   initialDelaySeconds: 3
   periodSeconds: 5
 
-# Liveness stays on ward-mcp: a wedged sidecar should fail readiness and stop
+# Liveness stays on mcp-beaver: a wedged sidecar should fail readiness and stop
 # taking traffic, not restart the whole pod out from under a healthy runtime.
 livenessProbe:
   tcpSocket:

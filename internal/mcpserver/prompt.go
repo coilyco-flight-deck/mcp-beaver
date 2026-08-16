@@ -47,7 +47,7 @@ func parsePrompts(src []byte) ([]inlinePrompt, error) {
 			return nil, err
 		}
 		if seen[name] {
-			return nil, fmt.Errorf("ward-mcp: duplicate `prompt` name %q", name)
+			return nil, fmt.Errorf("mcp-beaver: duplicate `prompt` name %q", name)
 		}
 		seen[name] = true
 		p := mcp.Prompt{Name: name}
@@ -56,14 +56,14 @@ func parsePrompts(src []byte) ([]inlinePrompt, error) {
 			case "title":
 				p.Title = value.String()
 			default:
-				return nil, fmt.Errorf("ward-mcp: unknown `prompt` property %q (want title; fail-closed)", key)
+				return nil, fmt.Errorf("mcp-beaver: unknown `prompt` property %q (want title; fail-closed)", key)
 			}
 		}
 		for _, child := range n.Children().Nodes {
 			switch child.Name() {
 			case "description":
 				if len(child.Arguments()) != 1 {
-					return nil, fmt.Errorf("ward-mcp: `prompt` %q child `description` wants exactly one argument", name)
+					return nil, fmt.Errorf("mcp-beaver: `prompt` %q child `description` wants exactly one argument", name)
 				}
 				p.Description = child.Arg(0).String()
 			case "argument":
@@ -75,7 +75,7 @@ func parsePrompts(src []byte) ([]inlinePrompt, error) {
 			case "text":
 				// Collected by joinTextChildren below.
 			default:
-				return nil, fmt.Errorf("ward-mcp: unknown `prompt` child %q (want description | argument | text; fail-closed)", child.Name())
+				return nil, fmt.Errorf("mcp-beaver: unknown `prompt` child %q (want description | argument | text; fail-closed)", child.Name())
 			}
 		}
 		body, err := joinTextChildren(n, "prompt")
@@ -83,7 +83,7 @@ func parsePrompts(src []byte) ([]inlinePrompt, error) {
 			return nil, err
 		}
 		if body == "" {
-			return nil, fmt.Errorf("ward-mcp: `prompt` %q has no `text` content", name)
+			return nil, fmt.Errorf("mcp-beaver: `prompt` %q has no `text` content", name)
 		}
 		out = append(out, inlinePrompt{prompt: p, body: body})
 	}
@@ -109,7 +109,7 @@ func promptArgument(n *kdl.Node, promptName string) (*mcp.PromptArgument, error)
 		case "title":
 			arg.Title = value.String()
 		default:
-			return nil, fmt.Errorf("ward-mcp: unknown `argument` property %q on prompt %q (want description | required | title; fail-closed)", key, promptName)
+			return nil, fmt.Errorf("mcp-beaver: unknown `argument` property %q on prompt %q (want description | required | title; fail-closed)", key, promptName)
 		}
 	}
 	return arg, nil
@@ -146,7 +146,7 @@ func renderPrompt(p inlinePrompt, args map[string]string) (string, error) {
 	for _, arg := range p.prompt.Arguments {
 		value, ok := args[arg.Name]
 		if !ok && arg.Required {
-			return "", fmt.Errorf("ward-mcp: prompt %q needs argument %q", p.prompt.Name, arg.Name)
+			return "", fmt.Errorf("mcp-beaver: prompt %q needs argument %q", p.prompt.Name, arg.Name)
 		}
 		body = strings.ReplaceAll(body, "{"+arg.Name+"}", value)
 	}

@@ -12,7 +12,7 @@ import (
 func typedQuerySpec(baseURL string) string {
 	return `wrap ward mcp typed-query-test {
     base-url "` + baseURL + `"
-    auth bearer { value env "WARD_MCP_TYPED_QUERY_TEST_TOKEN" }
+    auth bearer { value env "MCP_BEAVER_TYPED_QUERY_TEST_TOKEN" }
     can search thing {
         path "/things"
         query {
@@ -32,7 +32,7 @@ func typedQuerySpec(baseURL string) string {
 
 func typedQuerySession(t *testing.T, upstreamURL string) (*httptest.Server, string) {
 	t.Helper()
-	t.Setenv("WARD_MCP_TYPED_QUERY_TEST_TOKEN", "test-token")
+	t.Setenv("MCP_BEAVER_TYPED_QUERY_TEST_TOKEN", "test-token")
 	s, err := New("typed-query-test", "typed-query-test.mcp.kdl", []byte(typedQuerySpec(upstreamURL)))
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -40,7 +40,7 @@ func typedQuerySession(t *testing.T, upstreamURL string) (*httptest.Server, stri
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 	if out := decodeRPCResponse(t, initResp); out.Error != nil {
 		t.Fatalf("initialize error: %+v", out.Error)

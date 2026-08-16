@@ -24,7 +24,7 @@ func parseInlineDoc(src []byte, what string) (*kdl.Document, error) {
 	)
 	doc, err := kdl.ParseString(repl.Replace(string(src)))
 	if err != nil {
-		return nil, fmt.Errorf("ward-mcp: parse KDL for %s: %w", what, err)
+		return nil, fmt.Errorf("mcp-beaver: parse KDL for %s: %w", what, err)
 	}
 	return doc, nil
 }
@@ -33,11 +33,11 @@ func parseInlineDoc(src []byte, what string) (*kdl.Document, error) {
 // itself with, so every node reports the same shape error.
 func oneStringArg(n *kdl.Node, node string) (string, error) {
 	if len(n.Arguments()) != 1 {
-		return "", fmt.Errorf("ward-mcp: `%s` wants exactly one name argument, got %d", node, len(n.Arguments()))
+		return "", fmt.Errorf("mcp-beaver: `%s` wants exactly one name argument, got %d", node, len(n.Arguments()))
 	}
 	value := n.Arg(0).String()
 	if value == "" {
-		return "", fmt.Errorf("ward-mcp: `%s` name must be non-empty", node)
+		return "", fmt.Errorf("mcp-beaver: `%s` name must be non-empty", node)
 	}
 	return value, nil
 }
@@ -49,7 +49,7 @@ func oneStringArg(n *kdl.Node, node string) (string, error) {
 // instead, and never panic on operator-supplied config.
 func boolProp(value kdl.Value, node, key string) (bool, error) {
 	if value.Kind() != kdl.Bool {
-		return false, fmt.Errorf("ward-mcp: `%s` property %q wants a boolean (#true or #false), got %s", node, key, value.String())
+		return false, fmt.Errorf("mcp-beaver: `%s` property %q wants a boolean (#true or #false), got %s", node, key, value.String())
 	}
 	return value.Bool(), nil
 }
@@ -74,7 +74,7 @@ func floatProp(value kdl.Value, node, key string) (float64, error) {
 		got, _ := value.BigFloat().Float64()
 		return got, nil
 	default:
-		return 0, fmt.Errorf("ward-mcp: `%s` property %q wants a number, got %s", node, key, value.String())
+		return 0, fmt.Errorf("mcp-beaver: `%s` property %q wants a number, got %s", node, key, value.String())
 	}
 }
 
@@ -88,7 +88,7 @@ func joinTextChildren(n *kdl.Node, node string) (string, error) {
 			continue
 		}
 		if len(child.Arguments()) != 1 {
-			return "", fmt.Errorf("ward-mcp: `%s` child `text` wants exactly one argument, got %d", node, len(child.Arguments()))
+			return "", fmt.Errorf("mcp-beaver: `%s` child `text` wants exactly one argument, got %d", node, len(child.Arguments()))
 		}
 		lines = append(lines, child.Arg(0).String())
 	}

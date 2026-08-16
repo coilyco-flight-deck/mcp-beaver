@@ -22,20 +22,20 @@ var mutationVerbs = map[string]struct{}{
 // ValidateAllowlist checks an upstream tool allowlist for the shape the proxy
 // requires and returns the trimmed names in their original order. It is the
 // one authority on allowlist well-formedness, shared by the serving path and
-// by `ward-mcp lint-upstream`, so a consumer never writes a second validator.
+// by `mcp-beaver lint-upstream`, so a consumer never writes a second validator.
 func ValidateAllowlist(tools []string) ([]string, error) {
 	if len(tools) == 0 {
-		return nil, fmt.Errorf("ward-mcp: upstream allowlist is empty")
+		return nil, fmt.Errorf("mcp-beaver: upstream allowlist is empty")
 	}
 	out := make([]string, 0, len(tools))
 	seen := make(map[string]struct{}, len(tools))
 	for i, tool := range tools {
 		name := strings.TrimSpace(tool)
 		if name == "" {
-			return nil, fmt.Errorf("ward-mcp: upstream allowlist entry %d is empty", i+1)
+			return nil, fmt.Errorf("mcp-beaver: upstream allowlist entry %d is empty", i+1)
 		}
 		if _, ok := seen[name]; ok {
-			return nil, fmt.Errorf("ward-mcp: duplicate upstream tool allowlist entry %q", name)
+			return nil, fmt.Errorf("mcp-beaver: duplicate upstream tool allowlist entry %q", name)
 		}
 		seen[name] = struct{}{}
 		out = append(out, name)

@@ -10,7 +10,7 @@ import (
 
 // confirmInputID names the single input request a confirmation raises. The
 // client echoes it back in inputResponses on the retry.
-const confirmInputID = "ward-mcp/confirm"
+const confirmInputID = "mcp-beaver/confirm"
 
 // emptyElicitSchema is a schema with no properties. An empty-schema
 // elicitation is the protocol's message-only approval prompt: clients render
@@ -31,7 +31,7 @@ type confirmConfig map[string]string
 // is the name the client sees and the name the runtime dispatches on.
 //
 // Opt-in per tool rather than automatic on every mutation. Confirmation is a
-// behaviour change to a tool an agent already calls unattended, and ward-mcp
+// behaviour change to a tool an agent already calls unattended, and mcp-beaver
 // runs headless deployments where a blanket prompt would wedge every write.
 // The annotations already advertise destructiveness for clients that want to
 // decide for themselves; this is for the cases where the server insists.
@@ -50,18 +50,18 @@ func parseConfirmations(src []byte) (confirmConfig, error) {
 			return nil, err
 		}
 		if _, dup := out[tool]; dup {
-			return nil, fmt.Errorf("ward-mcp: duplicate `confirm` for tool %q", tool)
+			return nil, fmt.Errorf("mcp-beaver: duplicate `confirm` for tool %q", tool)
 		}
 		message := fmt.Sprintf("Run %q? This tool changes upstream state.", tool)
 		for key, value := range n.Properties() {
 			switch key {
 			case "message":
 				if value.String() == "" {
-					return nil, fmt.Errorf("ward-mcp: `confirm` %q message must be non-empty", tool)
+					return nil, fmt.Errorf("mcp-beaver: `confirm` %q message must be non-empty", tool)
 				}
 				message = value.String()
 			default:
-				return nil, fmt.Errorf("ward-mcp: unknown `confirm` property %q (want message; fail-closed)", key)
+				return nil, fmt.Errorf("mcp-beaver: unknown `confirm` property %q (want message; fail-closed)", key)
 			}
 		}
 		out[tool] = message
@@ -87,7 +87,7 @@ func validateConfirmations(cfg confirmConfig, tools []*mcp.Tool) error {
 	}
 	for name := range cfg {
 		if !served[name] {
-			return fmt.Errorf("ward-mcp: `confirm` names tool %q, which this spec does not mint", name)
+			return fmt.Errorf("mcp-beaver: `confirm` names tool %q, which this spec does not mint", name)
 		}
 	}
 	return nil
@@ -115,7 +115,7 @@ func withConfirmation(message string, next mcp.ToolHandler) mcp.ToolHandler {
 		if !isElicit || elicited.Action != "accept" {
 			// Anything other than an explicit accept is a refusal. A declined
 			// or dismissed prompt must not fall through to the upstream call.
-			return toolError(fmt.Errorf("ward-mcp: confirmation was not accepted, tool not run")), nil
+			return toolError(fmt.Errorf("mcp-beaver: confirmation was not accepted, tool not run")), nil
 		}
 		return next(ctx, req)
 	}

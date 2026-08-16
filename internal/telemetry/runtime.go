@@ -1,4 +1,4 @@
-// Package telemetry owns ward-mcp's opt-in OpenTelemetry provider lifecycle.
+// Package telemetry owns mcp-beaver's opt-in OpenTelemetry provider lifecycle.
 // Instrumentation stays inert unless an exporter selector or OTLP endpoint is
 // explicit, so an unset environment never inherits autoexport's OTLP default.
 package telemetry
@@ -193,7 +193,7 @@ func signalEnabled(selectorEnv, signalEndpointEnv string) bool {
 func configuredResource(ctx context.Context, defaultServiceName string) (*resource.Resource, error) {
 	defaultServiceName = strings.TrimSpace(defaultServiceName)
 	if defaultServiceName == "" {
-		defaultServiceName = "ward-mcp"
+		defaultServiceName = "mcp-beaver"
 	}
 	res, err := resource.New(ctx,
 		resource.WithAttributes(attribute.String("service.name", defaultServiceName)),

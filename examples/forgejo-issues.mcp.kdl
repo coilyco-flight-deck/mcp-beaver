@@ -1,20 +1,20 @@
-// forgejo-issues.mcp.kdl - the worked "hello world" ward-mcp spec.
+// forgejo-issues.mcp.kdl - the worked "hello world" mcp-beaver spec.
 //
-// The body is the FROZEN ward-mcp inline grammar (ward-mcp#6), parsed by
+// The body is the FROZEN mcp-beaver inline grammar (mcp-beaver#6), parsed by
 // umbra's `opcore.ParseInline` - stated directly from KDL, with no vendored
 // OpenAPI or lock file in the build. The `.mcp.kdl` suffix marks this as a
-// ward-mcp target - the interior of a Docker image that serves an HTTP/SSE MCP
+// mcp-beaver target - the interior of a Docker image that serves an HTTP/SSE MCP
 // server - and keeps it out of umbra's CLI-discovery glob. This spec
 // configures ONLY the image interior. Exposing the container (k3s Service,
 // route, Secret wiring) is the deploy repo's job, never this file's.
 //
-// ward-mcp has NO relation to the ward codebase. It drives umbra's opcore
-// engine directly. cli-mcp is read as a CODE REFERENCE only; ward-mcp
+// mcp-beaver has NO relation to the ward codebase. It drives umbra's opcore
+// engine directly. cli-mcp is read as a CODE REFERENCE only; mcp-beaver
 // implements its own SSE/HTTP MCP server and does not depend on cli-mcp.
 //
 // The magic is what is NOT here: no separate tool definitions or schemas. Each
 // `can` grant IS one MCP tool named `verb_resource`; its input schema is
-// derived by opcore from the grant's `path`/`query`/`body`. ward-mcp derives
+// derived by opcore from the grant's `path`/`query`/`body`. mcp-beaver derives
 // the human title, safety annotations, and structured `{result: ...}` output
 // contract from the same operation descriptor.
 wrap ward mcp forgejo {

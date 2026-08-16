@@ -51,10 +51,10 @@ func parseQueryPins(src []byte) (map[string][]queryPin, error) {
 			return nil, err
 		}
 		if _, dup := out[tool]; dup {
-			return nil, fmt.Errorf("ward-mcp: duplicate `pin` for tool %q", tool)
+			return nil, fmt.Errorf("mcp-beaver: duplicate `pin` for tool %q", tool)
 		}
 		if len(n.Properties()) > 0 {
-			return nil, fmt.Errorf("ward-mcp: `pin` %q takes no properties, only `query` children (fail-closed)", tool)
+			return nil, fmt.Errorf("mcp-beaver: `pin` %q takes no properties, only `query` children (fail-closed)", tool)
 		}
 		pins, err := parseQueryPinChildren(n, tool)
 		if err != nil {
@@ -73,30 +73,30 @@ func parseQueryPinChildren(n *kdl.Node, tool string) ([]queryPin, error) {
 	seen := map[string]bool{}
 	for _, child := range n.Children().Nodes {
 		if child.Name() != "query" {
-			return nil, fmt.Errorf("ward-mcp: unknown `pin` child %q (want query; fail-closed)", child.Name())
+			return nil, fmt.Errorf("mcp-beaver: unknown `pin` child %q (want query; fail-closed)", child.Name())
 		}
 		args := child.Arguments()
 		if len(args) != 3 {
-			return nil, fmt.Errorf("ward-mcp: `pin` %q: `query` wants three arguments - name, provider, source - e.g. `query \"steamid\" env \"STEAM_STEAMID64\"`", tool)
+			return nil, fmt.Errorf("mcp-beaver: `pin` %q: `query` wants three arguments - name, provider, source - e.g. `query \"steamid\" env \"STEAM_STEAMID64\"`", tool)
 		}
 		pin := queryPin{Name: args[0].String(), Provider: args[1].String(), Source: args[2].String()}
 		switch {
 		case pin.Name == "":
-			return nil, fmt.Errorf("ward-mcp: `pin` %q: query parameter name must be non-empty", tool)
+			return nil, fmt.Errorf("mcp-beaver: `pin` %q: query parameter name must be non-empty", tool)
 		case pin.Source == "":
-			return nil, fmt.Errorf("ward-mcp: `pin` %q: query %q has an empty source", tool, pin.Name)
+			return nil, fmt.Errorf("mcp-beaver: `pin` %q: query %q has an empty source", tool, pin.Name)
 		}
 		if _, ok := valuesource.Builtins()[pin.Provider]; !ok {
-			return nil, fmt.Errorf("ward-mcp: `pin` %q: query %q names unknown provider %q (want env | file | literal; fail-closed)", tool, pin.Name, pin.Provider)
+			return nil, fmt.Errorf("mcp-beaver: `pin` %q: query %q names unknown provider %q (want env | file | literal; fail-closed)", tool, pin.Name, pin.Provider)
 		}
 		if seen[pin.Name] {
-			return nil, fmt.Errorf("ward-mcp: `pin` %q pins query %q twice", tool, pin.Name)
+			return nil, fmt.Errorf("mcp-beaver: `pin` %q pins query %q twice", tool, pin.Name)
 		}
 		seen[pin.Name] = true
 		pins = append(pins, pin)
 	}
 	if len(pins) == 0 {
-		return nil, fmt.Errorf("ward-mcp: `pin` %q states no `query` children: a pin that fixes nothing is not a pin", tool)
+		return nil, fmt.Errorf("mcp-beaver: `pin` %q states no `query` children: a pin that fixes nothing is not a pin", tool)
 	}
 	return pins, nil
 }
@@ -119,7 +119,7 @@ func validateQueryPins(pins map[string][]queryPin, descs []opcore.Descriptor) er
 	for tool, group := range pins {
 		desc, served := byTool[tool]
 		if !served {
-			return fmt.Errorf("ward-mcp: `pin` names tool %q, which this spec does not mint as a grant: nothing would apply it", tool)
+			return fmt.Errorf("mcp-beaver: `pin` names tool %q, which this spec does not mint as a grant: nothing would apply it", tool)
 		}
 		declared := make(map[string]bool, len(desc.QueryFlags))
 		for _, f := range desc.QueryFlags {
@@ -128,7 +128,7 @@ func validateQueryPins(pins map[string][]queryPin, descs []opcore.Descriptor) er
 		}
 		for _, pin := range group {
 			if declared[pin.Name] {
-				return fmt.Errorf("ward-mcp: `pin` %q pins query %q, which the grant also declares as a caller input: remove one, since a pin does not override a supplied value", tool, pin.Name)
+				return fmt.Errorf("mcp-beaver: `pin` %q pins query %q, which the grant also declares as a caller input: remove one, since a pin does not override a supplied value", tool, pin.Name)
 			}
 		}
 	}
@@ -144,11 +144,11 @@ func resolveQueryPins(ctx context.Context, pins []queryPin) (map[string]string, 
 	for _, pin := range pins {
 		provider, ok := providers[pin.Provider]
 		if !ok {
-			return nil, fmt.Errorf("ward-mcp: unknown value provider %q", pin.Provider)
+			return nil, fmt.Errorf("mcp-beaver: unknown value provider %q", pin.Provider)
 		}
 		value, err := provider(ctx, pin.Source)
 		if err != nil {
-			return nil, fmt.Errorf("ward-mcp: resolve pinned query %q: %w", pin.Name, err)
+			return nil, fmt.Errorf("mcp-beaver: resolve pinned query %q: %w", pin.Name, err)
 		}
 		out[pin.Name] = value
 	}

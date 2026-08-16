@@ -38,10 +38,10 @@ func parseRateLimit(src []byte) (*rate.Limiter, error) {
 			continue
 		}
 		if limiter != nil {
-			return nil, fmt.Errorf("ward-mcp: duplicate `rate-limit` node")
+			return nil, fmt.Errorf("mcp-beaver: duplicate `rate-limit` node")
 		}
 		if len(n.Properties()) > 0 {
-			return nil, fmt.Errorf("ward-mcp: `rate-limit` takes no properties, only a rate argument like \"1/1s\" (fail-closed)")
+			return nil, fmt.Errorf("mcp-beaver: `rate-limit` takes no properties, only a rate argument like \"1/1s\" (fail-closed)")
 		}
 		spec, err := oneStringArg(n, "rate-limit")
 		if err != nil {
@@ -61,15 +61,15 @@ func parseRateLimit(src []byte) (*rate.Limiter, error) {
 func newRateLimiter(spec string) (*rate.Limiter, error) {
 	count, window, found := strings.Cut(strings.TrimSpace(spec), "/")
 	if !found {
-		return nil, fmt.Errorf("ward-mcp: `rate-limit` %q must be <count>/<duration>, e.g. \"1/1s\"", spec)
+		return nil, fmt.Errorf("mcp-beaver: `rate-limit` %q must be <count>/<duration>, e.g. \"1/1s\"", spec)
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(count))
 	if err != nil || n <= 0 {
-		return nil, fmt.Errorf("ward-mcp: `rate-limit` %q needs a positive integer count", spec)
+		return nil, fmt.Errorf("mcp-beaver: `rate-limit` %q needs a positive integer count", spec)
 	}
 	d, err := time.ParseDuration(strings.TrimSpace(window))
 	if err != nil || d <= 0 {
-		return nil, fmt.Errorf("ward-mcp: `rate-limit` %q needs a positive duration, e.g. 1s or 1m", spec)
+		return nil, fmt.Errorf("mcp-beaver: `rate-limit` %q needs a positive duration, e.g. 1s or 1m", spec)
 	}
 	return rate.NewLimiter(rate.Every(d/time.Duration(n)), n), nil
 }
@@ -91,7 +91,7 @@ func withRateLimit(limiter *rate.Limiter, next mcp.ToolHandler) mcp.ToolHandler 
 	}
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := limiter.Wait(ctx); err != nil {
-			return toolError(fmt.Errorf("ward-mcp: rate limit wait: %w", err)), nil
+			return toolError(fmt.Errorf("mcp-beaver: rate limit wait: %w", err)), nil
 		}
 		return next(ctx, req)
 	}

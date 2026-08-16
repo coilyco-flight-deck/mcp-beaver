@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp/internal/mcpserver"
+	"forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/mcpserver"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -24,7 +24,7 @@ func TestLintPrintsProjectedToolNames(t *testing.T) {
 	// Sorted, one per line: the list a consumer diffs against a reviewed
 	// expectation instead of reimplementing the parse to derive it. The info
 	// tool is on by default and counts itself, so lint and tools/list agree.
-	if got, want := out.String(), "get_issue\nlist_issue\nward_mcp_info\n"; got != want {
+	if got, want := out.String(), "get_issue\nlist_issue\nmcp_beaver_info\n"; got != want {
 		t.Fatalf("runLint stdout = %q, want %q", got, want)
 	}
 }
@@ -37,7 +37,7 @@ func TestLintWarnsOnVerbFallthrough(t *testing.T) {
 	if err := runLintTo(&out, &warn, []string{filepath.Join("testdata", "fallthrough-verb.mcp.kdl")}); err != nil {
 		t.Fatalf("runLintTo: %v", err)
 	}
-	if got, want := out.String(), "close_issue\npin_issue\nward_mcp_info\n"; got != want {
+	if got, want := out.String(), "close_issue\nmcp_beaver_info\npin_issue\n"; got != want {
 		t.Errorf("stdout = %q, want %q: a warning must not edit the diffable surface", got, want)
 	}
 	warning := warn.String()
@@ -72,7 +72,7 @@ func TestLintMethodsColumn(t *testing.T) {
 	}
 	// close is the case #55 was filed over: reopen and close share an endpoint
 	// and a method, and only one of them was in the table at the time.
-	want := "close_issue\tPATCH\npin_issue\tPOST\nward_mcp_info\t-\n"
+	want := "close_issue\tPATCH\nmcp_beaver_info\t-\npin_issue\tPOST\n"
 	if got := out.String(); got != want {
 		t.Errorf("stdout = %q, want %q", got, want)
 	}
@@ -428,7 +428,7 @@ func TestLintWarnsOnAResourceWithNoAudience(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("runLintTo: %v", err)
 	}
-	if got, want := out.String(), "get_issue\nward_mcp_info\n"; got != want {
+	if got, want := out.String(), "get_issue\nmcp_beaver_info\n"; got != want {
 		t.Errorf("stdout = %q, want %q: a warning must not edit the diffable surface", got, want)
 	}
 	warning := warn.String()

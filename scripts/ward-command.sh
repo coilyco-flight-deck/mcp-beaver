@@ -24,7 +24,7 @@ case "$action" in
     gofmt -w cmd internal
     ;;
   serve-example)
-    go run ./cmd/ward-mcp serve examples/skillsmp.mcp.kdl --http "${1:-:18080}"
+    go run ./cmd/mcp-beaver serve examples/skillsmp.mcp.kdl --http "${1:-:18080}"
     ;;
   lint-examples)
     # Every committed example is a reference someone copies, so a broken one is
@@ -33,7 +33,7 @@ case "$action" in
     status=0
     for spec in examples/*.mcp.kdl; do
       echo "== ${spec}"
-      go run ./cmd/ward-mcp lint --methods "${spec}" || status=1
+      go run ./cmd/mcp-beaver lint --methods "${spec}" || status=1
     done
     exit "${status}"
     ;;

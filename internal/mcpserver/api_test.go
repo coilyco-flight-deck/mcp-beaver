@@ -39,7 +39,7 @@ func decodeAPIResult(t *testing.T, resp *http.Response) map[string]any {
 }
 
 func TestAPILocalToolRoundTrip(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "api-test-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "api-test-token")
 	var gotPath, gotQuery, gotAuth string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path

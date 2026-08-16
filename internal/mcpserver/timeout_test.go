@@ -32,7 +32,7 @@ func hangingUpstream(t *testing.T) *httptest.Server {
 // that. opcore's own client timeout is 30s, so a bound that did not work would
 // show up here as roughly 30 seconds rather than a fast failure.
 func TestHangingUpstreamIsBounded(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "test-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "test-token")
 	upstream := hangingUpstream(t)
 	defer upstream.Close()
 
@@ -95,7 +95,7 @@ func TestHealthzExemptFromDeadline(t *testing.T) {
 // The bound must be reported, not merely applied. An empty body would leave a
 // wedged upstream indistinguishable from a crashed pod.
 func TestBoundedCallReportsTheTimeout(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "test-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "test-token")
 	upstream := hangingUpstream(t)
 	defer upstream.Close()
 
@@ -128,7 +128,7 @@ func TestBoundedCallReportsTheTimeout(t *testing.T) {
 // The per-call bound has to hold for the direct HTTP tool surface too, which
 // does not go through the MCP transport at all.
 func TestDirectHTTPToolIsBounded(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "test-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "test-token")
 	upstream := hangingUpstream(t)
 	defer upstream.Close()
 

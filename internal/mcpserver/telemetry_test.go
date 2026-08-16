@@ -54,7 +54,7 @@ func useInMemoryTelemetry(t *testing.T) telemetryHarness {
 
 func TestMCPServerTelemetrySuccessAndToolError(t *testing.T) {
 	harness := useInMemoryTelemetry(t)
-	t.Setenv("WARD_MCP_TEST_TOKEN", "telemetry-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "telemetry-token")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
@@ -130,7 +130,7 @@ func TestMCPServerTelemetrySuccessAndToolError(t *testing.T) {
 
 func TestDirectHTTPToolTelemetryAndHealthExclusion(t *testing.T) {
 	harness := useInMemoryTelemetry(t)
-	t.Setenv("WARD_MCP_TEST_TOKEN", "http-telemetry-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "http-telemetry-token")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
@@ -169,7 +169,7 @@ func TestDirectHTTPToolTelemetryAndHealthExclusion(t *testing.T) {
 
 func TestRuntimeConstructorsShareToolInstrumentation(t *testing.T) {
 	harness := useInMemoryTelemetry(t)
-	t.Setenv("WARD_MCP_TEST_TOKEN", "constructor-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "constructor-token")
 	localUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
@@ -224,8 +224,8 @@ func TestRuntimeConstructorsShareToolInstrumentation(t *testing.T) {
 			if logical == nil {
 				t.Fatal("constructor did not install shared logical tool instrumentation")
 			}
-			if got := spanAttribute(*logical, "ward_mcp.mode"); got != test.mode {
-				t.Fatalf("ward_mcp.mode = %q, want %q", got, test.mode)
+			if got := spanAttribute(*logical, "mcp_beaver.mode"); got != test.mode {
+				t.Fatalf("mcp_beaver.mode = %q, want %q", got, test.mode)
 			}
 		})
 	}
@@ -349,7 +349,7 @@ func TestTelemetryDoesNotCaptureSensitivePayloads(t *testing.T) {
 		resultSentinel = "secret-result-sentinel"
 		specSentinel   = "/private/spec/path-sentinel.mcp.kdl"
 	)
-	t.Setenv("WARD_MCP_TEST_TOKEN", tokenSentinel)
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", tokenSentinel)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"result":"` + resultSentinel + `"}`))
 	}))

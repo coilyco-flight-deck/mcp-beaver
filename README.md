@@ -10,20 +10,20 @@ mcp-beaver renders a [umbra](https://forgejo.coilysiren.me/coilyco-flight-deck/u
 
 The spec configures **only the image interior**: which upstream, which outbound auth, which grants become which tools. The image serves MCP over the official Go SDK's streamable HTTP transport at `/mcp` and automatically exposes each tool at `POST /api/{tool-name}` (never stdio - these run as remote k3s pods reached by URL). mcp-beaver has **no relation to the ward codebase**, and uses [cli-mcp](https://github.com/coilysiren/cli-mcp) as a code reference only, not a dependency.
 
-You declare the operations an agent may reach, down to the leaf. Everything you declared works. Nothing else is reachable. An unwritten `delete issue` grant means no `delete_issue` tool or HTTP endpoint is ever served (**deny-by-absence**), and `restrict owner matches coilyco-*` bounds every path. The one entry that is not a grant is `ward_mcp_info`, a read-only tool that reports the server's own shape, reaches no upstream, and can be turned off with `server-info disabled`. Audit one small file, hand a write-capable MCP to an agent, know the blast radius.
+You declare the operations an agent may reach, down to the leaf. Everything you declared works. Nothing else is reachable. An unwritten `delete issue` grant means no `delete_issue` tool or HTTP endpoint is ever served (**deny-by-absence**), and `restrict owner matches coilyco-*` bounds every path. The one entry that is not a grant is `mcp_beaver_info`, a read-only tool that reports the server's own shape, reaches no upstream, and can be turned off with `server-info disabled`. Audit one small file, hand a write-capable MCP to an agent, know the blast radius.
 
 The claim is about the running server, not the image. The image is deliberately generic: it carries no guardfile, and a consumer mounts the spec at deploy time. In upstream-proxy mode the undeclared tools exist behind an endpoint the container holds credentials for, and the runtime re-checks allowlist membership on every call - unreachable rather than absent. In spec mode an undeclared operation has no handler at all.
 
 ## Quickstart
 
-The generic `ward-mcp serve` runtime renders any `.mcp.kdl` into a guarded MCP
+The generic `mcp-beaver serve` runtime renders any `.mcp.kdl` into a guarded MCP
 server. Each grant also projects ChatGPT-friendly metadata: a human title,
 user-goal description, input and output schemas, and safety annotations derived
 from the operation's HTTP behavior. Run it directly:
 
 ```sh
 # initialize, then reuse the session id for tools/list and tools/call
-FORGEJO_TOKEN=... go run ./cmd/ward-mcp serve examples/forgejo-issues.mcp.kdl --http :8080
+FORGEJO_TOKEN=... go run ./cmd/mcp-beaver serve examples/forgejo-issues.mcp.kdl --http :8080
 
 # list the derived tools (SDK-backed streamable HTTP transport at /mcp)
 curl -s -H 'Content-Type: application/json' \
@@ -31,24 +31,24 @@ curl -s -H 'Content-Type: application/json' \
 
 # call the same guarded handler without an MCP session
 curl -s -H 'Content-Type: application/json' \
-  -d '{"owner":"coilyco-flight-deck","repo":"ward-mcp","index":"41"}' \
+  -d '{"owner":"coilyco-flight-deck","repo":"mcp-beaver","index":"41"}' \
   localhost:8080/api/get_issue
 ```
 
 The HTTP projection is always present. It accepts one JSON argument object,
 uses the same tool handler as `tools/call`, and returns the MCP
-`CallToolResult` JSON shape. ward-mcp performs no inbound authentication.
+`CallToolResult` JSON shape. mcp-beaver performs no inbound authentication.
 Consuming deployments own caller identity, authentication, TLS, ingress, and
-network reachability. Guardfile `auth` configures ward-mcp's credential for the
-upstream service, not the caller's credential to ward-mcp.
+network reachability. Guardfile `auth` configures mcp-beaver's credential for the
+upstream service, not the caller's credential to mcp-beaver.
 
 Or as the image (one runtime, many specs - the spec is mounted, not baked):
 
 ```sh
-docker build -t ward-mcp .
+docker build -t mcp-beaver .
 docker run -p 8080:8080 -e SKILLSMP_API_KEY \
   -v $PWD/examples/skillsmp.mcp.kdl:/spec/skillsmp.mcp.kdl \
-  ward-mcp serve /spec/skillsmp.mcp.kdl --http :8080
+  mcp-beaver serve /spec/skillsmp.mcp.kdl --http :8080
 ```
 
 For a passthrough MCP wrapper over a private upstream, use `serve-upstream`
@@ -56,7 +56,7 @@ with an allowlist. `--connect-timeout` lets a co-located upstream warm up
 without putting the wrapper into a crash cycle:
 
 ```sh
-ward-mcp serve-upstream --name grubhub-mcp \
+mcp-beaver serve-upstream --name grubhub-mcp \
   --upstream http://playwright-mcp.namespace.svc.cluster.local/mcp \
   --tool browser_navigate --tool browser_click \
   --connect-timeout 2m --http :8080
@@ -65,7 +65,7 @@ ward-mcp serve-upstream --name grubhub-mcp \
 For an exact-parameter AWS SSM reader, use the KDL-backed SDK runtime:
 
 ```sh
-ward-mcp serve-ssm /spec/aws-ssm.mcp.kdl --http :8080
+mcp-beaver serve-ssm /spec/aws-ssm.mcp.kdl --http :8080
 ```
 
 The SSM policy declares one parameter and exactly two read tools. The general
@@ -74,12 +74,12 @@ convenience getter fixes that same path internally.
 
 ## Validating a guardfile without serving it
 
-`ward-mcp lint` is the offline check. It reads the spec, builds the same server
+`mcp-beaver lint` is the offline check. It reads the spec, builds the same server
 `serve` would, prints the minted tool names to stdout one per line, and exits -
 no listener, no telemetry, no network, so it runs in a sealed clone and in CI:
 
 ```sh
-$ ward-mcp lint examples/skillsmp.mcp.kdl
+$ mcp-beaver lint examples/skillsmp.mcp.kdl
 search_ai-skills
 search_skills
 ```
@@ -111,13 +111,13 @@ reads only `wrap`, so these never touch the frozen grammar. Each is opt-in and
 fails closed: declare none and the server behaves exactly as before.
 
 ```kdl
-server-info                                   // mints `ward_mcp_info`
+server-info                                   // mints `mcp_beaver_info`
 confirm "create_issue" message="Create this issue upstream?"
 
 resource "oncall" uri="ward://runbook/oncall" mime="text/markdown" priority=0.9 {
     audience "assistant"
     description "First response for an upstream 5xx"
-    text "1. Call ward_mcp_info to confirm the pod is serving."
+    text "1. Call mcp_beaver_info to confirm the pod is serving."
     text "2. Check the upstream status page."
 }
 
@@ -169,7 +169,7 @@ validation the serving path runs, so it cannot drift from what `serve-upstream`
 accepts:
 
 ```sh
-$ ward-mcp lint-upstream --read-only heuristic --tool signoz_list_metrics --tool signoz_get_alert
+$ mcp-beaver lint-upstream --read-only heuristic --tool signoz_list_metrics --tool signoz_get_alert
 signoz_get_alert
 signoz_list_metrics
 ```
@@ -184,8 +184,8 @@ live upstream is reachable, `--read-only strict` supersedes it and asks the
 upstream what is actually read-only:
 
 ```sh
-$ ward-mcp lint-upstream --upstream http://127.0.0.1:8000/mcp --read-only strict --tool rotate_key
-ward-mcp: upstream "http://127.0.0.1:8000/mcp" does not annotate these allowlisted tools readOnlyHint: rotate_key
+$ mcp-beaver lint-upstream --upstream http://127.0.0.1:8000/mcp --read-only strict --tool rotate_key
+mcp-beaver: upstream "http://127.0.0.1:8000/mcp" does not annotate these allowlisted tools readOnlyHint: rotate_key
 ```
 
 A tool the upstream leaves unannotated counts as mutable: the MCP default for
@@ -196,9 +196,9 @@ step, not a CI one.
 
 ## Opt-in OpenTelemetry
 
-ward-mcp emits OpenTelemetry traces and metrics when standard `OTEL_*`
+mcp-beaver emits OpenTelemetry traces and metrics when standard `OTEL_*`
 configuration explicitly selects an exporter or supplies an OTLP endpoint. An
-unset telemetry environment is a no-network no-op. In particular, ward-mcp
+unset telemetry environment is a no-network no-op. In particular, mcp-beaver
 does not inherit autoexport's default OTLP exporter and does not dial a local
 collector unless an operator opts in.
 
@@ -226,7 +226,7 @@ bodies, authorization headers, tokens, Guardfile contents, spec paths, or
 upstream URLs. Export failures do not change tool results. Graceful process
 shutdown flushes active providers within a five-second bound.
 
-The runtime is a **thin shell** over umbra's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, exact nested-string body mapping, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool and one HTTP endpoint, and every call fires through the same self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, outbound auth). ward-mcp retains MCP JSON types when routing arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. ward-mcp adds only the grant→tool projection and transport layers.
+The runtime is a **thin shell** over umbra's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, exact nested-string body mapping, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool and one HTTP endpoint, and every call fires through the same self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, outbound auth). mcp-beaver retains MCP JSON types when routing arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. mcp-beaver adds only the grant→tool projection and transport layers.
 
 ## Authoring request bodies
 
@@ -263,7 +263,7 @@ body {
 ```
 
 Raw values are still real JSON objects or arrays in `tools/call` arguments.
-They are not JSON strings. ward-mcp advertises the object or array type plus
+They are not JSON strings. mcp-beaver advertises the object or array type plus
 `x-opcore-raw: true`, then preserves the supplied subtree when it builds the
 upstream request.
 
@@ -276,10 +276,10 @@ only when callers should send that JSON type.
 
 ## Distributes as image + chart
 
-The product ships two artifacts (ward-mcp#6): the generic runtime **image** above, and a generic **Helm chart** (`chart/`) that templates the k3s exposure. **Deploying** an MCP is then a values file plus `helm upgrade` - no per-guardfile image build, no per-service manifest fork:
+The product ships two artifacts (mcp-beaver#6): the generic runtime **image** above, and a generic **Helm chart** (`chart/`) that templates the k3s exposure. **Deploying** an MCP is then a values file plus `helm upgrade` - no per-guardfile image build, no per-service manifest fork:
 
 ```sh
-helm upgrade --install skillsmp ward-mcp \
+helm upgrade --install skillsmp mcp-beaver \
   -f skillsmp.values.yaml \
   --set-file spec=skillsmp.mcp.kdl \
   --set image.tag=<built-runtime-sha>
@@ -287,7 +287,7 @@ helm upgrade --install skillsmp ward-mcp \
 
 Every push to canonical `main` publishes the private single-architecture
 runtime as
-`forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp:<full-source-sha>`.
+`forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver:<full-source-sha>`.
 The trusted publisher verifies the remote manifest, and every fleet release
 consumes that exact reference through a separate read-only credential.
 
@@ -301,14 +301,14 @@ owns public ingress, authentication, TLS, DNS, and rollout.
 
 ## Layout
 
-* [`cmd/ward-mcp`](cmd/ward-mcp) - the `serve` entrypoint: parse a spec, project tools, bind the SDK-backed HTTP listener. `lint` is the same path minus the listener and telemetry, and `lint-upstream` is the allowlist counterpart for `serve-upstream`.
+* [`cmd/mcp-beaver`](cmd/mcp-beaver) - the `serve` entrypoint: parse a spec, project tools, bind the SDK-backed HTTP listener. `lint` is the same path minus the listener and telemetry, and `lint-upstream` is the allowlist counterpart for `serve-upstream`.
 * [`internal/mcpserver`](internal/mcpserver) - the thin shell: grant→MCP-tool and HTTP endpoint projection, the SDK-backed streamable HTTP/session layer, and the non-MCP `/healthz` plus `/admin/*` operator endpoints.
-* [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issues as an MCP. Its body is the frozen ward-mcp inline grammar (`opcore.ParseInline`), and it is the whole contract.
+* [`examples/forgejo-issues.mcp.kdl`](examples/forgejo-issues.mcp.kdl) - the worked "hello world": Forgejo issues as an MCP. Its body is the frozen mcp-beaver inline grammar (`opcore.ParseInline`), and it is the whole contract.
 * [`examples/skillsmp.mcp.kdl`](examples/skillsmp.mcp.kdl) - the first end-to-end target: two read tools over the SDK-backed transport against skillsmp.com.
 * [`examples/*.values.yaml`](examples/) - reference auth-neutral chart values: `skillsmp` uses the default ClusterIP, and `forgejo-issues` demonstrates the optional NodePort.
 * [`examples/upstream.values.yaml`](examples/upstream.values.yaml) - reference
   allowlisted upstream mode with a co-located MCP container.
-* [`chart/`](chart/) - the generic ward-mcp Helm chart. See [`docs/chart.md`](docs/chart.md).
+* [`chart/`](chart/) - the generic mcp-beaver Helm chart. See [`docs/chart.md`](docs/chart.md).
 * [`.ward/ward.yaml`](.ward/ward.yaml) and [`scripts/ward-command.sh`](scripts/ward-command.sh) - the tracked development command surface.
 * [`docs/DESIGN.md`](docs/DESIGN.md) - the spec→image pipeline, the interior-only scope, and the SDK-backed transport + safety model.
 * [`docs/chart.md`](docs/chart.md) - the chart's templates, values reference, and the runtime contract it targets.
@@ -316,4 +316,4 @@ owns public ingress, authentication, TLS, DNS, and rollout.
 
 ## Status
 
-The `ward-mcp serve` runtime is **implemented** (ward-mcp#7): it parses a `.mcp.kdl`, serves the derived tools over MCP at `/mcp` and HTTP at `/api/{tool-name}`, guarded-executes both projections through the same handler, and exposes operator-only `/healthz` plus `/admin/describe` and `/admin/reload` endpoints. The generic Helm chart that runs this image is also in (ward-mcp#8). Tracking [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/issues/164) (concept) and [coilyco-bridge/deploy#40](https://forgejo.coilysiren.me/coilyco-bridge/deploy/issues/40) (first consumer).
+The `mcp-beaver serve` runtime is **implemented** (mcp-beaver#7): it parses a `.mcp.kdl`, serves the derived tools over MCP at `/mcp` and HTTP at `/api/{tool-name}`, guarded-executes both projections through the same handler, and exposes operator-only `/healthz` plus `/admin/describe` and `/admin/reload` endpoints. The generic Helm chart that runs this image is also in (mcp-beaver#8). Tracking [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/issues/164) (concept) and [coilyco-bridge/deploy#40](https://forgejo.coilysiren.me/coilyco-bridge/deploy/issues/40) (first consumer).

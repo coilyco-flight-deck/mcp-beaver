@@ -51,7 +51,7 @@ type proxyBackend struct {
 
 func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []string, httpClient *http.Client, telemetry *instrumentation) (*proxyBackend, error) {
 	if strings.TrimSpace(upstreamURL) == "" {
-		return nil, fmt.Errorf("ward-mcp: upstream endpoint is empty")
+		return nil, fmt.Errorf("mcp-beaver: upstream endpoint is empty")
 	}
 	allowlist, err := ValidateAllowlist(allowTools)
 	if err != nil {
@@ -60,7 +60,7 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 
 	httpClient = boundedUpstreamClient(httpClient)
 
-	client := mcp.NewClient(&mcp.Implementation{Name: "ward-mcp", Version: "0.1.0"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "mcp-beaver", Version: "0.1.0"}, nil)
 	client.AddSendingMiddleware(telemetry.clientMiddleware)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint:             upstreamURL,
@@ -173,23 +173,23 @@ func (p *proxyBackend) ensureFresh(ctx context.Context, name string) error {
 	}
 	want, ok := p.baseline[name]
 	if !ok {
-		return fmt.Errorf("ward-mcp: tool %q is not allowlisted", name)
+		return fmt.Errorf("mcp-beaver: tool %q is not allowlisted", name)
 	}
 	if fp != want {
-		p.driftErr = fmt.Errorf("ward-mcp: upstream schema drift for tool %q", name)
+		p.driftErr = fmt.Errorf("mcp-beaver: upstream schema drift for tool %q", name)
 		return p.driftErr
 	}
 	if !slices.Contains(p.allowlist, name) {
-		return fmt.Errorf("ward-mcp: tool %q is not allowlisted", name)
+		return fmt.Errorf("mcp-beaver: tool %q is not allowlisted", name)
 	}
 	return nil
 }
 
 func (p *proxyBackend) probeTools(ctx context.Context) (*mcp.ListToolsResult, error) {
 	if strings.TrimSpace(p.endpoint) == "" {
-		return nil, fmt.Errorf("ward-mcp: upstream endpoint is empty")
+		return nil, fmt.Errorf("mcp-beaver: upstream endpoint is empty")
 	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "ward-mcp-probe", Version: "0.1.0"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "mcp-beaver-probe", Version: "0.1.0"}, nil)
 	client.AddSendingMiddleware(p.telemetry.clientMiddleware)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint:             p.endpoint,
@@ -209,5 +209,5 @@ func findUpstreamTool(tools []*mcp.Tool, name string) (*mcp.Tool, error) {
 			return tool, nil
 		}
 	}
-	return nil, fmt.Errorf("ward-mcp: upstream tool %q was not found or is no longer exposed", name)
+	return nil, fmt.Errorf("mcp-beaver: upstream tool %q was not found or is no longer exposed", name)
 }

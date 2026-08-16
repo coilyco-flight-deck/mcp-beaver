@@ -15,8 +15,8 @@ commands:
     run: bash scripts/ward-command.sh fmt
     description: Format the Go source tree.
   image-build:
-    run: docker build -t ward-mcp:local .
-    description: Build the generic ward-mcp runtime image locally.
+    run: docker build -t mcp-beaver:local .
+    description: Build the generic mcp-beaver runtime image locally.
   check-publish:
     run: bash -n scripts/publish-image.sh
     description: Validate the trusted Forgejo OCI publisher shell contract.
@@ -31,17 +31,17 @@ commands:
     description: Lint every committed example guardfile, so a shipped reference cannot rot.
   helm-lint-chart:
     run: helm lint chart --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
-    description: Lint the auth-neutral ward-mcp chart.
+    description: Lint the auth-neutral mcp-beaver chart.
   helm-template-clusterip:
-    run: helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
+    run: helm template mcp-beaver chart --namespace mcp-beaver --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
     description: Render the default ClusterIP chart shape.
   helm-template-nodeport:
-    run: helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/forgejo-issues.mcp.kdl -f examples/forgejo-issues.values.yaml
+    run: helm template mcp-beaver chart --namespace mcp-beaver --set-file spec=examples/forgejo-issues.mcp.kdl -f examples/forgejo-issues.values.yaml
     description: Render the optional NodePort chart shape.
   helm-template-upstream:
-    run: helm template ward-mcp chart --namespace ward-mcp -f examples/upstream.values.yaml
+    run: helm template mcp-beaver chart --namespace mcp-beaver -f examples/upstream.values.yaml
     description: Render the allowlisted upstream-proxy chart shape.
   helm-template-sidecar:
-    run: helm template ward-mcp chart --namespace ward-mcp --set-file spec=examples/sidecar.mcp.kdl -f examples/sidecar.values.yaml
+    run: helm template mcp-beaver chart --namespace mcp-beaver --set-file spec=examples/sidecar.mcp.kdl -f examples/sidecar.values.yaml
     description: Render the spec-mode sidecar shape, wrapping a co-located non-MCP process.
 

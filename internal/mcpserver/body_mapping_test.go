@@ -60,7 +60,7 @@ func TestBodyMappingProjectsSameRequestThroughMCPAndHTTP(t *testing.T) {
 	}
 	_ = decodeAPIResult(t, apiResp)
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 	if out := decodeRPCResponse(t, initResp); out.Error != nil {
 		t.Fatalf("initialize error: %+v", out.Error)

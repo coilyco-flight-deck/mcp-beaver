@@ -1,5 +1,5 @@
 // malformed.mcp.kdl - deliberately broken. The `can` grant's block is never
-// closed, so opcore.ParseInline fails and `ward-mcp lint` must exit non-zero
+// closed, so opcore.ParseInline fails and `mcp-beaver lint` must exit non-zero
 // with the parse error rather than reporting a surface.
 wrap ward mcp lint-fixture {
     base-url "example.invalid/api/v1"

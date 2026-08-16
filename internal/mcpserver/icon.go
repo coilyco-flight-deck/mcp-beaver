@@ -13,7 +13,7 @@ import (
 // ChatGPT connector tile - show a brand mark instead of a placeholder
 // (deploy#255).
 //
-// Grammar - ONE construct past the frozen inline grammar (ward-mcp#6), ruled
+// Grammar - ONE construct past the frozen inline grammar (mcp-beaver#6), ruled
 // in on deploy#255. The node rides BESIDE `wrap` at the document top level,
 // which `opcore.ParseInline` never inspects (it reads only the `wrap` node),
 // so the frozen wrap-body grammar and the umbra pin are untouched:
@@ -39,11 +39,11 @@ func parseIcons(src []byte) ([]mcp.Icon, error) {
 			continue
 		}
 		if len(n.Arguments()) != 1 {
-			return nil, fmt.Errorf("ward-mcp: `icon` wants exactly one src argument, got %d", len(n.Arguments()))
+			return nil, fmt.Errorf("mcp-beaver: `icon` wants exactly one src argument, got %d", len(n.Arguments()))
 		}
 		iconSrc := n.Arg(0).String()
 		if iconSrc == "" {
-			return nil, fmt.Errorf("ward-mcp: `icon` src must be non-empty")
+			return nil, fmt.Errorf("mcp-beaver: `icon` src must be non-empty")
 		}
 		icon := mcp.Icon{Source: iconSrc}
 		for key, value := range n.Properties() {
@@ -53,7 +53,7 @@ func parseIcons(src []byte) ([]mcp.Icon, error) {
 			case "sizes":
 				icon.Sizes = []string{value.String()}
 			default:
-				return nil, fmt.Errorf("ward-mcp: unknown `icon` property %q (want mime | sizes; fail-closed)", key)
+				return nil, fmt.Errorf("mcp-beaver: unknown `icon` property %q (want mime | sizes; fail-closed)", key)
 			}
 		}
 		if icon.MIMEType == "" {

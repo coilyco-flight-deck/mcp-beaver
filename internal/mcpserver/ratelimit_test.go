@@ -49,7 +49,7 @@ func TestRateLimitFailsClosed(t *testing.T) {
 // "two concurrent turns exceed it" is exactly the failure that passes in
 // testing and 503s under real channel traffic.
 func TestRateLimitSerialisesUpstreamCalls(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "test-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "test-token")
 
 	var mu sync.Mutex
 	var arrivals []time.Time

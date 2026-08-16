@@ -1,7 +1,7 @@
 # Example runtime values for a write MCP with an optional NodePort. The
 # consuming deployment owns network reachability and authentication. Consume as:
 #
-#   helm upgrade --install forgejo-issues ward-mcp \
+#   helm upgrade --install forgejo-issues mcp-beaver \
 #     -f forgejo-issues.values.yaml \
 #     --set-file spec=forgejo-issues.mcp.kdl \
 #     --set image.tag=<built-runtime-sha>

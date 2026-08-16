@@ -1,5 +1,5 @@
 // sidecar.mcp.kdl - the worked reference for wrapping a co-located NON-MCP
-// process with ordinary spec mode (ward-mcp#59).
+// process with ordinary spec mode (mcp-beaver#59).
 //
 // The sidecar here speaks plain HTTP JSON, not MCP. That is the whole reason
 // this is spec mode rather than `serve-upstream`: `serve-upstream` snapshots an

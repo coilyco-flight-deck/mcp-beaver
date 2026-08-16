@@ -13,7 +13,7 @@ import (
 func structuredBodySpec(baseURL string) string {
 	return `wrap ward mcp test {
     base-url "` + baseURL + `"
-    auth bearer { value env "WARD_MCP_TEST_TOKEN" }
+    auth bearer { value env "MCP_BEAVER_TEST_TOKEN" }
     can create report {
         path "/reports"
         body {
@@ -47,7 +47,7 @@ func TestToolsListProjectsStructuredBodySchemaUnchanged(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 	if out := decodeRPCResponse(t, initResp); out.Error != nil {
 		t.Fatalf("initialize error: %+v", out.Error)
@@ -100,7 +100,7 @@ func TestToolsListProjectsStructuredBodySchemaUnchanged(t *testing.T) {
 }
 
 func TestStructuredBodyRoundTripsThroughArgsAndUpstreamJSON(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "test-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "test-token")
 
 	var gotBody map[string]any
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +147,7 @@ func TestStructuredBodyRoundTripsThroughArgsAndUpstreamJSON(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 	if out := decodeRPCResponse(t, initResp); out.Error != nil {
 		t.Fatalf("initialize error: %+v", out.Error)

@@ -1,4 +1,4 @@
-# ward-mcp design draft
+# mcp-beaver design draft
 
 Tracking: [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/issues/164) (concept), [coilyco-bridge/deploy#40](https://forgejo.coilysiren.me/coilyco-bridge/deploy/issues/40) (first consumer).
 
@@ -10,15 +10,15 @@ Tracking: [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/
 
 ## Scope: the spec configures the image interior, and stops there
 
-The `.mcp.kdl` spec configures **only the interior of the Docker image**: which upstream API, how it authenticates, and which grants become which tools - the behavior of the server process running inside the container. ward-mcp's job ends at a runnable image that serves MCP over `/mcp` and projects the same tools over `/api/{tool-name}`.
+The `.mcp.kdl` spec configures **only the interior of the Docker image**: which upstream API, how it authenticates, and which grants become which tools - the behavior of the server process running inside the container. mcp-beaver's job ends at a runnable image that serves MCP over `/mcp` and projects the same tools over `/api/{tool-name}`.
 
-Everything about **exposing** that image is out of scope for the spec and for ward-mcp:
+Everything about **exposing** that image is out of scope for the spec and for mcp-beaver:
 
 * the k3s Deployment, Service, and port mapping,
 * the ingress or tailnet route and public-vs-tailnet decision,
 * injecting `FORGEJO_TOKEN` as a mounted Secret,
 
-are templated by the generic **chart** ward-mcp ships (see [Distribution](#distribution-image--chart) below), which [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) consumes per-MCP with one values file and rolls out. This keeps the dependency direction clean, the same rule deploy already follows: **the image stays unaware of how it is deployed.** The spec never reaches down into a chart, and the chart never reaches up into the spec - the chart is generic and treats the `.mcp.kdl` as opaque values it mounts, never parses.
+are templated by the generic **chart** mcp-beaver ships (see [Distribution](#distribution-image--chart) below), which [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) consumes per-MCP with one values file and rolls out. This keeps the dependency direction clean, the same rule deploy already follows: **the image stays unaware of how it is deployed.** The spec never reaches down into a chart, and the chart never reaches up into the spec - the chart is generic and treats the `.mcp.kdl` as opaque values it mounts, never parses.
 
 ## Why network HTTP and never stdio
 
@@ -26,20 +26,20 @@ The image serves MCP over the SDK-backed streamable HTTP transport and each tool
 
 ## Not built on ward. Not built on cli-mcp. Built on umbra.
 
-ward-mcp has **no relation to the ward codebase.** It is a driver over [umbra](https://github.com/coilysiren/cli-guard)'s three-layer spec engine. [cli-mcp](https://github.com/coilysiren/cli-mcp) is read as a **code reference only** - ward-mcp uses the official MCP Go SDK for transport/session plumbing and does not depend on cli-mcp.
+mcp-beaver has **no relation to the ward codebase.** It is a driver over [umbra](https://github.com/coilysiren/cli-guard)'s three-layer spec engine. [cli-mcp](https://github.com/coilysiren/cli-mcp) is read as a **code reference only** - mcp-beaver uses the official MCP Go SDK for transport/session plumbing and does not depend on cli-mcp.
 
 umbra already turns a Guardfile into a guarded surface, in three layers ([specverb.md](https://github.com/coilysiren/cli-guard/blob/main/docs/specverb.md)):
 
-* **L0 - upstream spec.** In umbra generally, the vendor's OpenAPI/Swagger truth, embedded and pruned to the granted operations. In ward-mcp's inline mode, the `.mcp.kdl` itself is the authored source and no fetched OpenAPI is a build input.
+* **L0 - upstream spec.** In umbra generally, the vendor's OpenAPI/Swagger truth, embedded and pruned to the granted operations. In mcp-beaver's inline mode, the `.mcp.kdl` itself is the authored source and no fetched OpenAPI is a build input.
 * **L1 - policy IR.** The compiled operation set. verb+resource resolves to an operation by convention; `op` overrides.
 * **L2 - Guardfile.** The human authoring layer, pure KDL data, parsed never evaluated.
 
-The engine carries zero upstream knowledge, so **one engine drives every spec, no code changes.** Its `specverb.Build` mounts each grant as a generic guarded action: path params become positionals, query and body fields become typed flags, all validated before the wire call. umbra's own `kdl-specs` driver renders that into a no-code **CLI**. ward-mcp renders the same engine's inline operation set into **MCP tools and matching HTTP endpoints** instead.
+The engine carries zero upstream knowledge, so **one engine drives every spec, no code changes.** Its `specverb.Build` mounts each grant as a generic guarded action: path params become positionals, query and body fields become typed flags, all validated before the wire call. umbra's own `kdl-specs` driver renders that into a no-code **CLI**. mcp-beaver renders the same engine's inline operation set into **MCP tools and matching HTTP endpoints** instead.
 
-## What ward-mcp adds on top of umbra
+## What mcp-beaver adds on top of umbra
 
 * umbra provides inline operation parsing, guards, request assembly, and authentication.
-* ward-mcp provides grant-to-tool projection, derived MCP metadata, matching HTTP endpoint projection, the SDK-backed streamable HTTP transport, the runtime image, and the spec-opaque auth-neutral chart.
+* mcp-beaver provides grant-to-tool projection, derived MCP metadata, matching HTTP endpoint projection, the SDK-backed streamable HTTP transport, the runtime image, and the spec-opaque auth-neutral chart.
 * deploy composes the runtime contract with ingress, authentication, TLS, DNS, per-MCP values, and rollout.
 
 A tool call arrives over the SDK-backed MCP session or `POST /api/{tool-name}`, runs through the same registered handler and umbra guard (restrict gate, argv metachar gate on URL-bound inputs), resolves to an HTTP request, is signed with the injected upstream secret, and fires upstream. Both projections return the MCP `CallToolResult` JSON shape.
@@ -58,9 +58,9 @@ MCP SDK. Inline opcore tools, allowlisted upstream MCP tools, and exact-paramete
 SSM tools all use the same projection. There is no flag, chart value, or
 per-tool handler to drift.
 
-ward-mcp does not authenticate inbound callers or trust identity-shaped request
+mcp-beaver does not authenticate inbound callers or trust identity-shaped request
 fields. Deploy owns the identity proxy, workload identity, network boundary,
-TLS, and ingress policy. Guardfile `auth` is the credential ward-mcp uses to
+TLS, and ingress policy. Guardfile `auth` is the credential mcp-beaver uses to
 call its upstream. It is not caller authentication.
 
 The MCP protocol surface keeps `initialize`, `ping`, `tools/list`, and
@@ -83,11 +83,11 @@ surface:
   restart required instead of pretending otherwise.
 
 These endpoints sit behind the same deployment-owned authentication assumptions
-as `/mcp` and `/api/`. ward-mcp itself performs no inbound authentication.
+as `/mcp` and `/api/`. mcp-beaver itself performs no inbound authentication.
 
 ## The safety story - the guardfile IS the tool surface
 
-A ward-mcp server **cannot exceed its guardfile**, because the guardfile is the only source of the tools.
+A mcp-beaver server **cannot exceed its guardfile**, because the guardfile is the only source of the tools.
 
 * Every `can` grant is one MCP tool and one matching HTTP endpoint. There is no way to declare a tool the guardfile does not grant.
 * An unwritten `delete issue` grant means no `delete_issue` tool is minted. In the frozen `opcore.ParseInline` grammar this is **deny-by-absence**: the served surface is exactly the `can` grants, so leaving a grant out is the deletion guard.
@@ -98,7 +98,7 @@ Handing a write-capable MCP to an agent (deploy#40's ask) is defensible: the bla
 
 ## Derived tool metadata
 
-The guardfile remains the sole per-tool authoring surface. ward-mcp derives the
+The guardfile remains the sole per-tool authoring surface. mcp-beaver derives the
 MCP metadata that clients use for selection, display, and confirmation:
 
 * **Title** - a human-readable form of `verb_resource`, such as `Create issue`.
@@ -120,26 +120,26 @@ MCP metadata that clients use for selection, display, and confirmation:
 The exact-parameter SSM reader advertises the same read-only safety metadata and
 a specific parameter result schema. An allowlisted upstream proxy preserves the
 upstream tool contract, including its title, schemas, annotations, and result,
-instead of reclassifying behavior ward-mcp does not own.
+instead of reclassifying behavior mcp-beaver does not own.
 
 ## The pipeline (Guardfile -> image; deploy takes it from there)
 
 ```
 inline `.mcp.kdl` + shared runtime ─► ward mcp build ─► OCI image (serves MCP/HTTP) ─► deploy ─► k3s ─► SSE URL
-                                        (CI on push)                         (out of ward-mcp scope)
+                                        (CI on push)                         (out of mcp-beaver scope)
 ```
 
 1. **Author** the `*.mcp.kdl` inline. The method, path, and typed params are the reviewable surface.
-2. **Build** bakes the guardfile plus the single static `ward-mcp` runtime into an image. There is no vendored OpenAPI JSON, no `.lock.json`, no prune output, and no `op` pin in the build input.
-3. The image ENTRYPOINT is `ward-mcp serve /spec/<name>.mcp.kdl --http :8080`: it parses the guardfile, registers one MCP tool and one HTTP endpoint per grant, and binds an HTTP listener on a default port.
+2. **Build** bakes the guardfile plus the single static `mcp-beaver` runtime into an image. There is no vendored OpenAPI JSON, no `.lock.json`, no prune output, and no `op` pin in the build input.
+3. The image ENTRYPOINT is `mcp-beaver serve /spec/<name>.mcp.kdl --http :8080`: it parses the guardfile, registers one MCP tool and one HTTP endpoint per grant, and binds an HTTP listener on a default port.
 
-**Consuming the chart** - picking the host, the SSM token, and public-vs-tailnet for a given MCP, and rolling it out - is deploy's work (deploy#61, deploy#46), described there. ward-mcp ships the generic chart the values feed; deploy owns the values.
+**Consuming the chart** - picking the host, the SSM token, and public-vs-tailnet for a given MCP, and rolling it out - is deploy's work (deploy#61, deploy#46), described there. mcp-beaver ships the generic chart the values feed; deploy owns the values.
 
 ## Distribution: image + chart
 
-ward-mcp distributes as **two generic artifacts** (ward-mcp#6), not a per-server image alone:
+mcp-beaver distributes as **two generic artifacts** (mcp-beaver#6), not a per-server image alone:
 
-1. the **runtime image** above - one static `ward-mcp` binary, shared across every guardfile, and
+1. the **runtime image** above - one static `mcp-beaver` binary, shared across every guardfile, and
 2. an **auth-neutral Helm chart** (`chart/`) that templates the runtime layer:
    the Deployment, Service, application Secret wiring, and either a mounted
    spec or an exact upstream MCP allowlist.
@@ -150,7 +150,7 @@ mounts the `.mcp.kdl` and never parses it. In upstream mode it passes the exact
 tool allowlist to `serve-upstream` and may co-locate a loopback-only private
 MCP. The full chart reference is in [chart.md](chart.md).
 
-This does not move deployment policy into ward-mcp. The consuming deployment chooses the host, application Secret source, network exposure, authentication, TLS, and DNS. CoilyCo's fleet-specific public gate lives in deploy's `charts/ingress-public-authed` chart. ward-mcp ships the runtime mechanism, and deploy sets exposure policy.
+This does not move deployment policy into mcp-beaver. The consuming deployment chooses the host, application Secret source, network exposure, authentication, TLS, and DNS. CoilyCo's fleet-specific public gate lives in deploy's `charts/ingress-public-authed` chart. mcp-beaver ships the runtime mechanism, and deploy sets exposure policy.
 
 ### "Automatic" = a CI consequence of a landed guardfile
 
@@ -158,9 +158,9 @@ A push touching a `.mcp.kdl` triggers the image build in CI, the way kai-server 
 
 ## The spec dialect
 
-The body is the frozen ward-mcp inline grammar parsed by `opcore.ParseInline` - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` grants (each with its `path`/`query`/`body`/`set`). Input schemas are derived from those inline op definitions, not authored separately. Flat `body "title" "body"` syntax remains shorthand for optional string fields. A `body { ... }` block adds typed scalars, scalar arrays, nested objects, required fields, raw object or array escape hatches, or exact nested-string input-to-output mappings. Mapped bodies emit only declared destination keys. Raw fields advertise their outer JSON type and `x-opcore-raw: true` while leaving the subtree unconstrained. The `.mcp.kdl` suffix marks the ward-mcp target and keeps the file out of umbra's CLI-discovery glob.
+The body is the frozen mcp-beaver inline grammar parsed by `opcore.ParseInline` - see [`examples/forgejo-issues.mcp.kdl`](../examples/forgejo-issues.mcp.kdl). The whole surface is the `can` grants (each with its `path`/`query`/`body`/`set`). Input schemas are derived from those inline op definitions, not authored separately. Flat `body "title" "body"` syntax remains shorthand for optional string fields. A `body { ... }` block adds typed scalars, scalar arrays, nested objects, required fields, raw object or array escape hatches, or exact nested-string input-to-output mappings. Mapped bodies emit only declared destination keys. Raw fields advertise their outer JSON type and `x-opcore-raw: true` while leaving the subtree unconstrained. The `.mcp.kdl` suffix marks the mcp-beaver target and keeps the file out of umbra's CLI-discovery glob.
 
-Several constructs ride **beside** the frozen grammar rather than in it, stated as siblings of `wrap`. `opcore.ParseInline` reads only the `wrap` node, so a sibling never touches the frozen wrap-body grammar or the umbra pin; ward-mcp parses each itself, over the shared document parse in `internal/mcpserver/inlinedoc.go`. Every sibling **fails closed**: an unknown property or child is an error. All but one are also opt-in, so an absent node means an absent capability - the same deny-by-absence rule the `can` grants follow. `server-info` is the single documented exception, and it is the only sibling that can serve something the guardfile did not ask for.
+Several constructs ride **beside** the frozen grammar rather than in it, stated as siblings of `wrap`. `opcore.ParseInline` reads only the `wrap` node, so a sibling never touches the frozen wrap-body grammar or the umbra pin; mcp-beaver parses each itself, over the shared document parse in `internal/mcpserver/inlinedoc.go`. Every sibling **fails closed**: an unknown property or child is an error. All but one are also opt-in, so an absent node means an absent capability - the same deny-by-absence rule the `can` grants follow. `server-info` is the single documented exception, and it is the only sibling that can serve something the guardfile did not ask for.
 
 * `icon "<src>"` (optional `mime=` / `sizes=`, repeatable, deploy#255) - served as `serverInfo.icons` on initialize, the mark connector tiles render. Prefer a `data:` URI: the gated deploys sit behind oauth2-proxy, where a hosted icon URL would 401 for the connecting client.
 * `resource "<name>" uri=...` with `text` children - static content served on `resources/read`. Content is inline only: a resource that proxied an upstream read would be a second, unguarded egress path beside the grants. Claude Code surfaces these as `@` mentions. Optional `audience` and `priority` map onto `mcp.Annotations`, which is how an agent harness decides to include a resource in a model's context on its own. Serving is unaffected either way, so this is metadata for the consumer rather than a second guard surface.
@@ -180,12 +180,12 @@ Several constructs ride **beside** the frozen grammar rather than in it, stated 
 
 ### Still open
 
-* **Tool naming** - `create_issue` (verb_resource) vs `forgejo_create_issue` (wrap-group-prefixed) when an agent mounts several ward-mcp servers at once. A cross-server concern, so plausibly the client's problem, not the spec's. The shipped runtime projects the bare `verb_resource` (`opcore` Leaf `_` Group). A secondary wrinkle surfaced building the skillsmp example: a resource carrying its own separator (`ai-search`) makes the underscore-joined name lossy (`search_ai-skills` vs the vendor's `ai_search_skills`). Reconciling projection with an arbitrary vendor tool name is a naming follow-up, not a guard concern - the guarded surface is correct either way.
-* **`action` composition** - one tool chaining several ops (e.g. `view issue` = issue + comments). opcore v0.80.0 exposes single-operation `Execute`/`Preview` but no composed chain, so ward-mcp defers this per DESIGN's `collect` follow-up and keeps every floor grant individually reachable. Additive once opcore exposes the chain; no new runtime spine.
+* **Tool naming** - `create_issue` (verb_resource) vs `forgejo_create_issue` (wrap-group-prefixed) when an agent mounts several mcp-beaver servers at once. A cross-server concern, so plausibly the client's problem, not the spec's. The shipped runtime projects the bare `verb_resource` (`opcore` Leaf `_` Group). A secondary wrinkle surfaced building the skillsmp example: a resource carrying its own separator (`ai-search`) makes the underscore-joined name lossy (`search_ai-skills` vs the vendor's `ai_search_skills`). Reconciling projection with an arbitrary vendor tool name is a naming follow-up, not a guard concern - the guarded surface is correct either way.
+* **`action` composition** - one tool chaining several ops (e.g. `view issue` = issue + comments). opcore v0.80.0 exposes single-operation `Execute`/`Preview` but no composed chain, so mcp-beaver defers this per DESIGN's `collect` follow-up and keeps every floor grant individually reachable. Additive once opcore exposes the chain; no new runtime spine.
 
-### Implemented (ward-mcp#7)
+### Implemented (mcp-beaver#7)
 
-The `ward-mcp serve <spec> --http :addr` runtime ships as a thin shell over umbra's `http/opcore` (pinned at `v0.127.0` in [`go.mod`](../go.mod)):
+The `mcp-beaver serve <spec> --http :addr` runtime ships as a thin shell over umbra's `http/opcore` (pinned at `v0.127.0` in [`go.mod`](../go.mod)):
 
 * `internal/mcpserver.New` runs `opcore.ParseInline`, wires the value providers (env/file/literal), and registers each `Descriptor` as one MCP tool on the official Go SDK server plus one matching HTTP route. The name is `verb_resource`, `inputSchema` is the unchanged output of `Descriptor.InputSchema().JSONSchema()`, and client-facing metadata is derived as described above.
 * A `tools/call` maps the MCP arguments onto `opcore.Args` by the schema's neutral Location hint (path/query→URL, body→JSON) without flattening JSON values, then fires the self-guarding `opcore.Operation.Execute`. A guard or upstream failure returns as an MCP tool result with `isError` set, not a transport fault.

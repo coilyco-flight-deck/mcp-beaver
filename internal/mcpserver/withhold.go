@@ -79,7 +79,7 @@ func parseWithheld(src []byte) ([]withheldStub, error) {
 			return nil, err
 		}
 		if seen[tool] {
-			return nil, fmt.Errorf("ward-mcp: duplicate `withhold` for tool %q", tool)
+			return nil, fmt.Errorf("mcp-beaver: duplicate `withhold` for tool %q", tool)
 		}
 		seen[tool] = true
 		stub, err := withheldChildren(n, tool)
@@ -94,7 +94,7 @@ func parseWithheld(src []byte) ([]withheldStub, error) {
 func withheldChildren(n *kdl.Node, tool string) (withheldStub, error) {
 	stub := withheldStub{tool: tool}
 	if len(n.Properties()) > 0 {
-		return stub, fmt.Errorf("ward-mcp: `withhold` %q takes no properties, only `reason` and `alternative` children (fail-closed)", tool)
+		return stub, fmt.Errorf("mcp-beaver: `withhold` %q takes no properties, only `reason` and `alternative` children (fail-closed)", tool)
 	}
 	for _, child := range n.Children().Nodes {
 		value, err := oneStringArg(child, child.Name())
@@ -104,22 +104,22 @@ func withheldChildren(n *kdl.Node, tool string) (withheldStub, error) {
 		switch child.Name() {
 		case "reason":
 			if stub.reason != "" {
-				return stub, fmt.Errorf("ward-mcp: `withhold` %q has a duplicate `reason`", tool)
+				return stub, fmt.Errorf("mcp-beaver: `withhold` %q has a duplicate `reason`", tool)
 			}
 			stub.reason = value
 		case "alternative":
 			if stub.alternative != "" {
-				return stub, fmt.Errorf("ward-mcp: `withhold` %q has a duplicate `alternative`", tool)
+				return stub, fmt.Errorf("mcp-beaver: `withhold` %q has a duplicate `alternative`", tool)
 			}
 			stub.alternative = value
 		default:
-			return stub, fmt.Errorf("ward-mcp: unknown `withhold` child %q (want reason | alternative; fail-closed)", child.Name())
+			return stub, fmt.Errorf("mcp-beaver: unknown `withhold` child %q (want reason | alternative; fail-closed)", child.Name())
 		}
 	}
 	// Required, because a stub that does not say why is the silence it was
 	// meant to replace, only louder.
 	if stub.reason == "" {
-		return stub, fmt.Errorf("ward-mcp: `withhold` %q needs a `reason`: a stub with no stated reason restates the absence it replaces", tool)
+		return stub, fmt.Errorf("mcp-beaver: `withhold` %q needs a `reason`: a stub with no stated reason restates the absence it replaces", tool)
 	}
 	return stub, nil
 }
@@ -142,12 +142,12 @@ func withheldTools(stubs []withheldStub, granted []*mcp.Tool) ([]*mcp.Tool, erro
 		// the surface would advertise a working capability as refused, and
 		// the grant would look revoked without anything revoking it.
 		if served[stub.tool] {
-			return nil, fmt.Errorf("ward-mcp: `withhold` names tool %q, which this spec mints: remove the grant or the stub, not both", stub.tool)
+			return nil, fmt.Errorf("mcp-beaver: `withhold` names tool %q, which this spec mints: remove the grant or the stub, not both", stub.tool)
 		}
 		// A named alternative that does not exist sends an agent hunting for
 		// a tool it will never find, which is the second failure in #54.
 		if stub.alternative != "" && !served[stub.alternative] {
-			return nil, fmt.Errorf("ward-mcp: `withhold` %q names alternative %q, which this spec does not mint", stub.tool, stub.alternative)
+			return nil, fmt.Errorf("mcp-beaver: `withhold` %q names alternative %q, which this spec does not mint", stub.tool, stub.alternative)
 		}
 		out = append(out, withheldTool(stub))
 	}

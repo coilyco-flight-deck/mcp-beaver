@@ -45,7 +45,7 @@ confirm "create_thing" message="This creates a thing upstream. Continue?"
 resource "oncall-runbook" uri="ward://runbook/oncall" mime="text/markdown" priority=0.8 {
     audience "assistant"
     description "First response when this upstream starts 5xx-ing"
-    text "1. Call ward_mcp_info and confirm the pod is serving its tools."
+    text "1. Call mcp_beaver_info and confirm the pod is serving its tools."
     text "2. Check the upstream's own status page before touching the pod."
     text "3. Escalate rather than retrying a write that already 5xx'd."
 }

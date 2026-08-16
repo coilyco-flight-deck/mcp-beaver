@@ -8,11 +8,23 @@ ward:
 
 `mcp-beaver` turns a umbra Guardfile into a guarded MCP server with an
 automatic matching HTTP tool API, and ships the generic runtime as an OCI
-image plus Helm chart. The Go module, the binary, and several in-tree names
-are still `ward-mcp`. That mismatch is deliberate cosmetic debt, not a broken
-state awaiting a fix - do not sweep it as incidental cleanup. The published
-image path is the one thing that DID move: it is now
-`coilyco-flight-deck/mcp-beaver`.
+image plus Helm chart. The module, the binary, the chart, and the served
+`mcp_beaver_info` tool all carry that name.
+
+## The old name, and where it still belongs
+
+This was `ward-mcp`, and the rename is done here. Two places keep the old
+spelling on purpose and are not stragglers to sweep:
+
+- **`wrap ward mcp <name>`** opens every guardfile. It is umbra's inline
+  grammar rather than this project's name, and every deployed spec starts with
+  it. It moves when umbra moves, not before.
+- **A live resource name.** A Kubernetes selector label is immutable, so a
+  release installed before the rename keeps its old names through
+  `nameOverride: ward-mcp`. See [the chart](docs/chart.md).
+
+Package installers name the old binary so they can mark it outdated and
+uninstall it. That is the tap's and the bucket's business, not this repo's.
 
 ## Boundaries
 

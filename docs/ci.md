@@ -1,4 +1,4 @@
-# ward-mcp CI
+# mcp-beaver CI
 
 The [`.forgejo/workflows/ci.yml`](../.forgejo/workflows/ci.yml) pipeline is the
 whole automation surface: a **gate** that build/vet/tests the generic runtime on
@@ -30,7 +30,7 @@ the `push` or `workflow_dispatch` event plus `refs/heads/main` - never on a pull
 request, never on a feature branch. The manual path recovers a commit whose
 original push did not queue Actions without inventing a local image or empty
 source commit. A green source commit on `main` is what produces
-`forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp:<full-source-sha>`.
+`forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver:<full-source-sha>`.
 
 * **trusted host runner** - the main-only lane owns Docker and receives the
   package-write credential.
@@ -43,7 +43,7 @@ source commit. A green source commit on `main` is what produces
   the deploy bundle consumes the exact full reference through a separate
   read-only credential.
 
-## Why CI never ran (ward-mcp#10)
+## Why CI never ran (mcp-beaver#10)
 
 CI showed `total_count: 0` from `GET /repos/{owner}/{repo}/actions/tasks` across
 9+ merges to `main` - zero runs ever - though `.forgejo/workflows/ci.yml` was
@@ -53,8 +53,8 @@ facts had to line up for a run to queue, and this repo missed one:
 * **the Actions unit must be active when the push event lands.** A valid workflow
   on the default branch does not, by itself, queue a run - the unit has to be on
   at the moment of the push. Check `has_actions` via
-  `ward ops forgejo repo get coilyco-flight-deck ward-mcp`, toggle it with
-  `ward ops forgejo repo edit coilyco-flight-deck ward-mcp --has_actions true`.
+  `ward ops forgejo repo get coilyco-flight-deck mcp-beaver`, toggle it with
+  `ward ops forgejo repo edit coilyco-flight-deck mcp-beaver --has_actions true`.
 * **the gate has to name a label the Forgejo runner advertises.** The gate was
   pinned to `runs-on: ubuntu-latest`, which is a GitHub-mirror label - the
   Forgejo runners here only advertise `docker`. A gate no runner can match is the

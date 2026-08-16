@@ -1,23 +1,23 @@
-# The ward-mcp Helm chart
+# The mcp-beaver Helm chart
 
-The auth-neutral distribution vehicle ward-mcp ships (ward-mcp#6). **One
+The auth-neutral distribution vehicle mcp-beaver ships (mcp-beaver#6). **One
 chart, one runtime image, many releases.** The chart can mount a `.mcp.kdl`
 guardfile or wrap an existing streamable-HTTP MCP with an exact tool allowlist.
 Adding an MCP runtime becomes a values file plus `helm upgrade`.
 
 ```sh
-helm upgrade --install skillsmp ward-mcp \
+helm upgrade --install skillsmp mcp-beaver \
   -f skillsmp.values.yaml \
   --set-file spec=skillsmp.mcp.kdl \
   --set image.tag=<built-runtime-sha>
 ```
 
-The chart lives here because the product **distributes as image + chart** (ward-mcp#6). It stays generic and spec-opaque: it takes the `.mcp.kdl` as an opaque blob and never parses it, so the [interior-only scope](DESIGN.md) of the spec is preserved. The spec never reaches down into a chart, and the chart never reaches up into the spec. [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) composes this runtime contract with its fleet-specific exposure charts and owns rollout.
+The chart lives here because the product **distributes as image + chart** (mcp-beaver#6). It stays generic and spec-opaque: it takes the `.mcp.kdl` as an opaque blob and never parses it, so the [interior-only scope](DESIGN.md) of the spec is preserved. The spec never reaches down into a chart, and the chart never reaches up into the spec. [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy) composes this runtime contract with its fleet-specific exposure charts and owns rollout.
 
 For an upstream MCP:
 
 ```sh
-helm upgrade --install reader ward-mcp \
+helm upgrade --install reader mcp-beaver \
   -f upstream.values.yaml \
   --set image.tag=<built-runtime-sha>
 ```
@@ -38,8 +38,8 @@ The chart intentionally renders no Ingress, authentication proxy, identity-provi
 
 The chart is buildable against the pinned runtime contract below, in parallel with the runtime image that implements it. Finalize the mount path / port / probe once the runtime lands.
 
-- spec mode runs `ward-mcp serve /spec/<name>.mcp.kdl --http :8080`
-- upstream mode runs `ward-mcp serve-upstream --upstream <url> --tool <name>... --connect-timeout 2m --http :8080`
+- spec mode runs `mcp-beaver serve /spec/<name>.mcp.kdl --http :8080`
+- upstream mode runs `mcp-beaver serve-upstream --upstream <url> --tool <name>... --connect-timeout 2m --http :8080`
 - MCP served over SSE / streamable-HTTP at `/mcp`
 - every projected tool automatically served at `POST /api/{tool-name}` on the
   same listener
@@ -52,7 +52,7 @@ The chart is buildable against the pinned runtime contract below, in parallel wi
 
 - **`runtime.mode`** - `spec` by default, or `upstream`.
 - **`runtime.injectSecrets`** - inject generated application secrets into the
-  ward-mcp container. Disable this when only a co-located upstream needs them.
+  mcp-beaver container. Disable this when only a co-located upstream needs them.
 - **`spec`** - the `.mcp.kdl` guardfile body in spec mode, supplied with `--set-file spec=<name>.mcp.kdl`. Written to a ConfigMap, mounted at `/spec/<specName>.mcp.kdl`. Empty by default so a spec-mode render fails loud.
 - **`specName`** - the `<name>` in the mount path. Defaults to the release name.
 
@@ -150,14 +150,14 @@ Reference: [`examples/sidecar.mcp.kdl`](../examples/sidecar.mcp.kdl) with
 
 Spec mode never connects at startup - it resolves `base-url` per request - so
 unlike upstream mode there is **no crash-loop risk** from a slow sidecar. The
-cost is the opposite failure: ward-mcp binds immediately and answers
+cost is the opposite failure: mcp-beaver binds immediately and answers
 `tools/list` correctly while the sidecar is still loading, so the pod reports
 Ready with its data plane down and takes traffic that errors.
 
-The chart's default `readinessProbe` checks ward-mcp's own port, which is right
+The chart's default `readinessProbe` checks mcp-beaver's own port, which is right
 for upstream mode and wrong for this one. The reference values gate readiness
 on the sidecar's port instead, which a probe may target directly because the
-containers share a namespace. Liveness stays on ward-mcp: a wedged sidecar
+containers share a namespace. Liveness stays on mcp-beaver: a wedged sidecar
 should fail readiness and stop taking traffic, not restart the pod out from
 under a healthy runtime.
 
@@ -165,6 +165,20 @@ Accepting the default and letting early requests fail is defensible for a
 sidecar that starts fast. It is not the default here, because "fails briefly
 after every rollout" is the kind of error that gets attributed to the wrong
 component.
+
+## Upgrading a release installed as `ward-mcp`
+
+This chart was named `ward-mcp`. The name reaches `app.kubernetes.io/name`,
+which is a selector label, and a Deployment's `spec.selector` is immutable, so
+an upgrade that changes it is rejected by the API server rather than applied.
+
+A release from before the rename keeps its names by setting
+`nameOverride: ward-mcp`, which is what every deploy-owned values file already
+does. Nothing about that is transitional debt to clean up later: the label is
+the identity of a running object, and the only way to change it is to delete
+the release and install it again.
+
+A new install leaves `nameOverride` empty and gets the current name.
 
 ## Exposure belongs to the consumer
 

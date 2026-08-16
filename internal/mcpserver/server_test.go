@@ -23,7 +23,7 @@ import (
 func roundTripSpec(baseURL string) string {
 	return `wrap ward mcp test {
     base-url "` + baseURL + `"
-    auth bearer { value env "WARD_MCP_TEST_TOKEN" }
+    auth bearer { value env "MCP_BEAVER_TEST_TOKEN" }
     restrict owner matches "coilyco-*"
     can get thing {
         path "/owners/{owner}/things/{id}"
@@ -165,7 +165,7 @@ func TestInitializeHandshake(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()
 
-	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -221,7 +221,7 @@ func TestToolsListFromSpec(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 	out := decodeRPCResponse(t, initResp)
 	if out.Error != nil {
@@ -356,7 +356,7 @@ func TestToolMetadataClassifiesHTTPBehavior(t *testing.T) {
 // arguments split onto path/query/body, the token is signed in, and the decoded
 // response renders back as MCP tool content with isError false.
 func TestToolCallRoundTrip(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "s3cr3t")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "s3cr3t")
 
 	var gotMethod, gotPath, gotQuery, gotAuth string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -374,7 +374,7 @@ func TestToolCallRoundTrip(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 
 	listResp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
@@ -427,7 +427,7 @@ func TestToolCallRoundTrip(t *testing.T) {
 // TestToolCallBodyRoundTrip proves a write tool sends its body fields as JSON
 // and path params still route, distinct from the GET path.
 func TestToolCallBodyRoundTrip(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "s3cr3t")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "s3cr3t")
 
 	var gotBody map[string]any
 	var gotMethod string
@@ -445,7 +445,7 @@ func TestToolCallBodyRoundTrip(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 
 	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"create_thing","arguments":{"owner":"coilyco-x","title":"hello"}}}`)
@@ -469,7 +469,7 @@ func TestToolCallBodyRoundTrip(t *testing.T) {
 // a path value outside the `restrict owner matches coilyco-*` allowlist comes
 // back as a tool error and never reaches the upstream.
 func TestToolCallRestrictDenied(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "s3cr3t")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "s3cr3t")
 
 	hit := false
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -485,7 +485,7 @@ func TestToolCallRestrictDenied(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 
 	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_thing","arguments":{"owner":"someone-else","id":"1"}}}`)
@@ -512,7 +512,7 @@ func TestUnknownToolDenied(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 
 	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"delete_thing","arguments":{}}}`)
@@ -550,7 +550,7 @@ func TestHealth(t *testing.T) {
 // TestAdminDescribe proves the runtime exposes non-MCP operator inspection
 // without leaking the upstream host or secret material.
 func TestAdminDescribe(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "s3cr3t")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "s3cr3t")
 
 	ts := httptest.NewServer(newTestHandler(t))
 	defer ts.Close()
@@ -672,7 +672,7 @@ func TestUpstreamProxyRoundTrip(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 	out := decodeRPCResponse(t, initResp)
 	if out.Error != nil {
@@ -736,7 +736,7 @@ func TestUpstreamProxySchemaDriftFailsClosed(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ward-mcp-test","version":"0.1.0"}}}`)
+	initResp := postToServer(t, ts.Client(), ts.URL+"/mcp", "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-beaver-test","version":"0.1.0"}}}`)
 	sessionID := initResp.Header.Get("Mcp-Session-Id")
 	if out := decodeRPCResponse(t, initResp); out.Error != nil {
 		t.Fatalf("initialize error: %+v", out.Error)
@@ -842,7 +842,7 @@ func toJSON(v any, out any) error {
 }
 
 // The regression this guards: a session-backed handler rejects a 2026-07-28
-// client outright with 400, so ward-mcp was unreachable from any client that
+// client outright with 400, so mcp-beaver was unreachable from any client that
 // negotiated the current revision.
 func TestStatelessAcceptsCurrentProtocolRevision(t *testing.T) {
 	ts := newTestServer(t)
@@ -885,7 +885,7 @@ func TestStatelessAcceptsCurrentProtocolRevision(t *testing.T) {
 }
 
 // 2026-07-28 requires ttlMs on cacheable list results. The SDK leaves it 0,
-// which tells clients the list is immediately stale, so ward-mcp stamps it.
+// which tells clients the list is immediately stale, so mcp-beaver stamps it.
 func TestToolsListCarriesCacheHints(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()
@@ -931,7 +931,7 @@ func TestProxyToolsListUsesShorterCacheHint(t *testing.T) {
 	}
 }
 
-// 2026-07-28 deprecates Logging, Roots, and Sampling. ward-mcp emits
+// 2026-07-28 deprecates Logging, Roots, and Sampling. mcp-beaver emits
 // OpenTelemetry instead, so it should not claim the deprecated capability.
 func TestCapabilitiesOmitDeprecatedLogging(t *testing.T) {
 	ts := newTestServer(t)

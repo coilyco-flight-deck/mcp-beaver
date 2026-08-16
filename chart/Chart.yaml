@@ -1,15 +1,15 @@
 apiVersion: v2
-name: ward-mcp
-description: The auth-neutral ward-mcp distribution chart - one runtime image, a mounted guardfile or exact upstream MCP allowlist, application secret wiring, and a ClusterIP or optional NodePort Service.
+name: mcp-beaver
+description: The auth-neutral mcp-beaver distribution chart - one runtime image, a mounted guardfile or exact upstream MCP allowlist, application secret wiring, and a ClusterIP or optional NodePort Service.
 type: application
 version: 0.3.0
-# The generic ward-mcp runtime image tag this chart defaults to. A release
+# The generic mcp-beaver runtime image tag this chart defaults to. A release
 # overrides image.tag with the built runtime sha; the guardfile it serves rides
 # in as chart values, not as a per-server image.
 appVersion: "0.1.0"
-home: https://forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
+home: https://forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver
 sources:
-  - https://forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
+  - https://forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver
 keywords:
   - mcp
   - umbra

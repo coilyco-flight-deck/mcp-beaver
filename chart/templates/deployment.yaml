@@ -1,19 +1,19 @@
 {{- $mode := default "spec" .Values.runtime.mode -}}
 {{- if not (has $mode (list "spec" "upstream")) -}}
-{{- fail (printf "ward-mcp: unsupported runtime.mode %q (want spec or upstream)" $mode) -}}
+{{- fail (printf "mcp-beaver: unsupported runtime.mode %q (want spec or upstream)" $mode) -}}
 {{- end -}}
 {{- if and (eq $mode "upstream") (not .Values.upstream.url) -}}
-{{- fail "ward-mcp: upstream mode needs .Values.upstream.url" -}}
+{{- fail "mcp-beaver: upstream mode needs .Values.upstream.url" -}}
 {{- end -}}
 {{- if and (eq $mode "upstream") (eq (len .Values.upstream.tools) 0) -}}
-{{- fail "ward-mcp: upstream mode needs at least one .Values.upstream.tools entry" -}}
+{{- fail "mcp-beaver: upstream mode needs at least one .Values.upstream.tools entry" -}}
 {{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "ward-mcp.fullname" . }}
+  name: {{ include "mcp-beaver.fullname" . }}
   labels:
-    {{- include "ward-mcp.labels" . | nindent 4 }}
+    {{- include "mcp-beaver.labels" . | nindent 4 }}
   {{- with .Values.commonAnnotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -25,11 +25,11 @@ spec:
     type: RollingUpdate
   selector:
     matchLabels:
-      {{- include "ward-mcp.selectorLabels" . | nindent 6 }}
+      {{- include "mcp-beaver.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "ward-mcp.selectorLabels" . | nindent 8 }}
+        {{- include "mcp-beaver.selectorLabels" . | nindent 8 }}
       annotations:
         checksum/runtime: {{ dict "mode" $mode "upstream" .Values.upstream "extraContainers" .Values.extraContainers | toJson | sha256sum }}
         {{- if eq $mode "spec" }}
@@ -54,8 +54,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: ward-mcp
-          image: {{ include "ward-mcp.image" . | quote }}
+        - name: mcp-beaver
+          image: {{ include "mcp-beaver.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -63,7 +63,7 @@ spec:
             {{- if eq $mode "upstream" }}
             - serve-upstream
             - --name
-            - {{ default (include "ward-mcp.fullname" .) .Values.upstream.name | quote }}
+            - {{ default (include "mcp-beaver.fullname" .) .Values.upstream.name | quote }}
             - --upstream
             - {{ .Values.upstream.url | quote }}
             - --connect-timeout
@@ -74,7 +74,7 @@ spec:
             {{- end }}
             {{- else }}
             - serve
-            - {{ include "ward-mcp.specPath" . }}
+            - {{ include "mcp-beaver.specPath" . }}
             {{- end }}
             - --http
             - :{{ .Values.http.port }}
@@ -89,7 +89,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   {{- if kindIs "string" $src }}
-                  name: {{ include "ward-mcp.secretName" $ }}
+                  name: {{ include "mcp-beaver.secretName" $ }}
                   key: {{ $env }}
                   {{- else }}
                   name: {{ $src.secretName }}
@@ -128,7 +128,7 @@ spec:
       volumes:
         - name: spec
           configMap:
-            name: {{ include "ward-mcp.fullname" . }}-spec
+            name: {{ include "mcp-beaver.fullname" . }}-spec
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

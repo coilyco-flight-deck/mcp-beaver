@@ -1,8 +1,8 @@
-# CI gate for ward-mcp: build, vet, and test the generic runtime on every push,
+# CI gate for mcp-beaver: build, vet, and test the generic runtime on every push,
 # then - on a push to main or an authorized manual dispatch of main - publish
 # the one runtime image to Forgejo OCI, keyed by the full source sha. Deploy
 # consumes that exact reference. One generic image is published when the
-# runtime source changes, not per guardfile (ward-mcp#6, mount-not-bake).
+# runtime source changes, not per guardfile (mcp-beaver#6, mount-not-bake).
 #
 # umbra is a private forgejo module fetched anonymously, so GOPRIVATE keeps
 # it off the public proxy and sumdb (the go gate here and the Dockerfile build).
@@ -16,7 +16,7 @@ jobs:
   # green peer workflow (reddit-mcp, node-stats-mcp, ward's .forgejo/*) runs on
   # it, and it resolves to node:20-bookworm. `ubuntu-latest` is a GitHub-mirror
   # label (the .github/* side), unknown to the Forgejo runner, so a gate pinned
-  # to it matched no runner and the repo queued zero tasks (ward-mcp#10).
+  # to it matched no runner and the repo queued zero tasks (mcp-beaver#10).
   gate:
     runs-on: docker
     container: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:release

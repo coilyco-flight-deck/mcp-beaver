@@ -1,4 +1,4 @@
-module forgejo.coilysiren.me/coilyco-flight-deck/ward-mcp
+module forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver
 
 go 1.25.5
 

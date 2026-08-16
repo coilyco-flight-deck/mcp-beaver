@@ -1,11 +1,11 @@
-# ward-mcp features
+# mcp-beaver features
 
-The living inventory of what ward-mcp ships today. Completes the
-README / AGENTS / docs/FEATURES trifecta. ward-mcp turns a umbra Guardfile
+The living inventory of what mcp-beaver ships today. Completes the
+README / AGENTS / docs/FEATURES trifecta. mcp-beaver turns a umbra Guardfile
 into a guarded MCP server with an automatic matching HTTP tool API, distributed
 as a runtime image plus a generic Helm chart.
 
-## `ward-mcp serve <spec.mcp.kdl> --http :addr`
+## `mcp-beaver serve <spec.mcp.kdl> --http :addr`
 
 The generic local runtime. One static binary renders any `.mcp.kdl` spec into
 a guarded MCP server over the official MCP Go SDK's streamable HTTP transport
@@ -14,7 +14,7 @@ at `/mcp` and automatically exposes the identical tool arguments at
 binds stdio - these run as remote pods reached by URL.
 
 * **Spec parse** - `opcore.ParseInline` (umbra `http/opcore`, pinned
-  `v0.131.0`) parses the ward-mcp inline grammar: `wrap` header, `base-url`,
+  `v0.131.0`) parses the mcp-beaver inline grammar: `wrap` header, `base-url`,
   `auth`, `restrict`, and each
   `can <verb> <resource> { path/query/body/set }` grant. Flat body declarations
   remain optional string shorthand. Body blocks preserve typed scalars, scalar
@@ -30,14 +30,14 @@ binds stdio - these run as remote pods reached by URL.
   one matching HTTP endpoint named `verb_resource`, its `inputSchema` derived
   (draft-07) from the grant's
   path/query/body, and its description taken from `describe` or derived as a
-  user-goal sentence. ward-mcp also derives a human title, read-only,
+  user-goal sentence. mcp-beaver also derives a human title, read-only,
   destructive, idempotent, and open-world annotations from the operation's
   HTTP behavior, plus a `{result: ...}` output schema. Successful calls return
   matching `structuredContent` while retaining the upstream response as text
   for older clients. Initialization includes compact server instructions for
   the policy boundary. `internal/mcpserver`.
 * **Typed query routing** - MCP query arguments retain their JSON types when
-  ward-mcp passes them to opcore. Scalars keep their existing wire spelling,
+  mcp-beaver passes them to opcore. Scalars keep their existing wire spelling,
   arrays become repeated upstream keys in caller order, and type, bound,
   required-field, array-length, and mutual-exclusion violations fail before
   the upstream receives a request. Flat string query specs stay compatible.
@@ -54,7 +54,7 @@ binds stdio - these run as remote pods reached by URL.
 * **Deny-by-absence** - the served surface is exactly the `can` grants. An
   unwritten grant is an absent tool; that is the deletion guard.
 
-## `ward-mcp lint <spec.mcp.kdl>`
+## `mcp-beaver lint <spec.mcp.kdl>`
 
 The offline validation surface. It is `serve` minus the listener and minus
 telemetry: read the spec, build the same server, print the minted tool names,
@@ -146,7 +146,7 @@ All are opt-in except `server-info`, which is on by default and opts out.
 * **Deprecations** - the runtime no longer advertises the deprecated `logging`
   capability. Observability is OpenTelemetry, which it already emits.
 
-## `ward-mcp lint-upstream --tool <name>...`
+## `mcp-beaver lint-upstream --tool <name>...`
 
 The validation surface for a `serve-upstream` allowlist, the counterpart to
 what `lint` gives a guardfile. An allowlist has no spec file to build, so the
@@ -170,7 +170,7 @@ checks are the allowlist's own shape plus, optionally, upstream truth.
 * **Existence check** - passing `--upstream` builds the same proxy
   `serve-upstream` builds, so a tool absent upstream fails there too.
 
-## `ward-mcp serve-upstream --upstream <mcp-url> --tool <name>...`
+## `mcp-beaver serve-upstream --upstream <mcp-url> --tool <name>...`
 
 The guarded passthrough backend. It connects to a private streamable-HTTP MCP
 upstream, snapshots the allowlisted upstream tool contracts, and exposes only
@@ -187,7 +187,7 @@ that subset on the outward MCP and automatic HTTP tool surfaces.
   MCP connection while a co-located upstream starts. Zero retains fail-fast
   behavior for direct CLI use.
 
-## `ward-mcp serve-ssm <spec.mcp.kdl> --http :addr`
+## `mcp-beaver serve-ssm <spec.mcp.kdl> --http :addr`
 
 The AWS SDK-backed exact-parameter reader. Its KDL policy names one parameter
 and grants exactly `get_parameter(name)` plus `get_forgejo_read_token()`.
@@ -211,9 +211,9 @@ tool API, and a liveness probe:
   errors return non-2xx JSON responses.
 * **Health** - `GET /healthz` for a pod liveness probe.
 
-ward-mcp does not authenticate inbound MCP or HTTP callers. The consuming
+mcp-beaver does not authenticate inbound MCP or HTTP callers. The consuming
 deployment owns identity, authentication, TLS, ingress, and network exposure.
-Guardfile authentication is outbound authentication from ward-mcp to the
+Guardfile authentication is outbound authentication from mcp-beaver to the
 configured upstream. Caller-supplied identity-shaped tool arguments are data,
 not trusted identity.
 
@@ -339,11 +339,11 @@ runtime source changes). The source gate runs in the moving :release aos
 dev-base image. The trusted deploy runner owns the package-write credential,
 verifies the remote manifest, and hands the exact reference to deploy. Fleet
 consumers use a separate read-only credential. See [ci.md](ci.md) for the gate
-and publish walkthrough plus the Actions-unit enablement gotcha (ward-mcp#10).
+and publish walkthrough plus the Actions-unit enablement gotcha (mcp-beaver#10).
 
 ## The generic Helm chart (`chart/`)
 
-The auth-neutral distribution vehicle (ward-mcp#8). One chart, one runtime
+The auth-neutral distribution vehicle (mcp-beaver#8). One chart, one runtime
 image, many releases. `runtime.mode: spec` mounts a `.mcp.kdl` ConfigMap.
 `runtime.mode: upstream` runs an exact passthrough allowlist, omits the
 guardfile, and can co-locate a private MCP through `extraContainers`.
@@ -360,13 +360,13 @@ Secret wiring, and startup protection for sidecar-backed proxies. See
   own exposure layer.
 * **secret wiring** - `secret` maps each `value env <VAR>` the guardfile names to
   an SSM parameter path (chart mints an ExternalSecret) or an existing Secret ref.
-  Upstream mode can disable injection into ward-mcp while a co-located
+  Upstream mode can disable injection into mcp-beaver while a co-located
   upstream consumes the generated Secret directly.
 
 Deploying an MCP, including the host, exposure, authentication, TLS, DNS, and
 rollout, is [`deploy`](https://forgejo.coilysiren.me/coilyco-bridge/deploy)'s
 job (deploy#40 / deploy#46 / deploy#61). Its shared
-`charts/ingress-public-authed` chart owns the CoilyCo fleet gate. ward-mcp ships
+`charts/ingress-public-authed` chart owns the CoilyCo fleet gate. mcp-beaver ships
 the auth-neutral runtime chart contract.
 
 ## Examples

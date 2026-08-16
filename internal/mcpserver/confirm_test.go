@@ -58,7 +58,7 @@ func confirmServer(t *testing.T, upstream string) *httptest.Server {
 // An accepted confirmation runs the tool: the upstream is reached exactly once,
 // on the retry, never on the first call.
 func TestConfirmAcceptedRunsTheToolOnce(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "confirm-test-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "confirm-test-token")
 	var upstreamHits int
 	upstream := httptest.NewServer(countingUpstream(&upstreamHits))
 	defer upstream.Close()
@@ -115,7 +115,7 @@ func TestConfirmDeclinedNeverReachesUpstream(t *testing.T) {
 // An ungated tool in the same spec keeps its single-round-trip behaviour, so
 // opting one tool in does not change the others.
 func TestUngatedToolIsNotConfirmed(t *testing.T) {
-	t.Setenv("WARD_MCP_TEST_TOKEN", "confirm-test-token")
+	t.Setenv("MCP_BEAVER_TEST_TOKEN", "confirm-test-token")
 	var upstreamHits int
 	upstream := httptest.NewServer(countingUpstream(&upstreamHits))
 	defer upstream.Close()

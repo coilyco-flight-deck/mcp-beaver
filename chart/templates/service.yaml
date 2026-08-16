@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "ward-mcp.fullname" . }}
+  name: {{ include "mcp-beaver.fullname" . }}
   labels:
-    {{- include "ward-mcp.labels" . | nindent 4 }}
+    {{- include "mcp-beaver.labels" . | nindent 4 }}
   {{- with .Values.commonAnnotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -13,7 +13,7 @@ spec:
   # every node interface. Unset -> plain ClusterIP.
   type: {{ if .Values.service.nodePort }}NodePort{{ else }}{{ .Values.service.type }}{{ end }}
   selector:
-    {{- include "ward-mcp.selectorLabels" . | nindent 4 }}
+    {{- include "mcp-beaver.selectorLabels" . | nindent 4 }}
   ports:
     - name: mcp
       port: {{ .Values.http.port }}

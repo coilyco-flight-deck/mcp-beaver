@@ -1,4 +1,4 @@
-# Default values for the generic ward-mcp chart. One chart, one runtime image,
+# Default values for the generic mcp-beaver chart. One chart, one runtime image,
 # many releases: the .mcp.kdl guardfile rides in as `spec` (a ConfigMap), and
 # the chart templates the k3s exposure. A deploy consumes this per-MCP with a
 # single values file (deploy#61 skillsmp, deploy#46 forgejo).
@@ -16,7 +16,7 @@
 #   allowlist, and bounded startup-connect timeout for upstream mode.
 # - extraContainers: optional co-located upstreams or support containers.
 # - image.tag defaults to .Chart.appVersion; a rollout sets it to the built
-#   ward-mcp runtime sha. image.repository defaults to the canonical Forgejo
+#   mcp-beaver runtime sha. image.repository defaults to the canonical Forgejo
 #   OCI path. A private-package consumer supplies a read-only pull Secret
 #   through imagePullSecrets.
 # - secret: map of ENV_VAR -> source, one entry per `value env <VAR>` the
@@ -48,7 +48,7 @@ upstream:
 
 image:
   # The publish path followed the forge rename: scripts/publish-image.sh writes
-  # to .../mcp-beaver, so the old .../ward-mcp package receives no new tags.
+  # to .../mcp-beaver, so the old .../mcp-beaver package receives no new tags.
   # Existing pins on the old path still resolve, since that package is
   # retained - but a consumer bumping to a post-rename sha has to move here.
   repository: forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver
@@ -56,6 +56,11 @@ image:
   pullPolicy: Always
 
 imagePullSecrets: []
+# A release installed while this chart was named `ward-mcp` must set
+# `nameOverride: ward-mcp` to keep its resource names. The chart name reaches
+# `app.kubernetes.io/name`, which is a selector label, and a Deployment's
+# selector is immutable: an upgrade that changes it is rejected, so the release
+# has to be deleted and recreated instead. New installs leave this empty.
 nameOverride: ""
 fullnameOverride: ""
 
@@ -77,7 +82,7 @@ securityContext:
       - ALL
 
 # The interior HTTP listener. The runtime ENTRYPOINT is
-# `ward-mcp serve /spec/<name>.mcp.kdl --http :<port>`, MCP served at /mcp and
+# `mcp-beaver serve /spec/<name>.mcp.kdl --http :<port>`, MCP served at /mcp and
 # every projected tool served automatically at POST /api/{tool-name}.
 http:
   port: 8080
