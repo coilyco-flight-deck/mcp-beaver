@@ -90,7 +90,7 @@ exit. No network, so it runs in a sealed clone and in CI.
   `serve-ssm` policies use a separate grammar and are not lintable through
   this path.
 
-## Guardfile siblings: instructions, resources, prompts, server-info, withheld verbs, confirmations
+## Guardfile siblings: instructions, resources, prompts, server-info, response cache, withheld verbs, confirmations
 
 Top-level nodes stated beside `wrap`, outside the frozen inline grammar
 `opcore.ParseInline` owns. Each fails closed on an unknown property or child.
@@ -143,6 +143,19 @@ All are opt-in except `server-info`, which is on by default and opts out.
   tool and withheld stubs reach no upstream and are not charged. A call that
   would queue past the request deadline fails with a stated timeout rather than
   holding a slot.
+* **Response cache** - `cache "<tool-name>" ttl="15m"` reuses one grant's
+  upstream answer for a window. **Not** the `ttlMs` / `cacheScope` on list
+  results, which cache the tool inventory rather than the data. Opt-in per
+  grant and off by default, because correctness varies entirely by upstream and
+  a stale answer beats a slow one only where the author says so. Keyed on the
+  tool plus its canonicalised arguments, so two spellings of the same object
+  hit the same entry and two different questions never do. Sits outside the
+  rate limiter, so a hit spends no slot - a rate limit bounds the rate and can
+  only make a tool refuse, where a cache is the one control that lowers a
+  metered bill without lowering capability. Failed calls are never stored,
+  caching a destructive grant or a `confirm`-gated one is a build error, and
+  the store is in-process and dies with the pod - the same objection #69 raises
+  about the rate limiter, with the same answer if a durable store lands.
 * **Withheld verbs** - `withhold "<tool-name>" { reason ...; alternative ... }`
   mints a discoverable stub for a verb left out on purpose. It appears in
   `tools/list`, states why in its description, names a substitute where one

@@ -1,5 +1,5 @@
 // guardfile-siblings.mcp.kdl - the worked reference for the nodes that ride
-// BESIDE `wrap`: `instructions`, `server-info`, `withhold`, `confirm`,
+// BESIDE `wrap`: `instructions`, `server-info`, `cache`, `withhold`, `confirm`,
 // `resource`, `prompt`.
 //
 // `opcore.ParseInline` reads only the `wrap` node, so none of these touch the
@@ -35,6 +35,19 @@ server-info
 // user behind this server. Calls queue rather than being rejected: a slower
 // tool call beats a failed turn. Omit the node for no limit at all.
 rate-limit "1/1s"
+
+// Reuse one grant's upstream answer for a window. Off by default and opt-in
+// per grant, because how stale an answer may be is a property of the upstream
+// that no default can guess. This is NOT the `ttlMs` on list results, which
+// caches the tool inventory rather than the data.
+//
+// A rate limit bounds the rate and can only make a tool refuse. A cache is the
+// one control that lowers a metered bill without lowering capability, which is
+// why it sits OUTSIDE the limiter: a hit spends no slot.
+//
+// Keyed on the tool plus its arguments. Failed calls are never stored, and
+// caching a destructive or `confirm`-gated grant is a build error.
+cache "get_thing" ttl="15m"
 
 // State a verb that is left out ON PURPOSE, so an agent stops inferring from
 // silence. Absence otherwise means four things at once - withheld by policy,

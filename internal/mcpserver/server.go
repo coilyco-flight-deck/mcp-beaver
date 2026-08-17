@@ -107,6 +107,13 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	caches, err := parseCaches(src)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCaches(caches, descs, confirmations); err != nil {
+		return nil, err
+	}
 	queryPins, err := parseQueryPins(src)
 	if err != nil {
 		return nil, err
@@ -163,6 +170,11 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		handler = withRateLimit(limiter, handler)
 		if message, gated := confirmations[spec.Name]; gated {
 			handler = withConfirmation(message, handler)
+		}
+		// Outermost: a hit must not spend a rate-limit slot the community
+		// needs for a request that was actually made.
+		if ttl, cached := caches[spec.Name]; cached {
+			handler = withResponseCache(newResponseCache(ttl), spec.Name, handler)
 		}
 		s.registerTool(spec, handler)
 	}

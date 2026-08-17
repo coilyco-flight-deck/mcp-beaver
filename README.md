@@ -125,6 +125,7 @@ fails closed: declare none and the server behaves exactly as before.
 ```kdl
 server-info                                   // mints `mcp_beaver_info`
 confirm "create_issue" message="Create this issue upstream?"
+cache "get_issue" ttl="15m"                   // reuse one read's answer
 
 instructions {
     text "Issues, pull requests and repository metadata on the Coilyco Forgejo."
@@ -182,6 +183,30 @@ reachable through `initialize`, `tools/list`, and the list methods, so
 withholding it protects nothing, and a probe present on only some servers
 teaches an agent nothing from its absence on the rest. Rename it with
 `server-info name="status"`, or remove it with `server-info disabled`.
+
+`cache` names a **projected tool name** and reuses its upstream answer for the
+declared window. It is off by default and opt-in per grant, because how stale
+an answer may be is a property of the upstream that no default can guess. It is
+also not the `ttlMs` / `cacheScope` on list results, which cache the tool
+inventory rather than the data.
+
+```kdl
+cache "get_store_app_details" ttl="15m"
+```
+
+Every tool call is otherwise a live upstream request, so N identical questions
+from a community produce N identical calls from one pod IP. That was a
+politeness problem while every upstream was a keyless public good; against a
+metered one it is a bill. Caching is the only control that lowers the bill
+without lowering capability - a `rate-limit` bounds the rate and can only make
+the tool refuse.
+
+Entries are keyed on the tool plus its canonicalised arguments, so two
+spellings of the same object hit the same entry and two different questions
+never do. A cache sits outside the rate limiter, so a hit spends no slot. A
+failed call is never stored, and caching a destructive grant or a
+`confirm`-gated one is a build error rather than a surprise at call time. The
+store is in-process, so it dies with the pod and two replicas keep two copies.
 
 `confirm` names a **projected tool name** and gates it behind a Multi
 Round-Trip Request: the first call returns an input request rather than acting,
