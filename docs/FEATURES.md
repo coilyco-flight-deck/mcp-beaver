@@ -277,6 +277,40 @@ Guardfile authentication is outbound authentication from mcp-beaver to the
 configured upstream. Caller-supplied identity-shaped tool arguments are data,
 not trusted identity.
 
+## Structured logs
+
+Every generated server writes JSON to stderr, one object per line, through
+`log/slog`. The node collector reads `/var/log/pods/*` and the ingest pipeline
+promotes JSON bodies and maps `level` onto OTel severity, so this needs no new
+parser downstream.
+
+Generated servers previously emitted exactly one line each - the startup banner
+- and nothing per call. Twelve hours across twenty-two pods produced **one** log
+line fleet-wide while four of those servers were failing every call, and each
+failure had to be inferred from client spans because the server that knew what
+went wrong said nothing.
+
+* **Startup** - mode, server name, spec path, bound address, tool count, and
+  request timeout, as fields rather than a sentence. An operator reading a
+  fleet of these needs the bound config queryable, not greppable.
+* **Every tool call** - `tool`, `outcome`, `duration_ms`, plus `trace_id` and
+  `span_id` when a span is active, so a log line joins to its trace. Applied at
+  registration, so grants, the info tool, withheld stubs, the SSM readers and
+  the upstream proxy are all covered by construction.
+* **Refusals** - `outcome=tool_error` at WARN with the reason, which is the gap
+  that mattered: a server rejecting a call in 16 milliseconds is a server-side
+  decision that had no server-side record anywhere. A handler failure is
+  `outcome=handler_error` at ERROR.
+* **Redaction** - a reason keeps each URL's scheme, host and path and drops its
+  query, marked `?<redacted>` rather than silently removed. That line is not
+  arbitrary: `pin` writes query parameters and only query parameters, and
+  `auth` writes a header, so dropping the query removes exactly the surfaces a
+  credential reaches while a 404 stays attributable. Reasons are bounded at 512
+  characters, because an upstream that refuses with an HTML error page would
+  otherwise put the page in the log line.
+* **Level** - `MCP_BEAVER_LOG_LEVEL` (`debug` | `info` | `warn` | `error`),
+  defaulting to info.
+
 ## Opt-in OpenTelemetry
 
 The generic runtime provides application-level traces and metrics for every
@@ -307,7 +341,11 @@ tool result.
 * **Safe attributes** - signal attributes stay bounded to methods, projected
   tools, transport, runtime mode, and closed-set error classes. Arguments,
   results, bodies, authorization headers, tokens, Guardfile contents, spec
-  paths, and upstream URLs are never captured.
+  paths, and upstream URLs are never captured. **Structured logs are the one
+  narrow exception**, and only for a refusal reason: they keep the upstream
+  host and path so a failure is attributable, and drop the query, which is
+  where `pin` and caller input live. Startup logs name the spec path, which the
+  operator supplied. Nothing else crosses.
 
 ## Server-side argument pins (upstream proxy)
 

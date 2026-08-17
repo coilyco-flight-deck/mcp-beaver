@@ -330,7 +330,15 @@ func runServe(ctx context.Context, argv []string) error {
 		}
 		srv.SetRequestTimeout(*requestTimeout)
 
-		fmt.Fprintf(os.Stderr, "mcp-beaver: serving %s on %s (MCP /mcp, HTTP tools /api/{tool-name}, %s request bound)\n", specPath, *addr, *requestTimeout)
+		// Structured rather than a banner: an operator reading a fleet of
+		// these needs the bound config queryable, not greppable (#78).
+		mcpserver.Log().Info("serving spec-backed MCP",
+			"mode", "spec",
+			"server", name,
+			"spec", specPath,
+			"addr", *addr,
+			"tools", len(srv.ToolNames()),
+			"request_timeout", requestTimeout.String())
 		return serveHTTP(ctx, *addr, srv.Handler())
 	})
 }
@@ -370,7 +378,12 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 		}
 		defer func() { _ = srv.Close() }()
 		srv.SetRequestTimeout(*requestTimeout)
-		fmt.Fprintf(os.Stderr, "mcp-beaver: serving upstream proxy %s on %s (%d MCP and HTTP tools, %s request bound)\n", *upstream, *addr, len(tools), *requestTimeout)
+		mcpserver.Log().Info("serving upstream proxy",
+			"mode", "upstream",
+			"server", *name,
+			"addr", *addr,
+			"tools", len(tools),
+			"request_timeout", requestTimeout.String())
 		return serveHTTP(ctx, *addr, srv.Handler())
 	})
 }
@@ -437,7 +450,11 @@ func runServeSSM(ctx context.Context, argv []string) error {
 		if err != nil {
 			return fmt.Errorf("parse SSM spec %q: %w", specPath, err)
 		}
-		fmt.Fprintf(os.Stderr, "mcp-beaver: serving guarded SSM reader %s on %s (MCP and HTTP tools)\n", specPath, *addr)
+		mcpserver.Log().Info("serving guarded SSM reader",
+			"mode", "ssm",
+			"server", name,
+			"spec", specPath,
+			"addr", *addr)
 		return serveHTTP(ctx, *addr, srv.Handler())
 	})
 }

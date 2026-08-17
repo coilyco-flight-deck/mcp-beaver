@@ -510,7 +510,12 @@ func (s *Server) applyCacheTTL(res mcp.Result) {
 	}
 }
 
+// Registration is where logging is applied rather than in New, so every served
+// tool is covered by construction: grants, the info tool, withheld stubs, the
+// SSM readers, and the upstream proxy all arrive here. Inside the telemetry
+// wrapper, so a logged call carries the span it belongs to.
 func (s *Server) registerTool(tool *mcp.Tool, handler mcp.ToolHandler) {
+	handler = withLogging(tool.Name, handler)
 	handler = s.telemetry.toolHandler(tool.Name, handler)
 	handler = s.withToolDeadline(handler)
 	s.handlers[tool.Name] = handler
