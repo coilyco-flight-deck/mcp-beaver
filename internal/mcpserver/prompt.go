@@ -24,7 +24,7 @@ type inlinePrompt struct {
 //	    description "Walk the on-call first-response steps"
 //	    argument "service" description="Which service is failing" required=#true
 //	    text "You are triaging {service}."
-//	    text "Read ward://runbook/oncall before acting."
+//	    text "Read beaver://runbook/oncall before acting."
 //	}
 //
 // The single argument is the prompt name. `text` children form the message

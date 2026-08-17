@@ -114,6 +114,11 @@ fails closed: declare none and the server behaves exactly as before.
 server-info                                   // mints `mcp_beaver_info`
 confirm "create_issue" message="Create this issue upstream?"
 
+instructions {
+    text "Issues, pull requests and repository metadata on the Coilyco Forgejo."
+    text "Reach for it to read or file tracker work."
+}
+
 resource "oncall" uri="beaver://runbook/oncall" mime="text/markdown" priority=0.9 {
     audience "assistant"
     description "First response for an upstream 5xx"
@@ -131,6 +136,19 @@ wrap ward mcp forgejo {
     // ... unchanged
 }
 ```
+
+`instructions` says what **this** server is for. It is published in
+`InitializeResult.Instructions`, under the shared policy sentence every
+generated server carries - read before mutate, schemas are contracts, safety
+annotations are hints rather than authorization. That sentence is true of every
+guardfile, which is exactly why it cannot tell four beaver servers apart on one
+roster; this is where a guardfile says which dam you are at.
+
+Keep it short. A consumer that renders instructions into the model's prompt
+pays for them on every turn, once per rostered server, so the text is bounded
+at 500 characters and a spec over budget fails at build rather than at read
+time. A guardfile that declares nothing publishes exactly what it published
+before, so no deployed image changes until its spec opts in.
 
 `resource` and `prompt` are what Claude Code renders as `@` mentions and slash
 commands. Resource content is inline only: a resource that proxied an upstream

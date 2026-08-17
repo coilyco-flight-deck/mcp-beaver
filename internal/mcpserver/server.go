@@ -19,8 +19,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const serverInstructions = "This server exposes only policy-approved tools. Use read-only tools to inspect state before mutation tools. Follow each tool's input and output schema, and treat safety annotations as hints rather than authorization."
-
 var resultOutputSchema = json.RawMessage(`{
 	"type":"object",
 	"properties":{"result":{}},
@@ -80,11 +78,15 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Top-level `icon`, `resource`, `prompt`, `server-info`, `confirm`, and
-	// `withhold` nodes ride beside `wrap`, outside the frozen inline grammar
-	// opcore owns (deploy#255) - parsed here, projected onto the served
-	// surface below.
+	// Top-level `icon`, `instructions`, `resource`, `prompt`, `server-info`,
+	// `confirm`, and `withhold` nodes ride beside `wrap`, outside the frozen
+	// inline grammar opcore owns (deploy#255) - parsed here, projected onto
+	// the served surface below.
 	icons, err := parseIcons(src)
+	if err != nil {
+		return nil, err
+	}
+	instructions, err := parseInstructions(src)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +155,7 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		cfg:            cfg,
 		tools:          tools,
 		handlers:       make(map[string]mcp.ToolHandler, len(descs)),
-		sdk:            newSDKServer(name, icons),
+		sdk:            newSDKServer(name, icons, instructions),
 		telemetry:      instrumentation,
 		requestTimeout: DefaultRequestTimeout,
 	}
@@ -216,7 +218,7 @@ func NewProxyWithPins(ctx context.Context, name, specPath, upstreamURL string, a
 		tools:          proxy.selectedTools(),
 		handlers:       make(map[string]mcp.ToolHandler, len(allowTools)),
 		upstreams:      []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http"}},
-		sdk:            newSDKServer(name, nil),
+		sdk:            newSDKServer(name, nil, ""),
 		telemetry:      instrumentation,
 		requestTimeout: DefaultRequestTimeout,
 		closeFn:        proxy.Close,
@@ -556,11 +558,11 @@ func cloneTool(tool *mcp.Tool) *mcp.Tool {
 	return &cloned
 }
 
-func newSDKServer(name string, icons []mcp.Icon) *mcp.Server {
+func newSDKServer(name string, icons []mcp.Icon, instructions string) *mcp.Server {
 	return mcp.NewServer(
 		&mcp.Implementation{Name: name, Version: "0.1.0", Icons: icons},
 		&mcp.ServerOptions{
-			Instructions: serverInstructions,
+			Instructions: renderInstructions(instructions),
 			// Empty rather than nil: nil means the SDK's historical
 			// {"logging":{}} default, and 2026-07-28 deprecates Logging along
 			// with Roots and Sampling. The suggested migration is

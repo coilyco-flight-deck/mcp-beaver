@@ -17,6 +17,15 @@
 // derived by opcore from the grant's `path`/`query`/`body`. mcp-beaver derives
 // the human title, safety annotations, and structured `{result: ...}` output
 // contract from the same operation descriptor.
+// What this server is for, published under the shared policy sentence in the
+// initialize handshake. Bounded at 500 characters, because a consumer that
+// inlines it pays for it every turn, once per rostered server.
+instructions {
+    text "Issues on repositories hosted at forgejo.coilysiren.me."
+    text "Reach for it to read an issue thread, file one, comment, or close one."
+    text "Issues only: it does not read code, pull requests, or repository settings."
+}
+
 wrap ward mcp forgejo {
     base-url "forgejo.coilysiren.me/api/v1"
 

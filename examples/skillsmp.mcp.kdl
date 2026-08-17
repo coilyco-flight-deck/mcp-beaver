@@ -18,6 +18,14 @@
 //
 // The exact query fields and paths mirror skillsmp's public search endpoints;
 // adjust them to a one-time authoring reference if the vendor surface changes.
+// What this server is for. The shared policy sentence still leads; this is the
+// part that tells one beaver server from another on a roster.
+instructions {
+    text "Search the skillsmp.com catalog of published agent skills."
+    text "Reach for it to find a skill by keyword before writing one."
+    text "Read-only: it publishes nothing and installs nothing."
+}
+
 wrap ward mcp skillsmp {
     base-url "skillsmp.com/api/v1"
 

@@ -77,7 +77,7 @@ func newSSMServer(name, specPath string, policy ssmPolicy, client ssmGetter) (*S
 		tools:          tools,
 		handlers:       make(map[string]mcp.ToolHandler, len(tools)),
 		upstreams:      []adminUpstreamResponse{{Kind: "aws-ssm", Mode: "sdk"}},
-		sdk:            newSDKServer(name, nil),
+		sdk:            newSDKServer(name, nil, ""),
 		telemetry:      instrumentation,
 		requestTimeout: DefaultRequestTimeout,
 	}

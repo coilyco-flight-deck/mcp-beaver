@@ -1,9 +1,25 @@
 // guardfile-siblings.mcp.kdl - the worked reference for the nodes that ride
-// BESIDE `wrap`: `server-info`, `withhold`, `confirm`, `resource`, `prompt`.
+// BESIDE `wrap`: `instructions`, `server-info`, `withhold`, `confirm`,
+// `resource`, `prompt`.
 //
 // `opcore.ParseInline` reads only the `wrap` node, so none of these touch the
 // frozen inline grammar or the umbra pin. Every one fails closed. All are
 // opt-in except `server-info`, which is on by default. See docs/DESIGN.md.
+
+// What THIS server is for, published in the initialize handshake under the
+// shared policy sentence every generated server carries. That sentence says
+// how to treat any guarded surface, which is why it cannot tell two of them
+// apart - this is where a guardfile says which one you reached.
+//
+// Keep it short. A consumer that renders instructions into the model's prompt
+// pays for them every turn, once per rostered server. Over 500 characters is a
+// build error rather than a silent cost. Omit the node and the server
+// publishes exactly the shared sentence, as it did before this existed.
+instructions {
+    text "Things owned by a coilyco-* account on the internal things API."
+    text "Reach for it to look up one thing by id, or to file a new one."
+    text "It reads and writes things only: no owners, no billing, no deletes."
+}
 
 // One read-only tool reporting this server's own shape. Also the liveness
 // probe clients lost when MCP 2026-07-28 removed the protocol-level `ping`.
@@ -42,7 +58,7 @@ confirm "create_thing" message="This creates a thing upstream. Continue?"
 // `audience` and `priority` are what an agent harness reads to decide whether
 // to pull this into a model's context unprompted. Without the annotation a
 // gating harness sees content meant for a human and skips it.
-resource "oncall-runbook" uri="ward://runbook/oncall" mime="text/markdown" priority=0.8 {
+resource "oncall-runbook" uri="beaver://runbook/oncall" mime="text/markdown" priority=0.8 {
     audience "assistant"
     description "First response when this upstream starts 5xx-ing"
     text "1. Call mcp_beaver_info and confirm the pod is serving its tools."
@@ -58,7 +74,7 @@ prompt "triage" title="Triage an incident" {
     argument "service" description="Which service is failing" required=#true
     argument "since" description="How far back to look, e.g. 1h"
     text "You are triaging {service}."
-    text "Read ward://runbook/oncall before taking any action."
+    text "Read beaver://runbook/oncall before taking any action."
     text "Look back {since} and report what you find before changing anything."
 }
 

@@ -78,12 +78,21 @@ exit. No network, so it runs in a sealed clone and in CI.
   `serve-ssm` policies use a separate grammar and are not lintable through
   this path.
 
-## Guardfile siblings: resources, prompts, server-info, withheld verbs, confirmations
+## Guardfile siblings: instructions, resources, prompts, server-info, withheld verbs, confirmations
 
 Top-level nodes stated beside `wrap`, outside the frozen inline grammar
 `opcore.ParseInline` owns. Each fails closed on an unknown property or child.
 All are opt-in except `server-info`, which is on by default and opts out.
 
+* **Server instructions** - `instructions { text ... }` states what this server
+  is for, published under the shared policy sentence in
+  `InitializeResult.Instructions`. Every generated server used to publish only
+  that shared sentence, so a client holding four of them learned that each
+  exposes policy-approved tools - true of all four and distinguishing none. The
+  policy floor still reaches every server and still serialises first. Bounded
+  at 500 characters, because a consumer that renders this into the model's
+  prompt pays for it every turn, once per rostered server. A guardfile that
+  declares nothing publishes exactly what it published before.
 * **Resources** - `resource "<name>" uri=... { text ... }` serves static
   content on `resources/read`. Inline only by design: a resource proxying an
   upstream read would be a second, unguarded egress path beside the grants.
