@@ -19,13 +19,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var resultOutputSchema = json.RawMessage(`{
-	"type":"object",
-	"properties":{"result":{}},
-	"required":["result"],
-	"additionalProperties":false
-}`)
-
 // DefaultRequestTimeout bounds one inbound MCP or HTTP tool request end to
 // end, including the upstream call it makes.
 //

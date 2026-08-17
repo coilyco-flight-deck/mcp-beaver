@@ -819,9 +819,14 @@ func assertResultOutputSchema(t *testing.T, tool map[string]any) {
 	if _, ok := properties["result"]; !ok {
 		t.Errorf("%s outputSchema omitted result: %v", tool["name"], schema)
 	}
+	if _, ok := properties["coverage"]; !ok {
+		t.Errorf("%s outputSchema omitted coverage: %v", tool["name"], schema)
+	}
+	// Both required, so a consumer can rely on the caveat being there rather
+	// than treating its absence as "nothing to say" (mcp-beaver#68).
 	required, _ := schema["required"].([]any)
-	if len(required) != 1 || required[0] != "result" {
-		t.Errorf("%s outputSchema.required = %v, want [result]", tool["name"], schema["required"])
+	if len(required) != 2 || !containsAny(required, "result") || !containsAny(required, "coverage") {
+		t.Errorf("%s outputSchema.required = %v, want coverage and result", tool["name"], schema["required"])
 	}
 }
 

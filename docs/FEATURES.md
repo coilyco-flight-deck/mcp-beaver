@@ -32,10 +32,22 @@ binds stdio - these run as remote pods reached by URL.
   path/query/body, and its description taken from `describe` or derived as a
   user-goal sentence. mcp-beaver also derives a human title, read-only,
   destructive, idempotent, and open-world annotations from the operation's
-  HTTP behavior, plus a `{result: ...}` output schema. Successful calls return
-  matching `structuredContent` while retaining the upstream response as text
-  for older clients. Initialization includes compact server instructions for
-  the policy boundary. `internal/mcpserver`.
+  HTTP behavior, plus a `{coverage: ..., result: ...}` output schema.
+  Initialization includes compact server instructions for the policy boundary.
+  `internal/mcpserver`.
+* **Coverage before payload** - every grant-backed result leads with a
+  `coverage` block and carries the payload under `result`, in both the text and
+  the structured content. A consuming harness bounds a tool result by keeping
+  the front and discarding the tail, so a caveat serialized last is destroyed
+  first and deterministically, and the model then answers from rows with no
+  caveat. Coverage states `truncated` (always false, stated rather than
+  omitted), `bytes`, `over_budget` past the smallest measured consumer cap, and
+  `items` naming every array in the payload and its length - a count in meaning
+  is what changes an answer, where a byte total does not. Enforced by the
+  envelope being a struct rather than a map, so field order is a contract
+  instead of an alphabetical accident. What the runtime cannot enforce - an
+  upstream that leaves an array unbounded, or that answers a failed read with
+  zero - is recorded in [DESIGN.md](DESIGN.md) rather than left implicit.
 * **Typed query routing** - MCP query arguments retain their JSON types when
   mcp-beaver passes them to opcore. Scalars keep their existing wire spelling,
   arrays become repeated upstream keys in caller order, and type, bound,

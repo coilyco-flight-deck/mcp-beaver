@@ -35,6 +35,18 @@ curl -s -H 'Content-Type: application/json' \
   localhost:8080/api/get_issue
 ```
 
+Every grant-backed result is `{"coverage": {...}, "result": ...}`, in that
+order, in both the text and the structured content. Coverage leads because a
+consuming harness bounds a tool result by keeping the front and discarding the
+tail, so a caveat serialized last is the first thing destroyed - and the model
+then reads rows with no caveat and answers as though the view were complete. It
+states `truncated` (always false; nothing here truncates), the payload's
+`bytes`, whether that is `over_budget` for the smallest consumer cap measured
+in the fleet, and `items` naming every array in the payload and its length. A
+count in meaning is what changes an answer; a byte total is not. See
+[docs/DESIGN.md](docs/DESIGN.md) for what the runtime enforces and what stays
+the upstream's word.
+
 The HTTP projection is always present. It accepts one JSON argument object,
 uses the same tool handler as `tools/call`, and returns the MCP
 `CallToolResult` JSON shape. mcp-beaver performs no inbound authentication.

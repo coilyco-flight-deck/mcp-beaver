@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
@@ -45,20 +46,29 @@ func scalarString(v any) string {
 	return fmt.Sprintf("%v", v)
 }
 
+// toolSuccess wraps the upstream payload in the coverage-first envelope. The
+// text content carries the SAME envelope rather than the bare upstream body:
+// the two used to disagree, and the text half is what a head-slicing consumer
+// cuts, so leading the structured half alone would have left the caveat where
+// it always got destroyed (mcp-beaver#68).
 func toolSuccess(resp opcore.Response) *mcp.CallToolResult {
-	text := string(resp.Raw)
-	if text == "" {
-		text = resp.Status
-	}
 	result := any(resp.Decoded)
 	if result == nil {
+		text := string(resp.Raw)
+		if text == "" {
+			text = resp.Status
+		}
 		result = text
 	}
-	out := &mcp.CallToolResult{
-		Content:           []mcp.Content{&mcp.TextContent{Text: text}},
-		StructuredContent: map[string]any{"result": result},
+	payload := toolPayload{Coverage: newCoverage(resp, result), Result: result}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return toolError(fmt.Errorf("serialize tool result: %w", err))
 	}
-	return out
+	return &mcp.CallToolResult{
+		Content:           []mcp.Content{&mcp.TextContent{Text: string(encoded)}},
+		StructuredContent: payload,
+	}
 }
 
 func toolError(err error) *mcp.CallToolResult {

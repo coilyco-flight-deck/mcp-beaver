@@ -122,6 +122,69 @@ a specific parameter result schema. An allowlisted upstream proxy preserves the
 upstream tool contract, including its title, schemas, annotations, and result,
 instead of reclassifying behavior mcp-beaver does not own.
 
+### Coverage before payload (mcp-beaver#68)
+
+A consuming harness bounds a tool result at a byte cap, and the common shape is
+a **head slice**: keep the front, discard the tail, append a byte-count notice.
+So whichever field serializes last is the first one destroyed, deterministically
+and silently. sirens-echo#449 cost a day to a server that put its `warnings` key
+last: the surface said it had searched 528 of 22,933 rows, the reply said none
+existed, and only the first was true.
+
+Two properties make it worse than an ordinary truncation bug. The notice is in
+**bytes, not meaning** - the model learns "this was cut" and never learns "the
+search covered 528 of 22,933 rows", and only the second changes an answer. And
+the cap is **per-consumer**: 8192 on one profile and 16384 on another, so the
+same query is honest for one reader and silently caveat-free for the other, with
+nothing in either log saying so.
+
+mcp-beaver generates the fleet's servers, so the property is worth fixing once
+here rather than once per server.
+
+**Enforced by the runtime, not left to the guardfile:**
+
+* **Coverage serializes first.** Every grant-backed result is
+  `{"coverage": {...}, "result": ...}`, and the envelope is a Go **struct**
+  rather than a map - `encoding/json` writes struct fields in declaration order
+  and map keys in sorted order, so a struct is what makes the position a
+  contract instead of an accident of the next field's name.
+* **The text content carries the same envelope.** Text and structured content
+  used to disagree - text was the bare upstream body, structured was
+  `{"result": ...}` - and the text half is the one a consumer slices. Leading
+  the structured half alone would have put the caveat exactly where it always
+  got destroyed.
+* **Truncation is stated, never silent.** `truncated` is always present and
+  always false, because nothing here truncates. The standing explicit claim is
+  what lets a consumer attribute a short view to its own slicing.
+* **Arrays are counted by name.** `coverage.items` names every array in the
+  payload and its length. This is where the eco-app#267 shape - 45 KB at
+  `limit=1`, because `limit` bounded one array of six - becomes visible on the
+  first call instead of after an investigation.
+* **`over_budget` marks a response past 8192 bytes**, the smallest consumer cap
+  measured. It does not mean this runtime cut anything. It means some consumer
+  will, and the model may be reading a prefix.
+
+**Not enforceable here, stated so an author is not surprised:**
+
+* **`limit` bounding every array is the upstream's job.** `limit` is a query
+  parameter this runtime forwards; nothing here can make an upstream bound a
+  second array it chose not to. What the runtime does instead is refuse to let
+  that stay invisible - an unbounded array shows up as a named count and an
+  `over_budget` flag rather than as a response that merely feels large.
+* **Null-versus-zero is the upstream's word.** This runtime never synthesizes a
+  zero: an upstream it cannot read is an `isError` tool result, and a decoded
+  `null` stays `null`. An upstream that answers a failed read with `0` is
+  reporting its own state, and no envelope can tell that apart from a measured
+  zero.
+* **Upstream-proxy mode passes the upstream's own result through.** The whole
+  point of that mode is preserving the upstream contract, so the envelope there
+  is the upstream's to shape. `lint-upstream` is where an allowlisted surface
+  gets reviewed.
+* **Fixed-shape tools carry no coverage block.** `serve-ssm` returns one
+  parameter, `mcp_beaver_info` returns the server's own shape, and a withheld
+  stub returns a refusal. None can grow with upstream data, and a coverage
+  block on a response that cannot be partial would train a reader to skim it.
+
 ### One upstream session, reused (mcp-beaver#67)
 
 Upstream mode compares the upstream tool fingerprint against its startup
