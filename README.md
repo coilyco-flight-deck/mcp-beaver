@@ -228,6 +228,33 @@ shutdown flushes active providers within a five-second bound.
 
 The runtime is a **thin shell** over umbra's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, exact nested-string body mapping, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool and one HTTP endpoint, and every call fires through the same self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, outbound auth). mcp-beaver retains MCP JSON types when routing arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. mcp-beaver adds only the grant→tool projection and transport layers.
 
+## Naming an outgoing query parameter
+
+A `query` field's local name is what the caller sees in the tool schema. When
+the upstream spells the parameter differently, `upstream=` states the outgoing
+name:
+
+```kdl
+can search artist {
+    path "/ws/2/artist"
+    query "search" upstream="query"
+    query "fmt" "limit"
+}
+```
+
+That call sends `?query=<search>`, and the tool schema advertises `search`.
+
+The aliased form is the only way to reach an upstream parameter named `query`,
+`output`, `dry-run` or `body-file`, because those four are umbra's per-leaf
+engine flags and a local input may not shadow one. The reserved check reads the
+**local** name, so aliasing satisfies it rather than working around it. Search
+APIs hit this constantly: MusicBrainz, Solr-backed endpoints, and
+Elasticsearch-style ones all take their search string in `query`.
+
+Two guards keep the alias honest. Repeating the local name in `upstream=` is an
+error rather than a no-op, and two fields aliasing onto the same outgoing name
+fail closed at build rather than silently dropping one.
+
 ## Authoring request bodies
 
 Use the flat shorthand when every caller-supplied body field is an optional
