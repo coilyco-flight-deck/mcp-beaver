@@ -13,40 +13,71 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// upstreamClientTimeout bounds one request to the proxied upstream MCP.
+// upstreamResponseHeaderTimeout bounds how long an upstream may take to START
+// answering. It is deliberately NOT an `http.Client.Timeout`.
 //
-// The serving path passed a nil client, which the transport resolves to
-// http.DefaultClient - and that has no timeout at all. Spec mode was already
-// bounded, because opcore's default client carries one; proxy mode was the
-// unbounded half. It sits under the inbound request deadline so the upstream
-// call is what fails, and the runtime still has room to say so.
-const upstreamClientTimeout = 45 * time.Second
+// `Client.Timeout` bounds the whole exchange including reading the body, and a
+// streamable-HTTP MCP response IS a body that stays open. So a 45s
+// `Client.Timeout` killed any tool call whose stream ran longer - a cold
+// Chromium launch takes 45s on its own - and the abort took the upstream
+// session with it. Every later call then failed instantly with `session not
+// found`, which is how a playwright deployment recorded 0 successes over 24h
+// at p95 16.8ms: one slow call poisoned the session, and nothing reconnected
+// (mcp-beaver#79).
+//
+// Time-to-first-byte is the right bound for a stream. A hung upstream still
+// fails here, and the per-call deadline in withToolDeadline bounds the rest
+// through the request context, which is what #49 actually needed.
+const upstreamResponseHeaderTimeout = 45 * time.Second
 
-// boundedUpstreamClient gives a caller-supplied client a timeout only when it
-// declared none. A caller that set one has made a deliberate choice, and this
-// must not quietly override it.
+// boundedUpstreamClient bounds a caller-supplied client's time-to-first-byte
+// when it declared no bound of its own. A caller that set one has made a
+// deliberate choice, and this must not quietly override it.
 func boundedUpstreamClient(client *http.Client) *http.Client {
 	if client == nil {
-		return &http.Client{Timeout: upstreamClientTimeout}
+		return &http.Client{Transport: boundedTransport(nil)}
 	}
-	if client.Timeout == 0 {
-		bounded := *client
-		bounded.Timeout = upstreamClientTimeout
-		return &bounded
+	if client.Timeout != 0 {
+		return client
 	}
-	return client
+	bounded := *client
+	bounded.Transport = boundedTransport(client.Transport)
+	return &bounded
 }
 
-// The endpoint, HTTP client and telemetry hook live only in newProxyBackend:
-// once the one session is up, nothing here redials, so holding the dial inputs
-// would just be an invitation to.
+// boundedTransport copies a transport and bounds its response-header wait.
+// Anything that is not an *http.Transport is left alone: it is a caller's own
+// round tripper, and reaching into it would be guessing.
+func boundedTransport(rt http.RoundTripper) http.RoundTripper {
+	base, ok := rt.(*http.Transport)
+	if rt == nil {
+		base, ok = http.DefaultTransport.(*http.Transport)
+	}
+	if !ok || base == nil {
+		return rt
+	}
+	bounded := base.Clone()
+	if bounded.ResponseHeaderTimeout == 0 {
+		bounded.ResponseHeaderTimeout = upstreamResponseHeaderTimeout
+	}
+	return bounded
+}
+
+// The dial inputs are held so a lost session can be replaced. They were dropped
+// when the per-call second session went away (#67), on the reasoning that
+// nothing redials - which was true until a dead session turned out to brick the
+// pod for 24 hours (#79).
 type proxyBackend struct {
-	mu        sync.Mutex
-	session   *mcp.ClientSession
-	allowlist []string
-	baseline  map[string]string
-	selected  []*mcp.Tool
-	driftErr  error
+	mu         sync.Mutex
+	endpoint   string
+	httpClient *http.Client
+	telemetry  *instrumentation
+	session    *mcp.ClientSession
+	allowlist  []string
+	baseline   map[string]string
+	selected   []*mcp.Tool
+	driftErr   error
+	closed     bool
 }
 
 func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []string, httpClient *http.Client, telemetry *instrumentation) (*proxyBackend, error) {
@@ -58,24 +89,18 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 		return nil, err
 	}
 
-	httpClient = boundedUpstreamClient(httpClient)
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "mcp-beaver", Version: "0.1.0"}, nil)
-	client.AddSendingMiddleware(telemetry.clientMiddleware)
-	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint:             upstreamURL,
-		HTTPClient:           httpClient,
-		DisableStandaloneSSE: true,
-	}, nil)
+	p := &proxyBackend{
+		endpoint:   upstreamURL,
+		httpClient: boundedUpstreamClient(httpClient),
+		telemetry:  telemetry,
+		allowlist:  allowlist,
+		baseline:   map[string]string{},
+	}
+	session, err := p.dial(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("connect upstream MCP %q: %w", upstreamURL, err)
 	}
-
-	p := &proxyBackend{
-		session:   session,
-		allowlist: allowlist,
-		baseline:  map[string]string{},
-	}
+	p.session = session
 	if err := p.snapshot(ctx); err != nil {
 		_ = session.Close()
 		return nil, err
@@ -83,9 +108,61 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 	return p, nil
 }
 
+// dial opens one session to the upstream. It holds no lock, so a reconnect can
+// run without blocking a concurrent call that is only reading the baseline.
+func (p *proxyBackend) dial(ctx context.Context) (*mcp.ClientSession, error) {
+	client := mcp.NewClient(&mcp.Implementation{Name: "mcp-beaver", Version: "0.1.0"}, nil)
+	client.AddSendingMiddleware(p.telemetry.clientMiddleware)
+	return client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:             p.endpoint,
+		HTTPClient:           p.httpClient,
+		DisableStandaloneSSE: true,
+	}, nil)
+}
+
+// reconnect replaces a session the upstream has stopped honouring.
+//
+// Deliberately NOT a retry of the failing call: a tool call may have already
+// reached the upstream and had its answer lost, and replaying it would turn a
+// timeout into a duplicate action. The failing call still fails, and the next
+// one gets a live session - which is the difference between one bad minute and
+// the 24-hour outage in #79.
+//
+// The baseline is NOT re-snapshotted. Re-reading it would adopt whatever the
+// upstream serves now as the reviewed contract, which is exactly the drift the
+// check exists to catch.
+func (p *proxyBackend) reconnect(ctx context.Context) error {
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return fmt.Errorf("mcp-beaver: upstream MCP session is closed")
+	}
+	stale := p.session
+	p.session = nil
+	p.mu.Unlock()
+
+	if stale != nil {
+		_ = stale.Close()
+	}
+	session, err := p.dial(ctx)
+	if err != nil {
+		return fmt.Errorf("reconnect upstream MCP %q: %w", p.endpoint, err)
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		_ = session.Close()
+		return fmt.Errorf("mcp-beaver: upstream MCP session is closed")
+	}
+	p.session = session
+	return nil
+}
+
 func (p *proxyBackend) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.closed = true
 	if p.session == nil {
 		return nil
 	}
@@ -106,7 +183,7 @@ func (p *proxyBackend) selectedTools() []*mcp.Tool {
 
 func (p *proxyBackend) toolHandler(name string) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if err := p.ensureFresh(ctx, name); err != nil {
+		if err := p.ensureFreshOrReconnect(ctx, name); err != nil {
 			return toolError(err), nil
 		}
 		session, err := p.currentSession()
@@ -125,6 +202,31 @@ func (p *proxyBackend) toolHandler(name string) mcp.ToolHandler {
 		}
 		return resp, nil
 	}
+}
+
+// ensureFreshOrReconnect runs the drift check, replacing the session once if it
+// has gone away underneath.
+//
+// The retry is safe because the drift check is a `tools/list` - idempotent, and
+// compared against the baseline captured at startup rather than a fresh one, so
+// a reconnect cannot launder a changed upstream into an accepted contract.
+// Schema drift is never retried: it is a decision about the upstream, not a
+// transport failure, and reconnecting would only ask the same question twice.
+func (p *proxyBackend) ensureFreshOrReconnect(ctx context.Context, name string) error {
+	err := p.ensureFresh(ctx, name)
+	if err == nil || p.hasDrifted() {
+		return err
+	}
+	if rerr := p.reconnect(ctx); rerr != nil {
+		return fmt.Errorf("%w (reconnect also failed: %v)", err, rerr)
+	}
+	return p.ensureFresh(ctx, name)
+}
+
+func (p *proxyBackend) hasDrifted() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.driftErr != nil
 }
 
 // currentSession resolves the long-lived upstream session for a caller that

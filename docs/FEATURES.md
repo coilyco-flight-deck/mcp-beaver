@@ -242,7 +242,17 @@ that subset on the outward MCP and automatic HTTP tool surfaces.
 * **Fail closed** - unknown upstream tools and schema drift return MCP tool
   errors instead of silently widening or mutating the surface.
 * **Proxy calls** - allowed `tools/call` requests are forwarded to the upstream
-  MCP session after the guard checks.
+  MCP session after the guard checks. One long-lived session serves every call,
+  including the drift check, because a second session is what real Node MCP
+  upstreams reject.
+* **Session survival** - the upstream bound is time-to-first-byte, never a
+  whole-exchange `Client.Timeout`: a streamable-HTTP response is a body that
+  stays open, so a whole-exchange bound killed any long tool call and took the
+  session with it. A session the upstream has forgotten is replaced on the next
+  call rather than being fatal for the life of the pod. The failing call is not
+  replayed - it may already have reached the upstream - and the reconnect never
+  re-snapshots the baseline, so drift still fails closed. See
+  [DESIGN.md](DESIGN.md).
 * **Bounded startup retry** - optional `--connect-timeout` retries the initial
   MCP connection while a co-located upstream starts. Zero retains fail-fast
   behavior for direct CLI use.

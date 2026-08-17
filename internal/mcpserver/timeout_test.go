@@ -169,15 +169,28 @@ func TestZeroRequestTimeoutDisablesTheBound(t *testing.T) {
 	}
 }
 
-// A caller that set its own client timeout has made a deliberate choice and
-// must keep it; a nil or unset client is the unbounded case worth fixing.
+// The bound is on time-to-first-byte, never on the whole exchange.
+// `Client.Timeout` covers reading the body, and a streamable-HTTP MCP response
+// IS a body that stays open, so setting it killed every long tool call and took
+// the session with it (mcp-beaver#79).
 func TestBoundedUpstreamClient(t *testing.T) {
-	if got := boundedUpstreamClient(nil); got.Timeout != upstreamClientTimeout {
-		t.Errorf("nil client timeout = %s, want %s", got.Timeout, upstreamClientTimeout)
+	for name, client := range map[string]*http.Client{"nil": nil, "unset": {}} {
+		t.Run(name, func(t *testing.T) {
+			got := boundedUpstreamClient(client)
+			if got.Timeout != 0 {
+				t.Errorf("Client.Timeout = %s, want 0: it would bound the open stream", got.Timeout)
+			}
+			transport, ok := got.Transport.(*http.Transport)
+			if !ok {
+				t.Fatalf("transport = %T, want *http.Transport", got.Transport)
+			}
+			if transport.ResponseHeaderTimeout != upstreamResponseHeaderTimeout {
+				t.Errorf("ResponseHeaderTimeout = %s, want %s", transport.ResponseHeaderTimeout, upstreamResponseHeaderTimeout)
+			}
+		})
 	}
-	if got := boundedUpstreamClient(&http.Client{}); got.Timeout != upstreamClientTimeout {
-		t.Errorf("unset timeout = %s, want %s", got.Timeout, upstreamClientTimeout)
-	}
+
+	// A caller that set its own timeout has made a deliberate choice.
 	caller := &http.Client{Timeout: 3 * time.Second}
 	if got := boundedUpstreamClient(caller); got.Timeout != 3*time.Second {
 		t.Errorf("caller timeout = %s, want it preserved", got.Timeout)
