@@ -1,0 +1,87 @@
+// reddit-public.mcp.kdl - the public half of reddit-mcp as a guardfile
+// (mcp-beaver#51), and the worked reference for `raw-response`.
+//
+// THIS SPEC DOES NOT SERVE YET. It lints, and it builds exactly the URL
+// reddit-mcp builds - verified live as
+// `GET https://www.reddit.com/r/golang/new/.rss?sort=new` - but reddit answers
+// opcore's default HTTP client with 403 "blocked due to a network policy",
+// reproducibly. reddit requires a descriptive User-Agent, reddit-mcp sends
+// `daily-routines/1.0 (by /u/coilysiren)`, and the INLINE grammar has no
+// `header` node to set one. The full guardfile grammar does; the inline one
+// opcore.ParseInline reads does not. Tracked as umbra#303. Until that lands,
+// this file is a reference for the shape rather than a deployable spec.
+//
+// Reddit publishes Atom, not JSON. Until umbra v0.148.0 that was a hard block
+// rather than a wrinkle: `Descriptor.RawResponse` was honoured only by
+// specverb, the CLI projection, so opcore decoded JSON unconditionally and an
+// Atom body failed the whole call with `invalid character '<' looking for
+// beginning of value`. The `raw-response` node below is what umbra#289 added,
+// and it is the reason this file can exist.
+//
+// THE COST, STATED. A guardfile hands the model raw Atom XML. reddit-mcp
+// returns normalized entries, and that normalization is a real part of its
+// value - the model now parses XML in context on every call. Kai took that
+// trade knowingly when she chose migration over keeping the server bespoke;
+// this comment exists so nobody later reads it as an oversight.
+//
+// WHY ONLY TWO OF THE FOUR READS. `get_frontpage` and `get_upvoted` read
+// private feed URLs that carry their own token. The origin is fixed and the
+// token rides in the query string, so `pin` is the right mechanism - but the
+// tokens live in SSM today as WHOLE URLs (`/reddit/frontpage-feed-url`,
+// `/reddit/upvoted-feed-url`), and a pin injects a query VALUE. Splitting the
+// token and username into their own env vars or parameters is deploy's config
+// to shape, not this repo's, so the private half lands there rather than
+// being guessed at here.
+
+instructions {
+    text "Reddit's public Atom feeds: the unpersonalized homepage, and the newest posts from named subreddits."
+    text "Reach for it to see what a community is discussing right now."
+    text "Public and read-only: it reads no account, no subscriptions, and nothing Kai upvoted."
+}
+
+// Reddit publishes no limit for these feeds and is not an upstream you are
+// invited to hammer. One request per second is a courtesy rate.
+rate-limit "1/1s"
+
+// A subreddit's newest posts are the same for a minute at a time, and a
+// community asks overlapping questions by nature. Off for the homepage feed,
+// which is what "what is happening right now" means.
+cache "get_subreddit_rss" ttl="1m"
+
+wrap ward mcp reddit-public {
+    base-url "www.reddit.com"
+
+    // These feeds are public and read no account. The grammar requires an
+    // `auth` block and offers no `none` scheme, so a genuinely credential-free
+    // upstream still has to name one - the same gap
+    // examples/steam-storefront.mcp.kdl documents. Nothing secret is written
+    // here and reddit ignores the header.
+    auth bearer {
+        value literal "unused-public-feed"
+    }
+
+    // A subreddit name is a path segment, so bound it. This is narrower than
+    // it looks: `base-url` is fixed, so the ORIGIN cannot be redirected by any
+    // input - the risk a restriction addresses is traversal within reddit.com,
+    // not turning the reader into an arbitrary URL fetcher.
+    //
+    // It is also LOOSER than reddit-mcp's own check, which validates each name
+    // against ^[A-Za-z0-9_]+$ after splitting on the join character. A glob
+    // cannot express a charset, so `+` joining several names still passes here
+    // while a per-name charset check does not exist. Worth knowing before this
+    // replaces the bespoke server.
+    restrict subreddits matches "*"
+
+    can get homepage_rss {
+        path "/.rss"
+        raw-response
+        describe "Reddit's PUBLIC, unpersonalized homepage Atom feed. Returns raw Atom XML. Does NOT read any account: not Kai's subscriptions, not her upvotes, not any private feed."
+    }
+
+    can get subreddit_rss {
+        path "/r/{subreddits}/new/.rss"
+        query "sort"
+        raw-response
+        describe "Newest posts from one or more subreddits as raw Atom XML. Join several with + as in `python+golang`. Public data only, and it does NOT search - it returns whatever is newest."
+    }
+}
