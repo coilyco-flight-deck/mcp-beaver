@@ -18,7 +18,7 @@ type inlineResource struct {
 // parseResources reads top-level `resource` nodes, siblings of `wrap` in the
 // same position as `icon`:
 //
-//	resource "oncall-runbook" uri="ward://runbook/oncall" mime="text/markdown" priority=0.9 {
+//	resource "oncall-runbook" uri="beaver://runbook/oncall" mime="text/markdown" priority=0.9 {
 //	    audience "assistant"
 //	    description "What to check first when the upstream 5xxes"
 //	    text "1. Check /healthz on the pod."

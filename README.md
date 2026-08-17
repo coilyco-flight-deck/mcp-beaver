@@ -8,7 +8,7 @@ A MCP server generator with a natural flow
 
 mcp-beaver renders a [umbra](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra) Guardfile into a guarded MCP server and HTTP tool API, baked into an OCI image. One generic runtime, many guardfiles. No per-server Go, no per-server Dockerfile, no per-server MCP or HTTP handler - and no per-tool input schema, because umbra's engine derives it from the inline operation definition in the `.mcp.kdl`.
 
-The spec configures **only the image interior**: which upstream, which outbound auth, which grants become which tools. The image serves MCP over the official Go SDK's streamable HTTP transport at `/mcp` and automatically exposes each tool at `POST /api/{tool-name}` (never stdio - these run as remote k3s pods reached by URL). mcp-beaver has **no relation to the ward codebase**, and uses [cli-mcp](https://github.com/coilysiren/cli-mcp) as a code reference only, not a dependency.
+The spec configures **only the image interior**: which upstream, which outbound auth, which grants become which tools. The image serves MCP over the official Go SDK's streamable HTTP transport at `/mcp` and automatically exposes each tool at `POST /api/{tool-name}` (never stdio - these run as remote k3s pods reached by URL). mcp-beaver shares **no code with [ward](https://forgejo.coilysiren.me/coilyco-flight-deck/ward)**, whose name this project used to carry as `ward-mcp`. One `ward` spelling survives on purpose: `wrap ward mcp <name>` opens every guardfile below, because that line is [umbra](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra)'s inline grammar rather than anything this runtime owns, and it moves when umbra moves. [cli-mcp](https://github.com/coilysiren/cli-mcp) is a code reference only, not a dependency.
 
 You declare the operations an agent may reach, down to the leaf. Everything you declared works. Nothing else is reachable. An unwritten `delete issue` grant means no `delete_issue` tool or HTTP endpoint is ever served (**deny-by-absence**), and `restrict owner matches coilyco-*` bounds every path. The one entry that is not a grant is `mcp_beaver_info`, a read-only tool that reports the server's own shape, reaches no upstream, and can be turned off with `server-info disabled`. Audit one small file, hand a write-capable MCP to an agent, know the blast radius.
 
@@ -114,7 +114,7 @@ fails closed: declare none and the server behaves exactly as before.
 server-info                                   // mints `mcp_beaver_info`
 confirm "create_issue" message="Create this issue upstream?"
 
-resource "oncall" uri="ward://runbook/oncall" mime="text/markdown" priority=0.9 {
+resource "oncall" uri="beaver://runbook/oncall" mime="text/markdown" priority=0.9 {
     audience "assistant"
     description "First response for an upstream 5xx"
     text "1. Call mcp_beaver_info to confirm the pod is serving."
@@ -124,7 +124,7 @@ resource "oncall" uri="ward://runbook/oncall" mime="text/markdown" priority=0.9 
 prompt "triage" title="Triage an incident" {
     description "Walk the on-call first-response steps"
     argument "service" description="Which service is failing" required=#true
-    text "You are triaging {service}. Read ward://runbook/oncall first."
+    text "You are triaging {service}. Read beaver://runbook/oncall first."
 }
 
 wrap ward mcp forgejo {

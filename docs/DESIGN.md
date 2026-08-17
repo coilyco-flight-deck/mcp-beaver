@@ -26,9 +26,9 @@ The image serves MCP over the SDK-backed streamable HTTP transport and each tool
 
 ## Not built on ward. Not built on cli-mcp. Built on umbra.
 
-mcp-beaver has **no relation to the ward codebase.** It is a driver over [umbra](https://github.com/coilysiren/cli-guard)'s three-layer spec engine. [cli-mcp](https://github.com/coilysiren/cli-mcp) is read as a **code reference only** - mcp-beaver uses the official MCP Go SDK for transport/session plumbing and does not depend on cli-mcp.
+mcp-beaver shares **no code with [ward](https://forgejo.coilysiren.me/coilyco-flight-deck/ward)**, whose name it used to carry as `ward-mcp`. The `ward` in `wrap ward mcp <name>` is umbra's inline grammar, not a dependency here, and it moves when umbra moves. It is a driver over [umbra](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra)'s three-layer spec engine. [cli-mcp](https://github.com/coilysiren/cli-mcp) is read as a **code reference only** - mcp-beaver uses the official MCP Go SDK for transport/session plumbing and does not depend on cli-mcp.
 
-umbra already turns a Guardfile into a guarded surface, in three layers ([specverb.md](https://github.com/coilysiren/cli-guard/blob/main/docs/specverb.md)):
+umbra already turns a Guardfile into a guarded surface, in three layers ([specverb.md](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra/src/branch/main/docs/specverb.md)):
 
 * **L0 - upstream spec.** In umbra generally, the vendor's OpenAPI/Swagger truth, embedded and pruned to the granted operations. In mcp-beaver's inline mode, the `.mcp.kdl` itself is the authored source and no fetched OpenAPI is a build input.
 * **L1 - policy IR.** The compiled operation set. verb+resource resolves to an operation by convention; `op` overrides.
