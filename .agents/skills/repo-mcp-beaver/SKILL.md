@@ -1,6 +1,6 @@
 ---
 name: repo-mcp-beaver
-description: MCP runtime that turns umbra policy files into guarded streamable HTTP services and container images. Triggers - mcp-beaver, automation, mcp, model-context-protocol, security
+description: MCP runtime that turns umbra Guardfiles into guarded streamable HTTP services and container images. Triggers - mcp-beaver, automation, mcp, model-context-protocol, security
 ---
 
 # repo-mcp-beaver
