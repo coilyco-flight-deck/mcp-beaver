@@ -317,3 +317,7 @@ owns public ingress, authentication, TLS, DNS, and rollout.
 ## Status
 
 The `mcp-beaver serve` runtime is **implemented** (mcp-beaver#7): it parses a `.mcp.kdl`, serves the derived tools over MCP at `/mcp` and HTTP at `/api/{tool-name}`, guarded-executes both projections through the same handler, and exposes operator-only `/healthz` plus `/admin/describe` and `/admin/reload` endpoints. The generic Helm chart that runs this image is also in (mcp-beaver#8). Tracking [coilysiren/inbox#164](https://forgejo.coilysiren.me/coilysiren/inbox/issues/164) (concept) and [coilyco-bridge/deploy#40](https://forgejo.coilysiren.me/coilyco-bridge/deploy/issues/40) (first consumer).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
