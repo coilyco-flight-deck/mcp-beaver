@@ -1,15 +1,16 @@
 // reddit-public.mcp.kdl - the public half of reddit-mcp as a guardfile
 // (mcp-beaver#51), and the worked reference for `raw-response`.
 //
-// THIS SPEC DOES NOT SERVE YET. It lints, and it builds exactly the URL
-// reddit-mcp builds - verified live as
-// `GET https://www.reddit.com/r/golang/new/.rss?sort=new` - but reddit answers
-// opcore's default HTTP client with 403 "blocked due to a network policy",
-// reproducibly. reddit requires a descriptive User-Agent, reddit-mcp sends
-// `daily-routines/1.0 (by /u/coilysiren)`, and the INLINE grammar has no
-// `header` node to set one. The full guardfile grammar does; the inline one
-// opcore.ParseInline reads does not. Tracked as umbra#303. Until that lands,
-// this file is a reference for the shape rather than a deployable spec.
+// Verified live: both reads serve real Atom off reddit.com.
+//
+// Getting there took two umbra fixes. `raw-response` (umbra#289) was the one
+// this issue already knew about. The second was not: a placeholder credential.
+// The grammar used to require an `auth` block with no way to say "no
+// credential", and reddit answers `Authorization: Bearer <anything>` with 403
+// while serving the same request unauthenticated. `auth none` (umbra#303,
+// v0.154.0) sends no header at all. That 403 read exactly like a block on the
+// client, and the first diagnosis blamed the User-Agent - measured through
+// curl and generalised to Go, which was wrong.
 //
 // Reddit publishes Atom, not JSON. Until umbra v0.148.0 that was a hard block
 // rather than a wrinkle: `Descriptor.RawResponse` was honoured only by
@@ -51,14 +52,12 @@ cache "get_subreddit_rss" ttl="1m"
 wrap ward mcp reddit-public {
     base-url "www.reddit.com"
 
-    // These feeds are public and read no account. The grammar requires an
-    // `auth` block and offers no `none` scheme, so a genuinely credential-free
-    // upstream still has to name one - the same gap
-    // examples/steam-storefront.mcp.kdl documents. Nothing secret is written
-    // here and reddit ignores the header.
-    auth bearer {
-        value literal "unused-public-feed"
-    }
+    // These feeds are public and read no account, and this is the upstream
+    // that proved a placeholder credential is not a harmless stand-in: reddit
+    // answers `Authorization: Bearer unused-public-feed` with 403 while
+    // serving the same request unauthenticated. `auth none` sends no header at
+    // all (umbra v0.154.0).
+    auth none
 
     // A subreddit name is a path segment, so bound it. This is narrower than
     // it looks: `base-url` is fixed, so the ORIGIN cannot be redirected by any
