@@ -1,10 +1,14 @@
-// fallthrough-verb.mcp.kdl - pins the #55 warning. `pin` is not in opcore's
-// verb table, so it resolves to POST by the unknown-verb fallthrough and still
-// mints a tool. `close` sits beside it as the control: an explicit table entry
-// resolving to PATCH, which must not warn.
+// fallthrough-verb.mcp.kdl - pins the #55 warning. `transfer` is not in
+// opcore's verb table, so it resolves to POST by the unknown-verb fallthrough
+// and still mints a tool. `close` sits beside it as the control: an explicit
+// table entry resolving to PATCH, which must not warn.
 //
 // The failure this guards against is that both cases printed identically, so a
 // grant that could never work looked exactly like a delivered one.
+//
+// `pin` used to be the fixture verb. It joined the table in umbra v0.148.0
+// along with `comment`, which is why this now uses a verb no upstream in the
+// fleet needs - a fixture that stops testing what it names is worse than none.
 wrap ward mcp fallthrough-fixture {
     base-url "example.invalid/api/v1"
 
@@ -12,8 +16,8 @@ wrap ward mcp fallthrough-fixture {
         value env "LINT_FIXTURE_TOKEN"
     }
 
-    can pin issue {
-        path "/repos/{owner}/{repo}/issues/{index}/pin"
+    can transfer issue {
+        path "/repos/{owner}/{repo}/issues/{index}/transfer"
     }
     can close issue {
         path "/repos/{owner}/{repo}/issues/{index}"

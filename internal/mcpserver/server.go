@@ -264,18 +264,22 @@ type ToolMethod struct {
 //
 // Tools with no descriptor (the info tool, proxy grants) are omitted rather
 // than reported with an empty method: they have no verb to resolve.
+//
+// Fallthrough reads opcore's own `MethodInferred` rather than re-deriving it
+// from the verb. A grant that states `method "POST"` has an author's decision
+// behind it and is owed no warning, and re-deriving would warn anyway - which
+// is the whole point of the node existing (mcp-beaver#72).
 func (s *Server) ToolMethods() []ToolMethod {
 	out := make([]ToolMethod, 0, len(s.descs))
 	for _, d := range s.descs {
 		if d.Proxy != nil {
 			continue
 		}
-		_, known := opcore.MethodForVerb(d.Leaf)
 		out = append(out, ToolMethod{
 			Tool:        toolName(d),
 			Verb:        d.Leaf,
 			Method:      d.Method,
-			Fallthrough: !known,
+			Fallthrough: d.MethodInferred,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Tool < out[j].Tool })

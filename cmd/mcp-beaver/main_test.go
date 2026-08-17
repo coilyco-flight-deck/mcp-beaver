@@ -37,12 +37,12 @@ func TestLintWarnsOnVerbFallthrough(t *testing.T) {
 	if err := runLintTo(&out, &warn, []string{filepath.Join("testdata", "fallthrough-verb.mcp.kdl")}); err != nil {
 		t.Fatalf("runLintTo: %v", err)
 	}
-	if got, want := out.String(), "close_issue\nmcp_beaver_info\npin_issue\n"; got != want {
+	if got, want := out.String(), "close_issue\nmcp_beaver_info\ntransfer_issue\n"; got != want {
 		t.Errorf("stdout = %q, want %q: a warning must not edit the diffable surface", got, want)
 	}
 	warning := warn.String()
-	if !strings.Contains(warning, "pin_issue") || !strings.Contains(warning, "fallthrough") {
-		t.Errorf("stderr = %q, want it to name pin_issue and the fallthrough", warning)
+	if !strings.Contains(warning, "transfer_issue") || !strings.Contains(warning, "fallthrough") {
+		t.Errorf("stderr = %q, want it to name transfer_issue and the fallthrough", warning)
 	}
 	if !strings.Contains(warning, "POST") {
 		t.Errorf("stderr = %q, want it to name the method the verb resolved to", warning)
@@ -72,7 +72,7 @@ func TestLintMethodsColumn(t *testing.T) {
 	}
 	// close is the case #55 was filed over: reopen and close share an endpoint
 	// and a method, and only one of them was in the table at the time.
-	want := "close_issue\tPATCH\nmcp_beaver_info\t-\npin_issue\tPOST\n"
+	want := "close_issue\tPATCH\nmcp_beaver_info\t-\ntransfer_issue\tPOST\n"
 	if got := out.String(); got != want {
 		t.Errorf("stdout = %q, want %q", got, want)
 	}

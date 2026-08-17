@@ -85,7 +85,19 @@ exit. No network, so it runs in a sealed clone and in CI.
   surface, so a spec carrying one lints identically to a working spec. An
   unknown verb resolving to POST by fallthrough, and a `resource` stating no
   `audience`. Both are legitimate choices, so both warn rather than fail, and
-  both keep off stdout so a warning never edits the diffable surface.
+  both keep off stdout so a warning never edits the diffable surface. The
+  fallthrough warning reads opcore's own `MethodInferred`, so a grant that
+  states `method` is owed no warning.
+* **Stated HTTP method** - `method "POST"` inside a `can` body picks the method
+  outright and leaves the verb free to name the tool well. The verb otherwise
+  does both jobs, and they collide on a read served over POST - ordinary for a
+  search API with a structured request body - which forced a create-shaped verb
+  and a tool named `create_web_search` for a call that creates nothing. The
+  verb table stays the default when `method` is absent. A stated `DELETE` marks
+  the grant destructive whatever the verb is called, since the confirmation
+  gate keys off the effect rather than the spelling, and anything outside
+  GET / POST / PUT / PATCH / DELETE / HEAD fails closed. Grammar owned by
+  umbra; pinned from v0.148.0.
 * **Scope** - the `wrap` inline grammar the serving runtime renders.
   `serve-ssm` policies use a separate grammar and are not lintable through
   this path.

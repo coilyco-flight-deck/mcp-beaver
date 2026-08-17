@@ -283,6 +283,38 @@ shutdown flushes active providers within a five-second bound.
 
 The runtime is a **thin shell** over umbra's [`http/opcore`](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra) engine: `opcore.ParseInline` parses the inline spec, including typed body blocks, exact nested-string body mapping, typed and bounded query fields, repeated query arrays, mutually-exclusive query groups, and safe local aliases for upstream parameter names. Each grant projects to one MCP tool and one HTTP endpoint, and every call fires through the same self-guarding `opcore.Operation.Execute` (metachar gate, `restrict`, outbound auth). mcp-beaver retains MCP JSON types when routing arguments, so opcore validates the declared contract before an upstream call and serializes arrays as repeated keys in caller order. Successful calls return both the original text content and a structured `{result: ...}` value that conforms to the advertised output schema. mcp-beaver adds only the grant→tool projection and transport layers.
 
+## Choosing a grant's HTTP method
+
+A verb picks the method by convention: `get` and `list` reach GET, `create`
+reaches POST, `edit` reaches PATCH. The verb is also the tool name, and those
+two jobs collide whenever an upstream serves a **read over POST**, which is
+ordinary for any search API taking a structured request body. Reaching POST
+used to mean naming the tool `create_web_search` for a call that creates
+nothing, and a model pattern-matches hardest on exactly that string.
+
+`method` states it outright and leaves the verb free to name the tool well:
+
+```kdl
+can search web {
+    method "POST"
+    path "/search"
+    body {
+        map "search" to="query"
+    }
+}
+```
+
+That mints `search_web` over POST. The verb table stays the default when
+`method` is absent, so nothing existing changes.
+
+Three things follow from stating it. A stated method is a decision, so `lint`
+owes it no unknown-verb warning - which is the point, since the alternative was
+relying on a verb **not** being in the table, and adding it later would have
+silently changed a deployed guardfile's method. A stated `DELETE` marks the
+grant destructive whatever the verb is called, because the confirmation gate
+keys off the effect rather than the spelling. And anything outside
+GET / POST / PUT / PATCH / DELETE / HEAD fails closed at build.
+
 ## Naming an outgoing query parameter
 
 A `query` field's local name is what the caller sees in the tool schema. When
