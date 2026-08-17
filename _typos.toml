@@ -1,0 +1,7 @@
+# Test fixtures whose whole point is the spelling. Correcting them would delete
+# what the test asserts: a misspelled tool name that must be rejected, and an
+# unknown KDL child that must fail parsing.
+[default.extend-words]
+reprot = "reprot"
+audiance = "audiance"
+unparseable = "unparseable"

@@ -27,9 +27,8 @@ case "$action" in
     go run ./cmd/mcp-beaver serve examples/skillsmp.mcp.kdl --http "${1:-:18080}"
     ;;
   lint-examples)
-    # Every committed example is a reference someone copies, so a broken one is
-    # worse than a missing one. --methods also surfaces the verb-fallthrough
-    # warnings on stderr as it goes.
+    # A broken committed example is worse than a missing one, and --methods
+    # surfaces verb-fallthrough warnings on stderr as it goes.
     status=0
     for spec in examples/*.mcp.kdl; do
       echo "== ${spec}"

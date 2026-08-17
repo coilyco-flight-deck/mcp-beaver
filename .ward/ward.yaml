@@ -45,3 +45,7 @@ commands:
     run: helm template mcp-beaver chart --namespace mcp-beaver --set-file spec=examples/sidecar.mcp.kdl -f examples/sidecar.values.yaml
     description: Render the spec-mode sidecar shape, wrapping a co-located non-MCP process.
 
+catalog:
+  description: "Guarded MCP server runtime: serves a KDL guardfile as an auth-neutral MCP surface over streamable HTTP, lints guardfiles and upstream allowlists, and ships as one generic image plus a Helm chart."
+  dependsOn:
+    - coilyco-flight-deck/umbra

@@ -1,2 +1,20 @@
 [tool.agentic-os.repo-pointer-skills]
 org = "coilyco-flight-deck"
+
+[tool.agentic-os.documentation-layout]
+# Large, not small. 84k chars of docs cannot fit small's 20 x 3,000 = 60,000
+# ceiling, and reaching it by splitting would mint 28 files, which is the exact
+# shape the count cap exists to punish. See the issue.
+band = "large"
+
+# The managed markers are stamped inside the pre-commit YAML and cannot form a
+# single top-of-file comment block. The Go source, chart, and examples predate
+# enrollment and carry 785 violations, tracked separately.
+[tool.agentic-os.code-comments]
+excludes = [
+  ".pre-commit-config.yaml",
+  "cmd/**",
+  "internal/**",
+  "chart/**",
+  "examples/**",
+]

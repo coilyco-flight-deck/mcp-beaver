@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The registry path moved to mcp-beaver first and the rest of the name followed
-# later, so images published either side of that are all under this path and all
-# still pullable. A deploy values file pins a source SHA rather than a tag, so
-# nothing here decides when a consumer adopts a new build.
+# Images published either side of the rename all live under this path and stay
+# pullable. Deploy pins a source SHA, so nothing here decides adoption.
 registry="forgejo.coilysiren.me"
 image_name="coilyco-flight-deck/mcp-beaver"
 

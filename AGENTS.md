@@ -26,7 +26,13 @@ spelling on purpose and are not stragglers to sweep:
 Package installers name the old binary so they can mark it outdated and
 uninstall it. That is the tap's and the bucket's business, not this repo's.
 
-## Boundaries
+## Project shape
+
+The Go runtime lives at `cmd/mcp-beaver` and `internal/`, the generic Helm
+chart at `chart/`, and the guardfile examples under `examples/`. `docs/` holds
+the design and feature pages the README points at.
+
+## Repo boundaries
 
 Keep the runtime spec-driven and deny by absence. `umbra` owns guarded HTTP
 execution. `mcp-beaver` owns MCP and HTTP tool projection plus transport.
@@ -47,6 +53,18 @@ change. Never bypass commit hooks.
 Do not widen a Guardfile grant, tool allowlist, path restriction, or secret
 boundary as incidental cleanup. Keep tokens and deployment identifiers out of
 tracked files and logs.
+
+## Cross-repo contracts
+
+umbra provides the guarded-CLI engine this builds on, consumed as a private
+Forgejo module. Deploy consumes the published image by full source sha and owns
+rollout. The catalog pre-commit hooks are authored in agentic-os and consumed
+here by upstream rev, never forked.
+
+## Agent rules
+
+Use she/her for Kai. No em dashes, italics, or semicolons in prose. Name the
+actor in every action sentence.
 
 ## Release
 
