@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
@@ -711,21 +710,20 @@ func TestUpstreamProxyRoundTrip(t *testing.T) {
 // TestUpstreamProxySchemaDriftFailsClosed proves the proxy compares upstream
 // tool contracts on call and returns an MCP tool error if the upstream schema
 // drifts.
+// The drift is applied to the same upstream server rather than by swapping the
+// instance behind the endpoint. The proxy now checks drift over its long-lived
+// session (mcp-beaver#67), and an instance swap is invisible to an already
+// established session - as it is in production, where replacing the served
+// binary means replacing the pod.
 func TestUpstreamProxySchemaDriftFailsClosed(t *testing.T) {
-	var current atomic.Value
-	current.Store(upstreamTool(t, "browse", "browse upstream", `{
+	upstream := upstreamTool(t, "browse", "browse upstream", `{
 		"type":"object",
 		"properties":{"q":{"type":"string"}},
 		"required":["q"]
 	}`, func(_ context.Context, _ *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "v1:" + args["q"].(string)}}}, nil, nil
-	}))
-
-	mux := http.NewServeMux()
-	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
-		return current.Load().(*mcp.Server)
-	}, &mcp.StreamableHTTPOptions{JSONResponse: true}))
-	upstreamTS := httptest.NewServer(mux)
+	})
+	upstreamTS := newUpstreamServer(t, upstream)
 	defer upstreamTS.Close()
 
 	s, err := NewProxy(context.Background(), "proxy", "", upstreamTS.URL+"/mcp", []string{"browse"}, upstreamTS.Client())
@@ -742,13 +740,18 @@ func TestUpstreamProxySchemaDriftFailsClosed(t *testing.T) {
 		t.Fatalf("initialize error: %+v", out.Error)
 	}
 
-	current.Store(upstreamTool(t, "browse", "browse upstream", `{
-		"type":"object",
-		"properties":{"q":{"type":"integer"}},
-		"required":["q"]
-	}`, func(_ context.Context, _ *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
+	upstream.RemoveTools("browse")
+	mcp.AddTool(upstream, &mcp.Tool{
+		Name:        "browse",
+		Description: "browse upstream",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{"q":{"type":"integer"}},
+			"required":["q"]
+		}`),
+	}, func(context.Context, *mcp.CallToolRequest, map[string]any) (*mcp.CallToolResult, any, error) {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "v2"}}}, nil, nil
-	}))
+	})
 
 	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", sessionID, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"browse","arguments":{"q":"ramen"}}}`)
 	out := decodeRPCResponse(t, resp)

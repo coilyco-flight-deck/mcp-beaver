@@ -122,6 +122,25 @@ a specific parameter result schema. An allowlisted upstream proxy preserves the
 upstream tool contract, including its title, schemas, annotations, and result,
 instead of reclassifying behavior mcp-beaver does not own.
 
+### One upstream session, reused (mcp-beaver#67)
+
+Upstream mode compares the upstream tool fingerprint against its startup
+baseline before every call, so a surface that drifts fails closed rather than
+serving a contract the operator never reviewed. That check runs over the
+**long-lived session opened at startup**, never a fresh one.
+
+A second session was what the drift check used to dial, and it made every
+`serve-upstream` deployment in the fleet non-functional at call time: real Node
+MCP servers answer a second `notifications/initialized` with HTTP 400, while a
+Go MCP server accepts it, so mcp-beaver fronting mcp-beaver passed and
+mcp-beaver fronting Playwright did not. The regression test therefore uses a
+fixture that rejects a second handshake rather than another Go server.
+
+Reuse also removes the round trip that never bought anything here. A
+`serve-upstream` deployment co-locates its upstream as a digest-pinned sidecar,
+so the upstream cannot change its tools while the pod lives, and a rollout
+replaces the pod along with the session.
+
 ## The pipeline (Guardfile -> image; deploy takes it from there)
 
 ```
