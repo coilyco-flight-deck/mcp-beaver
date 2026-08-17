@@ -1,19 +1,39 @@
 # Features
 
-The living inventory of what mcp-beaver ships today. Completes the
-README / AGENTS / docs/FEATURES trifecta. mcp-beaver turns a umbra Guardfile
-into a guarded MCP server with an automatic matching HTTP tool API, distributed
-as a runtime image plus a generic Helm chart.
+What mcp-beaver ships today. It turns a umbra Guardfile into a guarded MCP
+server with a matching HTTP tool API, distributed as one runtime image plus a
+generic Helm chart.
 
-- [Serving and linting](features-serve-and-lint.md)
-- [Guardfile siblings](features-guardfile-siblings.md)
-- [Conformance and upstream proxying](features-conformance-and-upstream.md)
-- [Logs, telemetry, and transports](features-observability.md)
-- [Bounds, operator HTTP, and packaging](features-bounds-and-packaging.md)
+## Commands
+
+- [serve.md](serve.md) - the generic runtime, grant-to-tool projection.
+- [lint.md](lint.md) - offline validation, and `lint-upstream`.
+- [upstream.md](upstream.md) - the guarded passthrough proxy.
+- [ssm.md](ssm.md) - the exact-parameter AWS reader.
+
+## Guardfile surface
+
+- [guardfile-siblings.md](guardfile-siblings.md) - instructions, resources,
+  prompts, server-info.
+- [guardfile-controls.md](guardfile-controls.md) - pins, rate limit, cache,
+  withheld verbs, confirmations.
+- [pdf-extraction.md](pdf-extraction.md) - reading a PDF an upstream returns.
+- [upstream-pins.md](upstream-pins.md) - server-side argument pinning.
+
+## Runtime
+
+- [transports.md](transports.md) - streamable HTTP, the HTTP tool API, health.
+- [conformance.md](conformance.md) - MCP 2026-07-28.
+- [request-bounds.md](request-bounds.md) - deadlines and connection guards.
+- [conformance.md](conformance.md) - `/admin` describe and reload.
+- [logs.md](logs.md) - structured logs and redaction.
+- [telemetry.md](telemetry.md) - opt-in OpenTelemetry.
+
+**Distribution.** - [image.md](image.md), [ci.md](ci.md), [chart.md](chart.md),
+  [chart-values.md](chart-values.md).
+- [DESIGN.md](DESIGN.md) - why it is shaped this way.
 
 ## See also
 
-- [README.md](../README.md) - human-facing intro.
-- [AGENTS.md](../AGENTS.md) - agent operating rules.
-- [DESIGN.md](DESIGN.md) - why it is shaped this way.
-- [.ward/ward.yaml](../.ward/ward.yaml) - allowlisted commands.
+- [README.md](../README.md), [AGENTS.md](../AGENTS.md),
+  [.ward/ward.yaml](../.ward/ward.yaml).

@@ -2,10 +2,7 @@
 org = "coilyco-flight-deck"
 
 [tool.agentic-os.documentation-layout]
-# Large, not small. 84k chars of docs cannot fit small's 20 x 3,000 = 60,000
-# ceiling, and reaching it by splitting would mint 28 files, which is the exact
-# shape the count cap exists to punish. See the issue.
-band = "large"
+band = "small"
 
 # The managed markers are stamped inside the pre-commit YAML and cannot form a
 # single top-of-file comment block. The Go source, chart, and examples predate

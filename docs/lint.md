@@ -1,40 +1,38 @@
-# Validating a guardfile without serving it
+# `mcp-beaver lint <spec.mcp.kdl>`
 
-Split out of the README.
+The offline validation surface: `serve` minus the listener and telemetry. Read
+the spec, build the same server, print the minted tool names, exit. No network,
+so it runs in a sealed clone and in CI.
 
-## Validating a guardfile without serving it
+Lint builds through the same constructor `serve` uses rather than calling
+`opcore.ParseInline` directly, so it validates the grant-to-tool projection as
+well as the parse. A well-formed file whose grants collide on one tool name
+fails here.
 
-`mcp-beaver lint` is the offline check. It reads the spec, builds the same server
-`serve` would, prints the minted tool names to stdout one per line, and exits -
-no listener, no telemetry, no network, so it runs in a sealed clone and in CI:
+A clean spec exits 0 and writes the projected tool names to stdout, sorted, one
+per line. That is how a consumer repo reads its served surface off the owning
+loader instead of writing a second parser. A rejected spec exits non-zero with
+the failure on stderr and writes nothing to stdout.
 
-```sh
-$ mcp-beaver lint examples/skillsmp.mcp.kdl
-search_ai-skills
-search_skills
-```
+## Warnings
 
-A spec that does not parse, or that projects two grants onto one tool name,
-exits non-zero with the failure on stderr and prints nothing to stdout.
+Two facts invisible from every other surface, so a spec carrying one lints
+identically to a working spec. An unknown verb resolving to POST by
+fallthrough, and a `resource` stating no `audience`. Both are legitimate, so
+both warn rather than fail, and both stay off stdout so a warning never edits
+the diffable surface. The fallthrough warning reads opcore's `MethodInferred`,
+so a grant stating `method` is owed no warning.
 
-Two things warn rather than fail, because both are legitimate choices an author
-has to be the one making: a verb that resolved to POST by fallthrough, and a
-`resource` that states no `audience`. Neither is visible from any other
-surface, so a spec carrying one reads exactly like a working spec. Warnings go
-to stderr, so adding one never edits the list a consumer diffs.
+## Stated HTTP method
 
-The tool-name output matters as much as the exit code. A consumer repo diffing
-that list against a reviewed expectation is invoking the owning loader. A
-consumer reimplementing the parse to derive the same list is the antipattern
-this command exists to remove. Linting goes through the full server build
-rather than the raw KDL parse on purpose, so the check covers the
-grant-to-tool projection the runtime will actually mint, not only what the file
-says. `serve-ssm` policies use a separate grammar and are not lintable through
-this path.
+`method "POST"` inside a `can` body picks the method outright and leaves the
+verb free to name the tool well. The verb otherwise does both jobs and they
+collide on a read served over POST, which forced tool names like
+`create_web_search` for a call that creates nothing. A stated `DELETE` marks
+the grant destructive whatever the verb is called, since the confirmation gate
+keys off effect rather than spelling, and anything outside GET, POST, PUT,
+PATCH, DELETE, HEAD fails closed.
 
-The forgejo example serves `create_issue`, `get_issue`, `list_issue`, `comment_issue`, `close_issue` - each guarded, each scoped to `coilyco-*` / `kai` owners.
-
-## See also
-
-- [authoring-siblings.md](authoring-siblings.md) - guardfile siblings.
-- [FEATURES.md](FEATURES.md) - what ships today.
+Scope is the `wrap` inline grammar. `serve-ssm` policies use a separate grammar
+and are not lintable through this path. `lint-upstream` is in
+[upstream.md](upstream.md).

@@ -134,15 +134,15 @@ MIT. See [LICENSE](LICENSE).
 
 ## Authoring guardfiles
 
-The authoring guidance that used to live here moved into `docs/`:
+The authoring guidance lives in `docs/`:
 
-- [lint.md](docs/lint.md) - validating a guardfile without serving it.
-- [authoring-siblings.md](docs/authoring-siblings.md) - the optional guardfile
-  siblings and what each one does.
-- [authoring-grants.md](docs/authoring-grants.md) - choosing a grant's HTTP
-  method, naming outgoing query parameters, and writing request bodies.
-- [authoring-upstream-and-otel.md](docs/authoring-upstream-and-otel.md) -
-  validating an upstream allowlist and opting into OpenTelemetry.
+- [lint.md](docs/lint.md) - validating a guardfile, and stating a method.
+- [guardfile-siblings.md](docs/guardfile-siblings.md) and
+  [guardfile-controls.md](docs/guardfile-controls.md) - the optional nodes
+  stated beside `wrap`.
+- [upstream.md](docs/upstream.md) and
+  [upstream-pins.md](docs/upstream-pins.md) - allowlists and scoping.
+- [telemetry.md](docs/telemetry.md) - opting into OpenTelemetry.
 
 ## See also
 
