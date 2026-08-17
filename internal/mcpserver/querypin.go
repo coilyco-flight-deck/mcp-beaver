@@ -3,6 +3,8 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/pkg/valuesource"
@@ -26,7 +28,22 @@ type queryPin struct {
 	Name     string // outgoing query parameter
 	Provider string // env | file | literal
 	Source   string // env var name, file path, or the literal value
+	From     string // optional extraction applied to the resolved value
 }
+
+// queryFromPrefix marks the one extraction a pin may apply: read a query
+// parameter out of a URL the resolved value holds.
+//
+// Credentials arrive embedded in a URL more often than they should - private
+// RSS and Atom feeds, signed links, webhook endpoints. Without this the only
+// way to pin one is to store a SECOND copy of the same credential, pre-split,
+// which means two secrets to rotate together and one of them silently going
+// stale. Extracting at call time keeps a single source of truth.
+//
+// It only ever NARROWS: it takes a component of a value the server already
+// resolved. It reaches no new source, widens no grant, and the pinned name is
+// still absent from the tool schema.
+const queryFromPrefix = "query:"
 
 // parseQueryPins reads top-level `pin` nodes, siblings of `wrap`:
 //
@@ -80,6 +97,18 @@ func parseQueryPinChildren(n *kdl.Node, tool string) ([]queryPin, error) {
 			return nil, fmt.Errorf("mcp-beaver: `pin` %q: `query` wants three arguments - name, provider, source - e.g. `query \"steamid\" env \"STEAM_STEAMID64\"`", tool)
 		}
 		pin := queryPin{Name: args[0].String(), Provider: args[1].String(), Source: args[2].String()}
+		for key, value := range child.Properties() {
+			if key != "from" {
+				return nil, fmt.Errorf("mcp-beaver: `pin` %q: unknown `query` property %q (want from; fail-closed)", tool, key)
+			}
+			pin.From = value.String()
+		}
+		if pin.From != "" {
+			name, ok := strings.CutPrefix(pin.From, queryFromPrefix)
+			if !ok || name == "" {
+				return nil, fmt.Errorf("mcp-beaver: `pin` %q: query %q has from=%q, want `from=\"query:<parameter>\"` (fail-closed)", tool, pin.Name, pin.From)
+			}
+		}
 		switch {
 		case pin.Name == "":
 			return nil, fmt.Errorf("mcp-beaver: `pin` %q: query parameter name must be non-empty", tool)
@@ -150,7 +179,37 @@ func resolveQueryPins(ctx context.Context, pins []queryPin) (map[string]string, 
 		if err != nil {
 			return nil, fmt.Errorf("mcp-beaver: resolve pinned query %q: %w", pin.Name, err)
 		}
+		if pin.From != "" {
+			value, err = extractQueryParam(value, strings.TrimPrefix(pin.From, queryFromPrefix))
+			if err != nil {
+				return nil, fmt.Errorf("mcp-beaver: pinned query %q: %w", pin.Name, err)
+			}
+		}
 		out[pin.Name] = value
 	}
 	return out, nil
+}
+
+// extractQueryParam reads one query parameter out of a URL.
+//
+// Errors name the parameter and never the value: the value is the credential
+// this exists to handle, and a resolve failure is exactly when something is
+// most likely to be logged.
+func extractQueryParam(raw, name string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", fmt.Errorf("from=%s%s: the resolved value is not a URL", queryFromPrefix, name)
+	}
+	values, err := url.ParseQuery(parsed.RawQuery)
+	if err != nil {
+		return "", fmt.Errorf("from=%s%s: the resolved URL has no readable query string", queryFromPrefix, name)
+	}
+	if !values.Has(name) {
+		return "", fmt.Errorf("from=%s%s: the resolved URL carries no %q parameter", queryFromPrefix, name, name)
+	}
+	got := values.Get(name)
+	if got == "" {
+		return "", fmt.Errorf("from=%s%s: the resolved URL carries %q but it is empty", queryFromPrefix, name, name)
+	}
+	return got, nil
 }

@@ -147,6 +147,16 @@ All are opt-in except `server-info`, which is on by default and opts out.
   build error, and an unresolvable pin fails the call rather than sending an
   unscoped request. The concrete case is Steam's `steamid`, where a declared
   field would turn "this account's library" into "any account's library".
+  `from="query:<parameter>"` reads one query parameter out of a URL the
+  resolved value holds, for the common case of a credential that arrives
+  embedded in a URL - a private RSS or Atom feed, a signed link, a webhook
+  endpoint. Without it the only way to pin one is to store a **second**,
+  pre-split copy of the same credential, which is two things to rotate and one
+  of them going stale silently. The extraction only ever narrows: it takes a
+  component of an already-resolved server-side value, reaches no new source,
+  and the pinned name stays out of the tool schema. A value that is not a URL,
+  or that carries no such parameter, fails the call, and the error names the
+  parameter rather than echoing the value.
 * **Rate limit** - `rate-limit "1/1s"` states a per-server, process-wide
   outbound bucket in `<count>/<duration>` form. It serialises rather than
   rejecting: a queued tool call is slower, a 503 is a failed turn. The pod has

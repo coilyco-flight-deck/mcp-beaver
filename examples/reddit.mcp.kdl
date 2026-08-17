@@ -1,7 +1,10 @@
-// reddit-public.mcp.kdl - the public half of reddit-mcp as a guardfile
-// (mcp-beaver#51), and the worked reference for `raw-response`.
+// reddit.mcp.kdl - reddit-mcp's four reads as a guardfile (mcp-beaver#51),
+// and the worked reference for `raw-response` and for pinning a credential
+// that arrives embedded in a URL.
 //
-// Verified live: both reads serve real Atom off reddit.com.
+// The two public reads are verified live against reddit.com. The two private
+// ones are verified against a local fixture, because their feed URLs are
+// Kai's - see PRIVATE FEEDS below.
 //
 // Getting there took two umbra fixes. `raw-response` (umbra#289) was the one
 // this issue already knew about. The second was not: a placeholder credential.
@@ -25,14 +28,17 @@
 // trade knowingly when she chose migration over keeping the server bespoke;
 // this comment exists so nobody later reads it as an oversight.
 //
-// WHY ONLY TWO OF THE FOUR READS. `get_frontpage` and `get_upvoted` read
-// private feed URLs that carry their own token. The origin is fixed and the
-// token rides in the query string, so `pin` is the right mechanism - but the
-// tokens live in SSM today as WHOLE URLs (`/reddit/frontpage-feed-url`,
-// `/reddit/upvoted-feed-url`), and a pin injects a query VALUE. Splitting the
-// token and username into their own env vars or parameters is deploy's config
-// to shape, not this repo's, so the private half lands there rather than
-// being guessed at here.
+// PRIVATE FEEDS. `get_frontpage` and `get_upvoted` read feed URLs that carry
+// their own token in the query string. SSM holds each as a WHOLE URL
+// (`/reddit/frontpage-feed-url`, `/reddit/upvoted-feed-url`) while a `pin`
+// injects a query VALUE, so this looked like it needed deploy to store a
+// second, pre-split copy of each credential.
+//
+// It does not, and it should not: two copies of one secret is two things to
+// rotate and one of them going stale silently. `from="query:<name>"` reads the
+// component out of the URL the deployment already has, so there is one source
+// of truth. The deploy side needs only to hand the pod the env var pointing at
+// the parameter it already uses.
 
 instructions {
     text "Reddit's public Atom feeds: the unpersonalized homepage, and the newest posts from named subreddits."
@@ -83,4 +89,46 @@ wrap ward mcp reddit-public {
         raw-response
         describe "Newest posts from one or more subreddits as raw Atom XML. Join several with + as in `python+golang`. Public data only, and it does NOT search - it returns whatever is newest."
     }
+
+    // The two private reads. Neither declares a caller input: their scope is
+    // the pinned feed token below, so a model cannot ask for somebody else's
+    // feed because there is nothing to ask with.
+    can get frontpage {
+        path "/.rss"
+        raw-response
+        describe "Kai's PERSONALIZED reddit front page - the subreddits she subscribes to - as raw Atom XML. Reads her private feed. Use get_homepage_rss for the public unpersonalized homepage instead."
+    }
+
+    // The account is IN THE PATH and a path parameter cannot be pinned, so it
+    // is fixed here rather than declared as a caller input - which would have
+    // handed the model "any account's upvotes" while the pin below was busy
+    // fixing the token. The handle is public: reddit-mcp ships it in its own
+    // committed User-Agent.
+    //
+    // CHECK THIS PATH before deploying. It is reddit's documented shape for an
+    // upvoted feed, not a value read off the real feed URL, and the real URL
+    // is the authority.
+    can get upvoted {
+        path "/user/coilysiren/upvoted.rss"
+        raw-response
+        describe "Posts Kai has UPVOTED, as raw Atom XML. An interest signal rather than a feed of new content: these are things she already saw and liked."
+    }
+}
+
+// The private feed credentials, taken out of the feed URLs the deployment
+// already holds. `from="query:<name>"` resolves the env var and then reads one
+// query parameter out of the URL it carries, so the token is stored once
+// rather than once per component.
+//
+// Pinned names are absent from the tool schema, so a caller can neither supply
+// nor override them - the whole point, since the token IS the authorization
+// on these feeds.
+pin "get_frontpage" {
+    query "feed" env "REDDIT_FRONTPAGE_FEED_URL" from="query:feed"
+    query "user" env "REDDIT_FRONTPAGE_FEED_URL" from="query:user"
+}
+
+pin "get_upvoted" {
+    query "feed" env "REDDIT_UPVOTED_FEED_URL" from="query:feed"
+    query "user" env "REDDIT_UPVOTED_FEED_URL" from="query:user"
 }
