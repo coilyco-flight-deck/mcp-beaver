@@ -111,6 +111,13 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	extracts, err := parseExtracts(src)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateExtracts(extracts, descs); err != nil {
+		return nil, err
+	}
 	if err := validateCaches(caches, descs, confirmations); err != nil {
 		return nil, err
 	}
@@ -163,7 +170,7 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	for _, d := range descs {
 		desc := d
 		spec := toolSpec(desc)
-		handler := toolHandler(rt, desc, queryPins[spec.Name])
+		handler := toolHandler(rt, desc, queryPins[spec.Name], extracts[spec.Name])
 		// Inside the confirmation gate: a call awaiting a human's accept must
 		// not hold an upstream slot, and a declined call must not have spent
 		// one. The bucket is for requests that actually go out.
@@ -594,7 +601,7 @@ func toolSpec(d opcore.Descriptor) *mcp.Tool {
 	}
 }
 
-func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin) mcp.ToolHandler {
+func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin, extract *pdfExtract) mcp.ToolHandler {
 	schema := desc.InputSchema()
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var rawArgs map[string]any
@@ -619,6 +626,9 @@ func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin) mc
 		resp, err := (&opcore.Operation{Desc: desc, RT: rt}).Execute(ctx, args)
 		if err != nil {
 			return toolError(err), nil
+		}
+		if extract != nil {
+			return pdfToolSuccess(ctx, resp, extract), nil
 		}
 		return toolSuccess(resp), nil
 	}

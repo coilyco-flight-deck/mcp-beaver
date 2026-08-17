@@ -37,6 +37,18 @@ type coverage struct {
 	// upstream failed to bound becomes visible to the author on the first call
 	// rather than after a day of investigation.
 	Items map[string]int `json:"items,omitempty"`
+	// Pages is present only on an extracted document. It is the one place this
+	// runtime can honestly state a shown-of-total, because the bound is its own
+	// rather than the upstream's.
+	Pages *pageCoverage `json:"pages,omitempty"`
+}
+
+// pageCoverage is how much of a document the extraction read. Present so a
+// bounded read cannot be mistaken for the whole document - a model told only
+// that it received text has no way to know page 21 exists.
+type pageCoverage struct {
+	Shown int `json:"shown"`
+	Total int `json:"total"`
 }
 
 // toolPayload is the response envelope. FIELD ORDER IS THE CONTRACT: Go
@@ -58,7 +70,13 @@ var resultOutputSchema = json.RawMessage(`{
 				"truncated":{"type":"boolean"},
 				"bytes":{"type":"integer"},
 				"over_budget":{"type":"boolean"},
-				"items":{"type":"object","additionalProperties":{"type":"integer"}}
+				"items":{"type":"object","additionalProperties":{"type":"integer"}},
+				"pages":{
+					"type":"object",
+					"description":"Pages read of pages the document holds. Present only on an extracted document.",
+					"properties":{"shown":{"type":"integer"},"total":{"type":"integer"}},
+					"required":["shown","total"]
+				}
 			},
 			"required":["truncated","bytes","over_budget"]
 		},

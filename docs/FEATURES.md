@@ -102,7 +102,7 @@ exit. No network, so it runs in a sealed clone and in CI.
   `serve-ssm` policies use a separate grammar and are not lintable through
   this path.
 
-## Guardfile siblings: instructions, resources, prompts, server-info, response cache, withheld verbs, confirmations
+## Guardfile siblings: instructions, resources, prompts, server-info, PDF extraction, response cache, withheld verbs, confirmations
 
 Top-level nodes stated beside `wrap`, outside the frozen inline grammar
 `opcore.ParseInline` owns. Each fails closed on an unknown property or child.
@@ -155,6 +155,20 @@ All are opt-in except `server-info`, which is on by default and opts out.
   tool and withheld stubs reach no upstream and are not charged. A call that
   would queue past the request deadline fails with a stated timeout rather than
   holding a slot.
+* **PDF text extraction** - `extract "<tool-name>" as="pdf-text" max-pages="20"`
+  turns a PDF an upstream returns into text an agent can read. A lot of
+  authoritative reference material - government statistics, standards bodies,
+  regulatory filings, equipment documentation - is published only as PDF, so a
+  grant reaching one used to return bytes no model could use. Requires the
+  grant to declare `raw-response`, checked at build. Bounded on three axes: a
+  32MB size gate before the parser, a page bound defaulting to 20 and ceilinged
+  at 200, and a parse that runs off the request goroutine so a wedged document
+  returns a stated timeout rather than holding the handler. Malformed and
+  encrypted documents are clean tool errors, and a parser panic is recovered
+  into one. The coverage block gains `pages: {shown, total}`, so a bounded read
+  cannot be mistaken for the whole document. Text only - table extraction and
+  OCR are separate decisions. The in-process-versus-sidecar posture and the
+  library choice are recorded in [DESIGN.md](DESIGN.md).
 * **Response cache** - `cache "<tool-name>" ttl="15m"` reuses one grant's
   upstream answer for a window. **Not** the `ttlMs` / `cacheScope` on list
   results, which cache the tool inventory rather than the data. Opt-in per
