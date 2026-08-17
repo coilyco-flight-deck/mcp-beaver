@@ -149,4 +149,5 @@ The authoring guidance lives in `docs/`:
 - [AGENTS.md](AGENTS.md) - agent operating rules for this repository.
 - [docs/FEATURES.md](docs/FEATURES.md) - what ships today.
 - [docs/DESIGN.md](docs/DESIGN.md) - why it is shaped this way.
-- [.ward/ward.yaml](.ward/ward.yaml) - allowlisted commands.
+- [justfile](justfile) - dev verbs.
+- [.ward/ward.yaml](.ward/ward.yaml) - catalog metadata only.

@@ -45,7 +45,7 @@ Route development through Ward using the verbs in [`.ward/ward.yaml`](.ward/ward
 
 ## Validation
 
-Run `ward exec test` and the relevant chart or image checks before landing a
+Run `just test` and the relevant chart or image checks before landing a
 change. Never bypass commit hooks.
 
 ## Safety

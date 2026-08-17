@@ -1,49 +1,9 @@
-commands:
-  build:
-    run: bash scripts/ward-command.sh build
-    description: Build all Go packages.
-  test:
-    run: bash scripts/ward-command.sh test
-    description: Run the Go test suite.
-  vet:
-    run: bash scripts/ward-command.sh vet
-    description: Run go vet across the tree.
-  tidy:
-    run: bash scripts/ward-command.sh tidy
-    description: Reconcile Go module dependencies.
-  fmt:
-    run: bash scripts/ward-command.sh fmt
-    description: Format the Go source tree.
-  image-build:
-    run: docker build -t mcp-beaver:local .
-    description: Build the generic mcp-beaver runtime image locally.
-  check-publish:
-    run: bash -n scripts/publish-image.sh
-    description: Validate the trusted Forgejo OCI publisher shell contract.
-  pin-umbra:
-    run: bash scripts/ward-command.sh pin-umbra
-    description: Pin umbra and reconcile Go module dependencies. Pass an optional version after `--`.
-  serve-example:
-    run: bash scripts/ward-command.sh serve-example
-    description: Serve the skillsmp example spec on localhost:18080 for local MCP handshake checks.
-  lint-examples:
-    run: bash scripts/ward-command.sh lint-examples
-    description: Lint every committed example guardfile, so a shipped reference cannot rot.
-  helm-lint-chart:
-    run: helm lint chart --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
-    description: Lint the auth-neutral mcp-beaver chart.
-  helm-template-clusterip:
-    run: helm template mcp-beaver chart --namespace mcp-beaver --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml
-    description: Render the default ClusterIP chart shape.
-  helm-template-nodeport:
-    run: helm template mcp-beaver chart --namespace mcp-beaver --set-file spec=examples/forgejo-issues.mcp.kdl -f examples/forgejo-issues.values.yaml
-    description: Render the optional NodePort chart shape.
-  helm-template-upstream:
-    run: helm template mcp-beaver chart --namespace mcp-beaver -f examples/upstream.values.yaml
-    description: Render the allowlisted upstream-proxy chart shape.
-  helm-template-sidecar:
-    run: helm template mcp-beaver chart --namespace mcp-beaver --set-file spec=examples/sidecar.mcp.kdl -f examples/sidecar.values.yaml
-    description: Render the spec-mode sidecar shape, wrapping a co-located non-MCP process.
+# Catalog metadata for the cross-repo knowledge graph.
+#
+# Dev verbs used to live here as a `commands:` block. They are recipes in the
+# justfile now. This file survives only because check_catalog_block pins this
+# exact path and catalog-trifecta wants README, AGENTS, and FEATURES to link
+# it, both upstream in agentic-os.
 
 catalog:
   description: "Guarded MCP server runtime: serves a KDL guardfile as an auth-neutral MCP surface over streamable HTTP, lints guardfiles and upstream allowlists, and ships as one generic image plus a Helm chart."
