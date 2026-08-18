@@ -204,6 +204,25 @@ func NewProxy(ctx context.Context, name, specPath, upstreamURL string, allowTool
 // scope a caller may reach when the scope rides in an argument rather than in
 // the tool name. See ArgPin.
 func NewProxyWithPins(ctx context.Context, name, specPath, upstreamURL string, allowTools []string, pins []ArgPin, httpClient *http.Client) (*Server, error) {
+	return NewProxyWithOptions(ctx, name, specPath, upstreamURL, allowTools, ProxyOptions{Pins: pins, HTTPClient: httpClient})
+}
+
+// ProxyOptions carries the optional inputs of an upstream proxy. It exists so
+// the third optional input did not mint a third positional constructor.
+type ProxyOptions struct {
+	// Pins fix arguments the caller may otherwise choose. See ArgPin.
+	Pins []ArgPin
+	// Headers are presented to the upstream on every request. See UpstreamHeader.
+	Headers []UpstreamHeader
+	// HTTPClient overrides the default upstream client, for tests and for a
+	// caller that has already chosen its own bounds.
+	HTTPClient *http.Client
+}
+
+// NewProxyWithOptions is the full upstream-proxy constructor. NewProxy and
+// NewProxyWithPins are the shorthands that predate it.
+func NewProxyWithOptions(ctx context.Context, name, specPath, upstreamURL string, allowTools []string, opts ProxyOptions) (*Server, error) {
+	pins, httpClient := opts.Pins, opts.HTTPClient
 	declaredTools := make([]*mcp.Tool, 0, len(allowTools))
 	for _, tool := range allowTools {
 		declaredTools = append(declaredTools, &mcp.Tool{Name: tool})
@@ -218,7 +237,10 @@ func NewProxyWithPins(ctx context.Context, name, specPath, upstreamURL string, a
 	if err := ValidatePins(pins, allowTools); err != nil {
 		return nil, err
 	}
-	proxy, err := newProxyBackend(ctx, upstreamURL, allowTools, httpClient, instrumentation)
+	if err := ValidateUpstreamHeaders(opts.Headers); err != nil {
+		return nil, err
+	}
+	proxy, err := newProxyBackend(ctx, upstreamURL, allowTools, opts.Headers, httpClient, instrumentation)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +251,7 @@ func NewProxyWithPins(ctx context.Context, name, specPath, upstreamURL string, a
 		specPath:       specPath,
 		tools:          proxy.selectedTools(),
 		handlers:       make(map[string]mcp.ToolHandler, len(allowTools)),
-		upstreams:      []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http"}},
+		upstreams:      []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http", Auth: upstreamAuthScheme(opts.Headers)}},
 		sdk:            newSDKServer(name, nil, ""),
 		telemetry:      instrumentation,
 		requestTimeout: DefaultRequestTimeout,

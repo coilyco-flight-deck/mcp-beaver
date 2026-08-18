@@ -41,6 +41,17 @@ type adminDescribeResponse struct {
 type adminUpstreamResponse struct {
 	Kind string `json:"kind"`
 	Mode string `json:"mode"`
+	// Auth names the scheme, never the credential. Whether a proxy actually
+	// presents one is otherwise invisible from every surface this exposes.
+	Auth string `json:"auth,omitempty"`
+}
+
+// upstreamAuthScheme reuses spec mode's name for the same mechanism.
+func upstreamAuthScheme(headers []UpstreamHeader) string {
+	if len(headers) == 0 {
+		return "none"
+	}
+	return "header-token"
 }
 
 type adminConfigResponse struct {

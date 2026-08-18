@@ -8,7 +8,8 @@ generic Helm chart.
 
 - [serve.md](serve.md) - the generic runtime, grant-to-tool projection.
 - [lint.md](lint.md) - offline validation, and `lint-upstream`.
-- [upstream.md](upstream.md) - the guarded passthrough proxy.
+- [upstream.md](upstream.md) - the guarded passthrough proxy, and the
+  credential it presents to an authenticated upstream.
 - [ssm.md](ssm.md) - the exact-parameter AWS reader.
 
 ## Guardfile surface

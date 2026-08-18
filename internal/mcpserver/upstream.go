@@ -80,7 +80,7 @@ type proxyBackend struct {
 	closed     bool
 }
 
-func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []string, httpClient *http.Client, telemetry *instrumentation) (*proxyBackend, error) {
+func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []string, headers []UpstreamHeader, httpClient *http.Client, telemetry *instrumentation) (*proxyBackend, error) {
 	if strings.TrimSpace(upstreamURL) == "" {
 		return nil, fmt.Errorf("mcp-beaver: upstream endpoint is empty")
 	}
@@ -91,7 +91,7 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 
 	p := &proxyBackend{
 		endpoint:   upstreamURL,
-		httpClient: boundedUpstreamClient(httpClient),
+		httpClient: withUpstreamHeaders(boundedUpstreamClient(httpClient), headers),
 		telemetry:  telemetry,
 		allowlist:  allowlist,
 		baseline:   map[string]string{},

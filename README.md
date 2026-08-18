@@ -74,6 +74,10 @@ mcp-beaver serve-upstream --name grubhub-mcp \
   --connect-timeout 2m --http :8080
 ```
 
+A hosted upstream demanding a credential takes `--upstream-header`, whose
+`{env:VAR}` span resolves in the container per request so the token never
+reaches argv. See [docs/upstream.md](docs/upstream.md).
+
 For an exact-parameter AWS SSM reader, use the KDL-backed SDK runtime:
 
 ```sh
@@ -118,6 +122,7 @@ owns public ingress, authentication, TLS, DNS, and rollout.
 * [`examples/*.values.yaml`](examples/) - reference auth-neutral chart values: `skillsmp` uses the default ClusterIP, and `forgejo-issues` demonstrates the optional NodePort.
 * [`examples/upstream.values.yaml`](examples/upstream.values.yaml) - reference
   allowlisted upstream mode with a co-located MCP container.
+* [`examples/upstream-authed.values.yaml`](examples/upstream-authed.values.yaml) - the hosted counterpart: an off-cluster upstream reached with a Secret-backed credential.
 * [`chart/`](chart/) - the generic mcp-beaver Helm chart. See [`docs/chart.md`](docs/chart.md).
 * [`.ward/ward.yaml`](.ward/ward.yaml) and [`scripts/ward-command.sh`](scripts/ward-command.sh) - the tracked development command surface.
 * [`docs/DESIGN.md`](docs/DESIGN.md) - the spec→image pipeline, the interior-only scope, and the SDK-backed transport + safety model.
@@ -141,7 +146,8 @@ The authoring guidance lives in `docs/`:
   [guardfile-controls.md](docs/guardfile-controls.md) - the optional nodes
   stated beside `wrap`.
 - [upstream.md](docs/upstream.md) and
-  [upstream-pins.md](docs/upstream-pins.md) - allowlists and scoping.
+  [upstream-pins.md](docs/upstream-pins.md) - allowlists, scoping, and
+  upstream credentials.
 - [telemetry.md](docs/telemetry.md) - opting into OpenTelemetry.
 
 ## See also

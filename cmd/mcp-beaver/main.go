@@ -5,7 +5,7 @@
 //
 //	mcp-beaver serve /spec/<name>.mcp.kdl --http :8080
 //	mcp-beaver lint /spec/<name>.mcp.kdl [--methods]
-//	mcp-beaver serve-upstream --upstream <url> --tool <name> [--pin <tool>.<arg>=<value>]
+//	mcp-beaver serve-upstream --upstream <url> --tool <name> [--pin <tool>.<arg>=<value>] [--upstream-header <name>=<template>]
 //	mcp-beaver lint-upstream --tool <name> --read-only heuristic
 //
 // It parses the spec through umbra's opcore engine, projects one MCP tool
@@ -86,6 +86,8 @@ func runLintUpstream(ctx context.Context, out io.Writer, argv []string) error {
 	connectTimeout := fs.Duration("connect-timeout", 0, "retry upstream startup until this timeout (0 fails immediately)")
 	var tools stringSliceFlag
 	fs.Var(&tools, "tool", "allowlisted upstream tool to check (repeatable)")
+	var headerFlags stringSliceFlag
+	fs.Var(&headerFlags, "upstream-header", "present a header to the upstream, as `<name>=<template>` where {env:VAR} resolves server-side (repeatable)")
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
 		return err
 	}
@@ -110,8 +112,12 @@ func runLintUpstream(ctx context.Context, out io.Writer, argv []string) error {
 			)
 		}
 	}
+	headers, err := parseUpstreamHeaders(headerFlags)
+	if err != nil {
+		return err
+	}
 	if *upstream != "" {
-		if err := checkUpstreamAllowlist(ctx, *upstream, allowlist, mode, *connectTimeout); err != nil {
+		if err := checkUpstreamAllowlist(ctx, *upstream, allowlist, headers, mode, *connectTimeout); err != nil {
 			return err
 		}
 	}
@@ -130,11 +136,12 @@ func checkUpstreamAllowlist(
 	ctx context.Context,
 	upstream string,
 	allowlist []string,
+	headers []mcpserver.UpstreamHeader,
 	mode readOnlyMode,
 	connectTimeout time.Duration,
 ) error {
 	srv, err := connectProxyWithRetry(ctx, connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
-		return mcpserver.NewProxy(ctx, "mcp-beaver-lint", "", upstream, allowlist, nil)
+		return mcpserver.NewProxyWithOptions(ctx, "mcp-beaver-lint", "", upstream, allowlist, mcpserver.ProxyOptions{Headers: headers})
 	})
 	if err != nil {
 		return fmt.Errorf("connect upstream %q: %w", upstream, err)
@@ -356,6 +363,8 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 	fs.Var(&tools, "tool", "allowlisted upstream tool to expose (repeatable)")
 	var pinFlags stringSliceFlag
 	fs.Var(&pinFlags, "pin", "fix one argument of one tool server-side, as `<tool>.<arg>=<value>` (repeatable)")
+	var headerFlags stringSliceFlag
+	fs.Var(&headerFlags, "upstream-header", "present a header to the upstream, as `<name>=<template>` where {env:VAR} resolves server-side (repeatable)")
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
 		return err
 	}
@@ -369,9 +378,19 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 	if err != nil {
 		return err
 	}
+	headers, err := parseUpstreamHeaders(headerFlags)
+	if err != nil {
+		return err
+	}
+	// Before the retry loop, not inside it: an unset secret is a configuration
+	// error, and --connect-timeout would otherwise spend minutes reporting it
+	// as an upstream that will not answer.
+	if err := mcpserver.PreflightUpstreamHeaders(ctx, headers); err != nil {
+		return err
+	}
 	return withTelemetry(ctx, *name, func() error {
 		srv, err := connectProxyWithRetry(ctx, *connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
-			return mcpserver.NewProxyWithPins(ctx, *name, "", *upstream, tools, pins, nil)
+			return mcpserver.NewProxyWithOptions(ctx, *name, "", *upstream, tools, mcpserver.ProxyOptions{Pins: pins, Headers: headers})
 		})
 		if err != nil {
 			return fmt.Errorf("connect upstream %q: %w", *upstream, err)
@@ -549,6 +568,24 @@ func reorderFlagsFirst(argv []string) []string {
 
 // parseArgPins lifts the repeatable --pin flag into the runtime's own type, so
 // the CLI never carries a second understanding of the pin format.
+func parseUpstreamHeaders(raw []string) ([]mcpserver.UpstreamHeader, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	out := make([]mcpserver.UpstreamHeader, 0, len(raw))
+	for _, entry := range raw {
+		header, err := mcpserver.ParseUpstreamHeader(entry)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, header)
+	}
+	if err := mcpserver.ValidateUpstreamHeaders(out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func parseArgPins(raw []string) ([]mcpserver.ArgPin, error) {
 	if len(raw) == 0 {
 		return nil, nil

@@ -72,6 +72,10 @@ spec:
             - --tool
             - {{ . | quote }}
             {{- end }}
+            {{- range .Values.upstream.headers }}
+            - --upstream-header
+            - {{ . | quote }}
+            {{- end }}
             {{- else }}
             - serve
             - {{ include "mcp-beaver.specPath" . }}

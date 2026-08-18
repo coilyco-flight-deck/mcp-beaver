@@ -71,6 +71,10 @@ helm-template-nodeport *ARGS:
 helm-template-upstream *ARGS:
     @helm template mcp-beaver chart --namespace mcp-beaver -f examples/upstream.values.yaml "$@"
 
+# Render the authenticated hosted-upstream chart shape.
+helm-template-upstream-authed *ARGS:
+    @helm template mcp-beaver chart --namespace mcp-beaver -f examples/upstream-authed.values.yaml "$@"
+
 # Render the spec-mode sidecar shape, wrapping a co-located non-MCP process.
 helm-template-sidecar *ARGS:
     @helm template mcp-beaver chart --namespace mcp-beaver --set-file spec=examples/sidecar.mcp.kdl -f examples/sidecar.values.yaml "$@"

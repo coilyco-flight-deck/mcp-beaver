@@ -1,0 +1,20 @@
+# A HOSTED third-party MCP, which is the shape the loopback-sidecar example
+# cannot cover: the upstream is off-cluster and demands a credential.
+#
+# The token never appears here. `secret` names the SSM path, External Secrets
+# mints the Secret, the chart injects it as an env var, and the header template
+# resolves it inside the container on every request.
+runtime:
+  mode: upstream
+  injectSecrets: true
+
+upstream:
+  name: example-hosted-reader
+  url: https://example-workspace.example.invalid/api/mcp/http
+  tools:
+    - read_example
+  headers:
+    - "Authorization=Bearer {env:EXAMPLE_TOKEN}"
+
+secret:
+  EXAMPLE_TOKEN: /coilysiren/example/api-token

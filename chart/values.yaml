@@ -45,6 +45,10 @@ upstream:
   url: ""
   tools: []
   connectTimeout: 2m
+  # Headers presented to the upstream on every request, as
+  # `<name>=<template>` where a `{env:VAR}` span resolves in the container.
+  # Pair with `secret` so the value arrives from a Secret rather than here.
+  headers: []
 
 image:
   # The publish path followed the forge rename: scripts/publish-image.sh writes
