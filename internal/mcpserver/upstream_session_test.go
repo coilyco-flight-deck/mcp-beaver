@@ -28,6 +28,13 @@ func singleSessionUpstream(t *testing.T, server *mcp.Server) (*httptest.Server, 
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
+		// Answered on the POST, so no standalone stream is offered. Holding
+		// one open would outlive the test, since httptest waits for
+		// outstanding requests before it closes.
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "read body", http.StatusBadRequest)

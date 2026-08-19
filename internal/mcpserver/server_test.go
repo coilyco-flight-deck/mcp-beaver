@@ -63,10 +63,20 @@ func newTestServer(t *testing.T) *httptest.Server {
 
 func newUpstreamServer(t *testing.T, server *mcp.Server) *httptest.Server {
 	t.Helper()
-	mux := http.NewServeMux()
-	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+	inner := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return server
-	}, &mcp.StreamableHTTPOptions{JSONResponse: true}))
+	}, &mcp.StreamableHTTPOptions{JSONResponse: true})
+	mux := http.NewServeMux()
+	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
+		// These fixtures answer on the POST, so they have nothing to deliver on
+		// a standalone stream and decline it, which the spec allows. Left open
+		// it would outlive the test: httptest waits for outstanding requests.
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		inner.ServeHTTP(w, r)
+	})
 	return httptest.NewServer(mux)
 }
 

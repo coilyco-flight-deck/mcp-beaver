@@ -12,13 +12,13 @@ and exposes only that subset on the outward MCP and HTTP surfaces.
 - **One session** - allowed calls forward to a single long-lived upstream MCP
   session, the drift check included, because a second session is what real Node
   MCP upstreams reject.
+- **The standalone stream stays open** - an upstream may answer a `tools/call`
+  there, so with no stream it hangs while `tools/list` still works (#80).
 - **Session survival** - the upstream bound is time-to-first-byte, never a
-  whole-exchange `Client.Timeout`: a streamable-HTTP response is a body that
-  stays open, so a whole-exchange bound killed any long call and took the
-  session with it. A session the upstream has forgotten is replaced on the next
-  call. The failing call is not replayed, since it may already have reached the
-  upstream, and the reconnect never re-snapshots the baseline, so drift still
-  fails closed.
+  whole-exchange `Client.Timeout`, since a streamable-HTTP response is a body
+  that stays open and a whole-exchange bound took the session with it. A
+  forgotten session is replaced on the next call, the failing call is never
+  replayed, and the reconnect never re-snapshots the baseline.
 - **Bounded startup retry** - optional `--connect-timeout` retries the initial
   connection while a co-located upstream starts. Zero retains fail-fast.
 - **Upstream credentials** - `--upstream-header 'Authorization=Bearer
@@ -30,8 +30,8 @@ and exposes only that subset on the outward MCP and HTTP surfaces.
 
 **mcp-beaver lint-upstream --tool <name>....** The validation surface for an allowlist, calling the serving path's own
 `ValidateAllowlist` so the check cannot drift. Empty entries, duplicates, and an
-empty list fail. Offline by default, so it runs in CI and a sealed clone. Clean
-exits 0 and prints the names sorted. `--read-only heuristic` screens names for
+empty list fail. Offline by default, so it runs in CI and a sealed clone, and a
+clean run exits 0 and prints the names sorted. `--read-only heuristic` screens names for
 mutation verbs offline, a heuristic living in the owning loader rather than
 restated per consumer. `--read-only strict` needs `--upstream`, connects, and
 fails any tool the upstream leaves un-annotated by `readOnlyHint`, so it belongs

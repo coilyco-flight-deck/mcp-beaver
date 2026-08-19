@@ -113,10 +113,11 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 func (p *proxyBackend) dial(ctx context.Context) (*mcp.ClientSession, error) {
 	client := mcp.NewClient(&mcp.Implementation{Name: "mcp-beaver", Version: "0.1.0"}, nil)
 	client.AddSendingMiddleware(p.telemetry.clientMiddleware)
+	// The standalone SSE stream stays on. An upstream may deliver a tools/call
+	// result over it, and with no stream that call hangs. See #80.
 	return client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint:             p.endpoint,
-		HTTPClient:           p.httpClient,
-		DisableStandaloneSSE: true,
+		Endpoint:   p.endpoint,
+		HTTPClient: p.httpClient,
 	}, nil)
 }
 

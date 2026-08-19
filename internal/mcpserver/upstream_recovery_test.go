@@ -26,6 +26,13 @@ func sessionDroppingUpstream(t *testing.T, server *mcp.Server) (*httptest.Server
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
+		// Answered on the POST, so no standalone stream is offered. Holding
+		// one open would outlive the test, since httptest waits for
+		// outstanding requests before it closes.
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		if r.Header.Get("Mcp-Session-Id") != "" && drop.Load() {
 			http.Error(w, "session not found", http.StatusNotFound)
 			return
