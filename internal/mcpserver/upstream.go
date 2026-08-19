@@ -93,7 +93,7 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 
 	p := &proxyBackend{
 		endpoint:   upstreamURL,
-		httpClient: withUpstreamHeaders(boundedUpstreamClient(httpClient), headers),
+		httpClient: withUpstreamDiagnostics(withUpstreamHeaders(boundedUpstreamClient(httpClient), headers)),
 		telemetry:  telemetry,
 		allowlist:  allowlist,
 		baseline:   map[string]string{},
