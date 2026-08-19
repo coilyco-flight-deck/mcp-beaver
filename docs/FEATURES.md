@@ -11,6 +11,7 @@ generic Helm chart.
 - [upstream.md](upstream.md) - the guarded passthrough proxy, and the
   credential it presents to an authenticated upstream.
 - [ssm.md](ssm.md) - the exact-parameter AWS reader.
+- [s3.md](s3.md) - the asset publisher, and the one write-capable mode.
 
 ## Guardfile surface
 
