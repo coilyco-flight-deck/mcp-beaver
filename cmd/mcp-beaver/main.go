@@ -65,7 +65,7 @@ func run(argv []string) error {
 
 func runContext(ctx context.Context, argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: mcp-beaver serve <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-ssm <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...] | mcp-beaver lint <spec.mcp.kdl> | mcp-beaver lint-upstream --tool <name> [--read-only heuristic|strict] [--upstream <mcp-url>]")
+		return fmt.Errorf("usage: mcp-beaver serve <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-ssm <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-s3 <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...] | mcp-beaver lint <spec.mcp.kdl> | mcp-beaver lint-upstream --tool <name> [--read-only heuristic|strict] [--upstream <mcp-url>]")
 	}
 	switch argv[0] {
 	case "serve":
@@ -74,12 +74,14 @@ func runContext(ctx context.Context, argv []string) error {
 		return runServeUpstream(ctx, argv[1:])
 	case "serve-ssm":
 		return runServeSSM(ctx, argv[1:])
+	case "serve-s3":
+		return runServeS3(ctx, argv[1:])
 	case "lint":
 		return runLint(os.Stdout, argv[1:])
 	case "lint-upstream":
 		return runLintUpstream(ctx, os.Stdout, argv[1:])
 	default:
-		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-upstream, lint, lint-upstream)", argv[0])
+		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-s3, serve-upstream, lint, lint-upstream)", argv[0])
 	}
 }
 
@@ -483,6 +485,39 @@ func runServeSSM(ctx context.Context, argv []string) error {
 		}
 		mcpserver.Log().Info("serving guarded SSM reader",
 			"mode", "ssm",
+			"server", name,
+			"spec", specPath,
+			"addr", *addr)
+		return serveHTTP(ctx, *addr, srv.Handler())
+	})
+}
+
+// runServeS3 serves the spec-declared publisher. Credential discovery is the
+// same static-key path serve-ssm uses, and the guardfile carries every bound
+// that IAM cannot state: the content-type allowlist, the key shape, and the
+// size cap.
+func runServeS3(ctx context.Context, argv []string) error {
+	fs := flag.NewFlagSet("serve-s3", flag.ContinueOnError)
+	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
+	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("serve-s3 needs exactly one spec path")
+	}
+	specPath := fs.Arg(0)
+	name := serverName(specPath)
+	return withTelemetry(ctx, name, func() error {
+		src, err := os.ReadFile(specPath) //nolint:gosec // operator-supplied trusted policy path
+		if err != nil {
+			return fmt.Errorf("read spec %q: %w", specPath, err)
+		}
+		srv, err := mcpserver.NewS3(ctx, name, specPath, src)
+		if err != nil {
+			return fmt.Errorf("parse S3 spec %q: %w", specPath, err)
+		}
+		mcpserver.Log().Info("serving guarded S3 publisher",
+			"mode", "s3",
 			"server", name,
 			"spec", specPath,
 			"addr", *addr)
