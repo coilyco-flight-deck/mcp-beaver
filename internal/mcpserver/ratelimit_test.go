@@ -14,13 +14,13 @@ import (
 
 func TestParseRateLimitShapes(t *testing.T) {
 	for _, spec := range []string{"1/1s", "10/1m", " 5 / 2s "} {
-		if _, err := newRateLimiter(spec); err != nil {
-			t.Errorf("newRateLimiter(%q) = %v, want it accepted", spec, err)
+		if _, _, err := parseRateSpec(spec); err != nil {
+			t.Errorf("parseRateSpec(%q) = %v, want it accepted", spec, err)
 		}
 	}
 	for _, spec := range []string{"", "1", "0/1s", "-1/1s", "1/0s", "1/banana", "banana/1s", "1/-1s"} {
-		if _, err := newRateLimiter(spec); err == nil {
-			t.Errorf("newRateLimiter(%q) was accepted, want fail-closed", spec)
+		if _, _, err := parseRateSpec(spec); err == nil {
+			t.Errorf("parseRateSpec(%q) was accepted, want fail-closed", spec)
 		}
 	}
 }
@@ -108,9 +108,9 @@ func TestRateLimitAbsentByDefault(t *testing.T) {
 // A queued call must still respect the request deadline rather than holding a
 // slot forever. This is the interaction between #57 and #49.
 func TestRateLimitWaitRespectsDeadline(t *testing.T) {
-	limiter, err := newRateLimiter("1/1h")
+	limiter, err := newRateBucket(&rateLimitConfig{count: 1, window: time.Hour}, "test")
 	if err != nil {
-		t.Fatalf("newRateLimiter: %v", err)
+		t.Fatalf("newRateBucket: %v", err)
 	}
 	called := 0
 	handler := withRateLimit(limiter, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {

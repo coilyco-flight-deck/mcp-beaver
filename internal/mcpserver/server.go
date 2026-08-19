@@ -103,7 +103,13 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	limiter, err := parseRateLimit(src)
+	rateCfg, err := parseRateLimit(src)
+	if err != nil {
+		return nil, err
+	}
+	// The server name is the default bucket key, so two pods rendering the
+	// same guardfile charge one budget rather than one each (deploy#549).
+	limiter, err := newRateBucket(rateCfg, name)
 	if err != nil {
 		return nil, err
 	}
