@@ -212,3 +212,66 @@ func TestTextAndStructuredContentCarryTheSameEnvelope(t *testing.T) {
 		t.Fatalf("text and structured disagree:\n text = %s\n struct = %s", textJSON, structuredJSON)
 	}
 }
+
+// The shape every GraphQL response has: the array sits under `data`, two
+// objects down. Walking one level reported no count at all, which reads as
+// "nothing was returned" (mcp-beaver#88).
+func TestCoverageCountsAnArrayNestedUnderObjects(t *testing.T) {
+	var payload toolPayload
+	body := `{"data":{"Page":{"media":[{"id":1},{"id":5},{"id":17205}]}}}`
+	if err := json.Unmarshal([]byte(callThingTool(t, body)), &payload); err != nil {
+		t.Fatalf("envelope: %v", err)
+	}
+	if got := payload.Coverage.Items["data.Page.media"]; got != 3 {
+		t.Fatalf("coverage.items = %v, want data.Page.media = 3", payload.Coverage.Items)
+	}
+}
+
+// The per-row rationale the one-level rule was written for still holds: an
+// array inside an array ELEMENT is a detail of one row, not of the view.
+func TestCoverageDoesNotCountArraysInsideArrayElements(t *testing.T) {
+	var payload toolPayload
+	body := `{"rows":[{"tags":["a","b"]},{"tags":["c"]}]}`
+	if err := json.Unmarshal([]byte(callThingTool(t, body)), &payload); err != nil {
+		t.Fatalf("envelope: %v", err)
+	}
+	if got := payload.Coverage.Items["rows"]; got != 2 {
+		t.Errorf("coverage.items[rows] = %d, want 2", got)
+	}
+	for name := range payload.Coverage.Items {
+		if name != "rows" {
+			t.Errorf("coverage counted a per-row array: %v", payload.Coverage.Items)
+		}
+	}
+}
+
+// Nothing already emitted changes spelling: a top-level array stays "result"
+// and a top-level named array keeps its bare key.
+func TestCoverageKeepsTopLevelKeysBare(t *testing.T) {
+	var payload toolPayload
+	if err := json.Unmarshal([]byte(callThingTool(t, `{"rows":[1,2],"page":{"labels":["a"]}}`)), &payload); err != nil {
+		t.Fatalf("envelope: %v", err)
+	}
+	if got := payload.Coverage.Items["rows"]; got != 2 {
+		t.Errorf("coverage.items[rows] = %d, want 2 with no prefix", got)
+	}
+	if got := payload.Coverage.Items["page.labels"]; got != 1 {
+		t.Errorf("coverage.items[page.labels] = %d, want 1", got)
+	}
+}
+
+// The descent is bounded, so a deeply nested payload cannot make the coverage
+// block the expensive part of the response.
+func TestCoverageBoundsTheObjectDescent(t *testing.T) {
+	deep := map[string]any{"leaf": []any{1, 2}}
+	for range maxCountDepth + 2 {
+		deep = map[string]any{"nest": deep}
+	}
+	if counts := countArrays(deep); len(counts) != 0 {
+		t.Fatalf("counted past the depth bound: %v", counts)
+	}
+	shallow := countArrays(map[string]any{"a": map[string]any{"b": []any{1}}})
+	if shallow["a.b"] != 1 {
+		t.Fatalf("a reachable nested array was missed: %v", shallow)
+	}
+}
