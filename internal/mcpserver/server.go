@@ -128,6 +128,13 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err := validateRejectEmpty(rejectEmpties, descs); err != nil {
 		return nil, err
 	}
+	emptyArgs, err := parseRejectEmptyArguments(src)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRejectEmptyArguments(emptyArgs, descs); err != nil {
+		return nil, err
+	}
 	queryPins, err := parseQueryPins(src)
 	if err != nil {
 		return nil, err
@@ -194,6 +201,11 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		// needs for a request that was actually made.
 		if ttl, cached := caches[spec.Name]; cached {
 			handler = withResponseCache(newResponseCache(ttl), spec.Name, handler)
+		}
+		// Outermost of all: a write that carries nothing spends no slot and
+		// asks no human to confirm what was going to be refused anyway.
+		if fields, declared := emptyArgs[spec.Name]; declared {
+			handler = withRejectEmptyArguments(spec.Name, fields, handler)
 		}
 		s.registerTool(spec, handler)
 	}

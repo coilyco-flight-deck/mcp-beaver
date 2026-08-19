@@ -15,19 +15,19 @@ the call rather than sending an unscoped request.
 **Rate limit.** `rate-limit "1/1s"` states a per-server, process-wide outbound bucket. It
 serialises rather than rejecting: a queued call is slower, a 503 is a failed
 turn. The pod has one IP, so a public-good API otherwise sees one caller whose
-rate is a whole community's. Grant-backed only, and a call that would queue past
-the request deadline fails with a stated timeout.
+rate is a whole community's. Grant-backed only, and a call queued past the
+request deadline fails with a stated timeout.
 
 **Response cache.** `cache "<tool-name>" ttl="15m"` reuses one grant's upstream answer for a
-window. Not the `ttlMs` on list results, which caches the tool inventory rather
-than the data. Off by default, because correctness varies by upstream. Keyed on
-the tool plus canonicalised arguments, and outside the rate limiter so a hit
-spends no slot. Failed calls are never stored, caching a destructive or
-`confirm`-gated grant is a build error, and the store dies with the pod.
+window, not the `ttlMs` on list results, which caches the inventory rather than
+the data. Off by default. Keyed on the tool plus canonicalised arguments, and
+outside the rate limiter so a hit spends no slot. Failed calls are never stored,
+caching a destructive or `confirm`-gated grant is a build error.
 
-**Reject an empty answer.** `reject-empty "<tool-name>"` makes an empty result a tool error
-naming the reason. Off by default. Empty is no content, whitespace, `null`, `""`,
-`[]`, `{}` past the `coverage` envelope; **`false` and `0` are answers**.
+**Reject empty.** `reject-empty "<tool>"` makes an empty result a tool error; `reject-empty-argument
+"<tool>" field="<name>"` refuses a write carrying a blank field. Both off by
+default. Empty is no content, whitespace, `null`, `""`, `[]`, or `{}` past the
+`coverage` envelope; **`false` and `0` are answers**.
 
 ## Withheld verbs and confirmations
 

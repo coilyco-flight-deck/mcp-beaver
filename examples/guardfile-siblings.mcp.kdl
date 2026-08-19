@@ -55,6 +55,15 @@ cache "get_thing" ttl="15m"
 // the author knows which this is. `false` and `0` are never refused.
 reject-empty "get_thing"
 
+// The mirror, and a separate control: that one refuses an answer carrying
+// nothing, this refuses a WRITE that would carry nothing. A blank write
+// succeeds everywhere, so a lane posted four fully empty messages into a
+// shared channel with every layer reporting success (sirens-echo#1035).
+// Per field, because emptiness is legitimate for some inputs and a control
+// that refuses a write should say exactly what it refuses. A field that is
+// absent is the grant's error to report; this catches present-and-blank.
+reject-empty-argument "create_thing" field="title"
+
 // State a verb that is left out ON PURPOSE, so an agent stops inferring from
 // silence. Absence otherwise means four things at once - withheld by policy,
 // unimplemented, not offered upstream, or simply not matched by the agent's
