@@ -51,7 +51,7 @@ func scalarString(v any) string {
 // the two used to disagree, and the text half is what a head-slicing consumer
 // cuts, so leading the structured half alone would have left the caveat where
 // it always got destroyed (mcp-beaver#68).
-func toolSuccess(resp opcore.Response) *mcp.CallToolResult {
+func toolSuccess(resp opcore.Response, desc opcore.Descriptor) *mcp.CallToolResult {
 	result := any(resp.Decoded)
 	if result == nil {
 		text := string(resp.Raw)
@@ -60,7 +60,14 @@ func toolSuccess(resp opcore.Response) *mcp.CallToolResult {
 		}
 		result = text
 	}
-	payload := toolPayload{Coverage: newCoverage(resp, result), Result: result}
+	cov := newCoverage(resp, result)
+	// A `max-rows` bound means this runtime really did cut the result, and
+	// umbra states that at the END of the payload - the position #68 exists
+	// because a slicing consumer destroys it. Lift it to the front.
+	if desc.SQL != nil {
+		cov.Truncated = sqlResultTruncated(result)
+	}
+	payload := toolPayload{Coverage: cov, Result: result}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return toolError(fmt.Errorf("serialize tool result: %w", err))
@@ -69,6 +76,18 @@ func toolSuccess(resp opcore.Response) *mcp.CallToolResult {
 		Content:           []mcp.Content{&mcp.TextContent{Text: string(encoded)}},
 		StructuredContent: payload,
 	}
+}
+
+// sqlResultTruncated reads umbra's own truncation statement off a sql result.
+// Keyed on the declared grant kind by the caller, never on sniffing a field
+// name out of an arbitrary upstream payload.
+func sqlResultTruncated(result any) bool {
+	obj, ok := result.(map[string]any)
+	if !ok {
+		return false
+	}
+	cut, _ := obj["truncated"].(bool)
+	return cut
 }
 
 func toolError(err error) *mcp.CallToolResult {

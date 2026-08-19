@@ -20,10 +20,11 @@ const consumerBudgetBytes = 8192
 // (mcp-beaver#68). A model then reads rows with no caveat and answers as
 // though the view were complete.
 type coverage struct {
-	// Truncated is always false and is stated rather than omitted. Silent
-	// truncation is prohibited, and a standing explicit claim is what lets a
-	// consumer attribute a short view to its own slicing rather than to this
-	// runtime.
+	// Truncated is stated rather than omitted, so a consumer can attribute a
+	// short view to its own slicing rather than to this runtime. It is false
+	// for every upstream read, because nothing here cuts one. A `sql` grant's
+	// `max-rows` is the one bound this runtime applies itself, and it sets
+	// this true rather than leaving the caveat at the tail (mcp-beaver#89).
 	Truncated bool `json:"truncated"`
 	// Bytes is the size of the upstream payload this result carries.
 	Bytes int `json:"bytes"`

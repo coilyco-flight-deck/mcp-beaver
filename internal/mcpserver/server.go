@@ -681,7 +681,7 @@ func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin, ex
 		if extract != nil {
 			return extractToolSuccess(ctx, resp, extract), nil
 		}
-		return toolSuccess(resp), nil
+		return toolSuccess(resp, desc), nil
 	}
 }
 
