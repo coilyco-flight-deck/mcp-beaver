@@ -164,6 +164,7 @@ func TestExtractFailsClosedAtBuild(t *testing.T) {
 		"unknown tool":   {`extract "no_such_tool" as="pdf-text"`, "not a grant-backed tool"},
 		"missing as":     {`extract "get_report"`, "needs `as="},
 		"unknown kind":   {`extract "get_report" as="ocr"`, "needs `as="},
+		"items on a pdf": {`extract "get_report" as="pdf-text" max-items="5"`, "bounds pages rather than items"},
 		"bad max-pages":  {`extract "get_report" as="pdf-text" max-pages="lots"`, "must be a whole number"},
 		"zero max-pages": {`extract "get_report" as="pdf-text" max-pages="0"`, "must be between 1 and 200"},
 		"over ceiling":   {`extract "get_report" as="pdf-text" max-pages="500"`, "must be between 1 and 200"},
@@ -224,7 +225,7 @@ func TestExtractHonoursACancelledContext(t *testing.T) {
 // serving 32MB through httptest would test the loopback, not the gate.
 func TestExtractRefusesAnOversizeDocument(t *testing.T) {
 	oversize := opcore.Response{Raw: make([]byte, maxPDFBytes+1)}
-	result := pdfToolSuccess(context.Background(), oversize, &pdfExtract{maxPages: 5})
+	result := pdfToolSuccess(context.Background(), oversize, &extractSpec{kind: kindPDFText, maxPages: 5})
 	if !result.IsError {
 		t.Fatalf("an oversize document was accepted")
 	}

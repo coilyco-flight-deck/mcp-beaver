@@ -37,16 +37,28 @@ type coverage struct {
 	// upstream failed to bound becomes visible to the author on the first call
 	// rather than after a day of investigation.
 	Items map[string]int `json:"items,omitempty"`
-	// Pages is present only on an extracted document. It is the one place this
-	// runtime can honestly state a shown-of-total, because the bound is its own
-	// rather than the upstream's.
+	// Pages is present only on an extracted document. It is one of the two
+	// places this runtime can honestly state a shown-of-total, because the
+	// bound is its own rather than the upstream's.
 	Pages *pageCoverage `json:"pages,omitempty"`
+	// Entries is present only on an extracted feed, and is the other. A feed
+	// carries its whole item set in one document, so unlike an upstream's
+	// paging the total here is measured rather than guessed.
+	Entries *entryCoverage `json:"entries,omitempty"`
 }
 
 // pageCoverage is how much of a document the extraction read. Present so a
 // bounded read cannot be mistaken for the whole document - a model told only
 // that it received text has no way to know page 21 exists.
 type pageCoverage struct {
+	Shown int `json:"shown"`
+	Total int `json:"total"`
+}
+
+// entryCoverage is how many of a feed's items the projection carried. Present
+// so a bounded read cannot be mistaken for the whole feed - a model told only
+// that it received entries has no way to know the 26th exists.
+type entryCoverage struct {
 	Shown int `json:"shown"`
 	Total int `json:"total"`
 }
@@ -74,6 +86,12 @@ var resultOutputSchema = json.RawMessage(`{
 				"pages":{
 					"type":"object",
 					"description":"Pages read of pages the document holds. Present only on an extracted document.",
+					"properties":{"shown":{"type":"integer"},"total":{"type":"integer"}},
+					"required":["shown","total"]
+				},
+				"entries":{
+					"type":"object",
+					"description":"Entries carried of entries the feed holds. Present only on an extracted feed.",
 					"properties":{"shown":{"type":"integer"},"total":{"type":"integer"}},
 					"required":["shown","total"]
 				}

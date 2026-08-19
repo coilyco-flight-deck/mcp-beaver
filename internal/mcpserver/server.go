@@ -652,7 +652,7 @@ func toolSpec(d opcore.Descriptor) *mcp.Tool {
 	}
 }
 
-func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin, extract *pdfExtract) mcp.ToolHandler {
+func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin, extract *extractSpec) mcp.ToolHandler {
 	schema := desc.InputSchema()
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var rawArgs map[string]any
@@ -679,7 +679,7 @@ func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin, ex
 			return toolError(err), nil
 		}
 		if extract != nil {
-			return pdfToolSuccess(ctx, resp, extract), nil
+			return extractToolSuccess(ctx, resp, extract), nil
 		}
 		return toolSuccess(resp), nil
 	}

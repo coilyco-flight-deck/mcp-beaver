@@ -18,7 +18,7 @@ generic Helm chart.
   prompts, server-info.
 - [guardfile-controls.md](guardfile-controls.md) - pins, rate limit, cache,
   withheld verbs, confirmations.
-- [pdf-extraction.md](pdf-extraction.md) - reading a PDF an upstream returns.
+- [extraction.md](extraction.md) - reading a PDF or feed an upstream returns.
 - [upstream-pins.md](upstream-pins.md) - server-side argument pinning.
 
 ## Runtime

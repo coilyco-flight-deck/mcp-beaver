@@ -22,11 +22,12 @@
 // beginning of value`. The `raw-response` node below is what umbra#289 added,
 // and it is the reason this file can exist.
 //
-// THE COST, STATED. A guardfile hands the model raw Atom XML. reddit-mcp
-// returns normalized entries, and that normalization is a real part of its
-// value - the model now parses XML in context on every call. Kai took that
-// trade knowingly when she chose migration over keeping the server bespoke;
-// this comment exists so nobody later reads it as an oversight.
+// THE COST, SETTLED. This file used to hand the model raw Atom XML - 53 KB of
+// it per call - because normalizing entries was reddit-mcp's own work and a
+// guardfile could not do it. `extract ... as="feed-entries"` (mcp-beaver#81)
+// is that work moved into the runtime, so the four reads below return the same
+// shape the bespoke server did. The `raw-response` nodes stay: they are what
+// stops opcore decoding Atom as JSON, and the projection runs after them.
 //
 // PRIVATE FEEDS. `get_frontpage` and `get_upvoted` read feed URLs that carry
 // their own token in the query string. SSM holds each as a WHOLE URL
@@ -55,6 +56,19 @@ rate-limit "1/1s"
 // which is what "what is happening right now" means.
 cache "get_subreddit_rss" ttl="1m"
 
+// Atom in, entries out. Every one of these grants declares `raw-response`, so
+// all four are eligible, and without the projection each returns an XML string
+// the model has to parse in context on every call.
+//
+// The bound is per feed rather than global: reddit serves 25 entries on the
+// two public feeds, so the default is already the whole feed and states so in
+// the coverage block. The two private feeds run longer, and 25 is the read
+// worth having rather than the whole history.
+extract "get_homepage_rss" as="feed-entries"
+extract "get_subreddit_rss" as="feed-entries"
+extract "get_frontpage" as="feed-entries"
+extract "get_upvoted" as="feed-entries"
+
 wrap ward mcp reddit-public {
     base-url "www.reddit.com"
 
@@ -80,14 +94,14 @@ wrap ward mcp reddit-public {
     can get homepage_rss {
         path "/.rss"
         raw-response
-        describe "Reddit's PUBLIC, unpersonalized homepage Atom feed. Returns raw Atom XML. Does NOT read any account: not Kai's subscriptions, not her upvotes, not any private feed."
+        describe "Reddit's PUBLIC, unpersonalized homepage Atom feed. Returns normalized entries. Does NOT read any account: not Kai's subscriptions, not her upvotes, not any private feed."
     }
 
     can get subreddit_rss {
         path "/r/{subreddits}/new/.rss"
         query "sort"
         raw-response
-        describe "Newest posts from one or more subreddits as raw Atom XML. Join several with + as in `python+golang`. Public data only, and it does NOT search - it returns whatever is newest."
+        describe "Newest posts from one or more subreddits as normalized entries. Join several with + as in `python+golang`. Public data only, and it does NOT search - it returns whatever is newest."
     }
 
     // The two private reads. Neither declares a caller input: their scope is
@@ -96,7 +110,7 @@ wrap ward mcp reddit-public {
     can get frontpage {
         path "/.rss"
         raw-response
-        describe "Kai's PERSONALIZED reddit front page - the subreddits she subscribes to - as raw Atom XML. Reads her private feed. Use get_homepage_rss for the public unpersonalized homepage instead."
+        describe "Kai's PERSONALIZED reddit front page - the subreddits she subscribes to - as normalized entries. Reads her private feed. Use get_homepage_rss for the public unpersonalized homepage instead."
     }
 
     // The account is IN THE PATH and a path parameter cannot be pinned, so it
@@ -111,7 +125,7 @@ wrap ward mcp reddit-public {
     can get upvoted {
         path "/user/coilysiren/upvoted.rss"
         raw-response
-        describe "Posts Kai has UPVOTED, as raw Atom XML. An interest signal rather than a feed of new content: these are things she already saw and liked."
+        describe "Posts Kai has UPVOTED, as normalized entries. An interest signal rather than a feed of new content: these are things she already saw and liked."
     }
 }
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
@@ -29,108 +28,10 @@ const defaultExtractPages = 20
 // the answer is a different tool rather than a bigger number.
 const maxExtractPages = 200
 
-// pdfExtract is one grant's declared PDF-to-text projection.
-type pdfExtract struct {
-	maxPages int
-}
-
-// extractConfig maps a projected tool name to its extraction.
-type extractConfig map[string]*pdfExtract
-
-// parseExtracts reads top-level `extract` nodes, siblings of `wrap`:
-//
-//	extract "get_report" as="pdf-text" max-pages="20"
-//
-// A large amount of authoritative reference material - government statistics,
-// standards bodies, regulatory filings, equipment documentation - is published
-// only as PDF, with no JSON API and often no HTML equivalent. A grant that
-// reaches one returns bytes an agent cannot read, so those sources are
-// invisible to the whole fleet (mcp-beaver#60).
-//
-// The projection lives here rather than in the guardfile grammar because
-// turning an upstream response into tool content is this runtime's half of the
-// boundary: umbra owns guarded execution, mcp-beaver owns projection.
-//
-// `as` names the extraction and takes only "pdf-text" today. Table extraction
-// and OCR are three very different amounts of work with three very different
-// dependency footprints, and text alone covers most of the stated need - so
-// the property exists to make the next one additive rather than to suggest it
-// already exists.
-func parseExtracts(src []byte) (extractConfig, error) {
-	doc, err := parseInlineDoc(src, "extract")
-	if err != nil {
-		return nil, err
-	}
-	out := extractConfig{}
-	for _, n := range doc.Nodes {
-		if n.Name() != "extract" {
-			continue
-		}
-		tool, err := oneStringArg(n, "extract")
-		if err != nil {
-			return nil, err
-		}
-		if _, dup := out[tool]; dup {
-			return nil, fmt.Errorf("mcp-beaver: duplicate `extract` for tool %q", tool)
-		}
-		kind := ""
-		pages := defaultExtractPages
-		for key, value := range n.Properties() {
-			switch key {
-			case "as":
-				kind = value.String()
-			case "max-pages":
-				pages, err = strconv.Atoi(value.String())
-				if err != nil {
-					return nil, fmt.Errorf("mcp-beaver: `extract` %q max-pages %q must be a whole number", tool, value.String())
-				}
-			default:
-				return nil, fmt.Errorf("mcp-beaver: unknown `extract` property %q (want as | max-pages; fail-closed)", key)
-			}
-		}
-		if kind != "pdf-text" {
-			return nil, fmt.Errorf("mcp-beaver: `extract` %q needs `as=\"pdf-text\"`, got %q", tool, kind)
-		}
-		if pages < 1 || pages > maxExtractPages {
-			return nil, fmt.Errorf("mcp-beaver: `extract` %q max-pages must be between 1 and %d, got %d", tool, maxExtractPages, pages)
-		}
-		out[tool] = &pdfExtract{maxPages: pages}
-	}
-	if len(out) == 0 {
-		return nil, nil
-	}
-	return out, nil
-}
-
-// validateExtracts rejects an `extract` that could never run. Both cases are
-// build errors because an author who believes a PDF is being read and one who
-// believes it is not should not both be able to run the same spec.
-func validateExtracts(cfg extractConfig, descs []opcore.Descriptor) error {
-	if cfg == nil {
-		return nil
-	}
-	byTool := make(map[string]opcore.Descriptor, len(descs))
-	for _, d := range descs {
-		byTool[toolName(d)] = d
-	}
-	for tool := range cfg {
-		desc, ok := byTool[tool]
-		if !ok {
-			return fmt.Errorf("mcp-beaver: `extract` names %q, which is not a grant-backed tool this spec serves", tool)
-		}
-		// Without `raw-response` opcore decodes the body as JSON and the call
-		// fails on the first byte of `%PDF`, long before anything here runs.
-		if !desc.RawResponse {
-			return fmt.Errorf("mcp-beaver: `extract` names %q, whose grant does not declare `raw-response`: opcore would decode the PDF as JSON and fail the call before extraction", tool)
-		}
-	}
-	return nil
-}
-
 // pdfToolSuccess replaces the PDF bytes with the text an agent can read, and
 // reports pages shown of pages total in the coverage block so a bounded read
 // cannot be mistaken for the whole document (mcp-beaver#68).
-func pdfToolSuccess(ctx context.Context, resp opcore.Response, x *pdfExtract) *mcp.CallToolResult {
+func pdfToolSuccess(ctx context.Context, resp opcore.Response, x *extractSpec) *mcp.CallToolResult {
 	if len(resp.Raw) > maxPDFBytes {
 		return toolError(fmt.Errorf("mcp-beaver: PDF is %d bytes, over the %d-byte extraction ceiling", len(resp.Raw), maxPDFBytes))
 	}
