@@ -1,0 +1,180 @@
+// bluesky-public.mcp.kdl - the seven credential-free reads of bluesky-mcp,
+// as a guardfile. The first half of retiring coilyco-flight-deck/bluesky-mcp.
+//
+// THE SPLIT, AND WHY IT IS NOT ARBITRARY. bluesky-mcp registers eleven read
+// tools and logs in for all eleven, because it holds one authenticated
+// `BskyAgent` and every handler awaits it. That made the whole surface look
+// like it needed a credential. It does not. Seven of the eleven are served by
+// Bluesky's public AppView with no credential at all, and this file is those
+// seven. The remaining four need a session and are blocked on mcp-beaver#91:
+//
+//   get_home_timeline   app.bsky.feed.getTimeline            401 unauthenticated
+//   list_notifications  app.bsky.notification.listNotifications  401
+//   get_kai_liked_posts app.bsky.feed.getActorLikes          400, not a public read
+//
+// Also blocked, and easy to miss because it looks public: search_posts.
+// `app.bsky.feed.searchPosts` answers 403 on the public AppView, unlike
+// `app.bsky.actor.searchActors` next to it, which answers 200. So this file
+// carries profile search and not post search. That asymmetry is upstream's,
+// not a decision here.
+//
+// VERIFIED, NOT ASSUMED. Every status above was measured against
+// public.api.bsky.app on 2026-08-19, and every grant below returned 200 on the
+// same pass. The 400 on getActorLikes is a real response rather than a
+// timeout, so it is a shape question and not a reachability one.
+
+// A DIFFERENT HOST FROM THE SERVER THIS REPLACES. bluesky-mcp talks to the
+// entryway at bsky.social, because that is where a login goes. These reads go
+// to the public AppView, which is a read replica that answers without one.
+// Same data, different door.
+//
+// THE COST OF THAT DOOR, STATED PLAINLY. An authenticated AppView read carries
+// viewer state: `viewer.following`, `viewer.followedBy`, `viewer.muted`,
+// `viewer.blockedBy` on a profile, and viewer-scoped fields on posts. An
+// unauthenticated read does not. So a caller can no longer ask "do I follow
+// this person" through these tools, and blocks and mutes no longer filter the
+// results. For reading what an account posts and who it follows, which is what
+// these seven are for, that loss is nothing. For anything that reasons about
+// Kai's relationship to an account, it is the whole answer, and the honest
+// move is to notice it here rather than discover it in a wrong reply.
+
+instructions {
+    text "Bluesky's public reads: profiles, author feeds, post threads, followers, and follows."
+    text "Reach for it to look up an account, read what it has posted, or follow a thread."
+    text "Public and credential-free. It reads no account of Kai's: not her home timeline, not her notifications, not her likes, and it carries no viewer state, so it cannot say whether she follows anyone."
+}
+
+// Bluesky publishes rate limits per IP on the public AppView and these reads
+// are cheap. One per second is a courtesy rate rather than a measured ceiling,
+// matching the other public guardfiles in this directory.
+rate-limit "1/1s"
+
+// A profile and a follow graph change on the order of hours, and an agent
+// answering a question about one account asks overlapping questions. A feed
+// and a thread are what "right now" means, so neither is cached.
+cache "get_profile" ttl="5m"
+cache "list_followers" ttl="5m"
+cache "list_follows" ttl="5m"
+
+wrap ward mcp bluesky-public {
+    base-url "public.api.bsky.app/xrpc"
+
+    // Not a placeholder, a measured choice. reddit.mcp.kdl is the worked case
+    // for why these differ: reddit answers a stand-in bearer with 403 while
+    // serving the same request unauthenticated. The AppView is more forgiving,
+    // but sending a credential-shaped header to a credential-free upstream is
+    // a thing to avoid on purpose rather than by luck.
+    auth none
+
+    can get profile {
+        path "/app.bsky.actor.getProfile"
+        describe "Look up ONE Bluesky account by handle or DID, returning its display name, description, avatar, and follower, follow, and post counts. The `actor` is either a handle like `coilysiren.me` (no leading @) or a DID like `did:plc:...`. Public data only: this carries NO viewer state, so it cannot tell you whether Kai follows this account, is followed by it, or has muted or blocked it. Use search_profiles when you have a name rather than a handle."
+        query "actor"
+    }
+
+    can search profiles {
+        path "/app.bsky.actor.searchActors"
+        describe "Search Bluesky accounts by text and return matching profiles. The step before get_profile when you have a person's name rather than their handle. This searches ACCOUNTS, not posts. There is no public post search on this surface - see the header of this file. Public data only, and it carries no viewer state."
+        query {
+            // NOT `query`, which bluesky-mcp calls this argument. `query` is
+            // one of opcore's reserved engine flag names and fails closed at
+            // lint, the same wall steam-storefront.mcp.kdl hit. So this one
+            // tool is not a drop-in: a caller passing `query` gets a schema
+            // error and has to pass `term`. Renaming the tool would have been
+            // worse, since the tool name is what a model reaches for.
+            //
+            // `q` is the wire name and `term` the legacy spelling. Both answer
+            // 200 today, which is the reason to pin one rather than trust the
+            // one that happens to work.
+            field "term" type="string" upstream="q"
+            field "limit" type="integer" minimum=1 maximum=50
+            field "cursor" type="string"
+        }
+    }
+
+    can get author_feed {
+        path "/app.bsky.feed.getAuthorFeed"
+        describe "Read what ONE account has posted, newest first, by handle or DID. This is the tool for \"what has <account> been saying\". Returns posts and reposts with their text, timestamps, and engagement counts. Page with the returned cursor. Public data only, so a private or suspended account returns nothing rather than an error, and no viewer state is included."
+        query {
+            field "actor" type="string"
+            field "limit" type="integer" minimum=1 maximum=50
+            field "cursor" type="string"
+        }
+    }
+
+    can get posts {
+        path "/app.bsky.feed.getPosts"
+        describe "Fetch up to 25 specific posts by AT URI in one call. Each URI has the form `at://did:plc:.../app.bsky.feed.post/<rkey>`. Use this when you already hold URIs, typically from get_author_feed or get_post_thread. It does NOT search and does NOT accept a bsky.app web link. Public data only."
+        query {
+            // Arrays become repeated upstream keys in caller order, which is
+            // the shape `uris` takes on the wire. The 25 cap is upstream's own
+            // and is restated here so an over-long list fails before the
+            // request rather than after it.
+            array "uris" items="string" min-items=1 max-items=25
+        }
+    }
+
+    can get post_thread {
+        path "/app.bsky.feed.getPostThread"
+        describe "Read one post together with its replies and the posts above it, given the post's AT URI. Use this to follow a conversation rather than a single post. `depth` bounds replies below the post and `parentHeight` bounds the ancestors above it, both 0 to 6. A thread whose root is deleted or blocked returns the visible part rather than an error. Public data only."
+        query {
+            field "uri" type="string"
+            field "depth" type="integer" minimum=0 maximum=6
+            field "parentHeight" type="integer" minimum=0 maximum=6
+        }
+    }
+
+    can list followers {
+        path "/app.bsky.graph.getFollowers"
+        describe "List the accounts that follow one account, by handle or DID. Page with the returned cursor. This is a public graph read and carries no viewer state, so it cannot say which of these Kai also follows. Its mirror is list_follows."
+        query {
+            field "actor" type="string"
+            field "limit" type="integer" minimum=1 maximum=50
+            field "cursor" type="string"
+        }
+    }
+
+    can list follows {
+        path "/app.bsky.graph.getFollows"
+        describe "List the accounts one account follows, by handle or DID. Page with the returned cursor. The mirror of list_followers. Public graph data only, with no viewer state."
+        query {
+            field "actor" type="string"
+            field "limit" type="integer" minimum=1 maximum=50
+            field "cursor" type="string"
+        }
+    }
+}
+
+// WHAT THIS FILE CANNOT DO THAT bluesky-mcp DOES, so nobody has to rediscover
+// it during the swap. None of these blocks the retirement of the public half,
+// and all three are real.
+//
+// 1. CHARSET VALIDATION IS GONE. bluesky-mcp validates `actor` against a
+//    handle-or-DID regex, `uri` against an at:// post-URI regex, and `cursor`
+//    against a printable-character bound, rejecting a bad value before the
+//    request. A guardfile has `restrict ... matches` for PATH parameters and a
+//    glob cannot express a charset, and these are all QUERY parameters, so
+//    there is no equivalent. What remains is the engine's metachar gate plus
+//    the type and bound declarations above. The practical exposure is small,
+//    because `base-url` is fixed so the origin cannot be redirected by any
+//    input, and a malformed actor becomes an upstream 400 rather than a
+//    traversal. It is still less checking than the server it replaces.
+//
+// 2. SCHEMA DEFAULTS ARE GONE. bluesky-mcp defaults `limit` to 20 or 25 per
+//    tool and `depth` and `parentHeight` to 3. The bounds above are declared
+//    and the defaults are not, so an omitted argument now takes the upstream
+//    default instead of Kai's. Worth a look before this ships, because a model
+//    that omits `limit` gets a different page size than it used to.
+//
+// 3. RESPONSE REDACTION IS MOOT RATHER THAN REPLICATED. bluesky-mcp strips
+//    password, secret, and JWT-shaped keys from every response before it
+//    reaches the model. There is no session anywhere in this file, so there is
+//    no such key to strip. That is a genuine absence rather than a gap, but it
+//    stops being true the moment the authenticated half lands, and whoever
+//    writes that half owns the question again.
+//
+// WHAT THIS FILE DOES THAT bluesky-mcp DOES NOT. Every grant-backed result
+// leads with `coverage` and carries the payload under `result`, so a harness
+// that truncates keeps the caveat instead of destroying it. That is the first
+// invariant of coilyco-gaming/steam-ops#18, and here it arrives for free
+// rather than being implemented.
