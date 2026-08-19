@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/baggage"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // upstreamResponseHeaderTimeout bounds how long an upstream may take to START
@@ -108,9 +110,30 @@ func newProxyBackend(ctx context.Context, upstreamURL string, allowTools []strin
 	return p, nil
 }
 
+// upstreamContext detaches a caller's request values from the upstream call,
+// keeping its deadline, cancellation, and trace. See docs/upstream.md.
+func upstreamContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	// The span and the baggage are carried across deliberately. Everything else
+	// belongs to the caller's session rather than to this one.
+	detached := trace.ContextWithSpan(context.Background(), trace.SpanFromContext(ctx))
+	detached = baggage.ContextWithBaggage(detached, baggage.FromContext(ctx))
+	var out context.Context
+	var cancel context.CancelFunc
+	if deadline, ok := ctx.Deadline(); ok {
+		out, cancel = context.WithDeadline(detached, deadline)
+	} else {
+		out, cancel = context.WithCancel(detached)
+	}
+	// The caller's cancellation still reaches the upstream, only its values do not.
+	stop := context.AfterFunc(ctx, cancel)
+	return out, func() { stop(); cancel() }
+}
+
 // dial opens one session to the upstream. It holds no lock, so a reconnect can
 // run without blocking a concurrent call that is only reading the baseline.
 func (p *proxyBackend) dial(ctx context.Context) (*mcp.ClientSession, error) {
+	ctx, cancel := upstreamContext(ctx)
+	defer cancel()
 	client := mcp.NewClient(&mcp.Implementation{Name: "mcp-beaver", Version: "0.1.0"}, nil)
 	client.AddSendingMiddleware(p.telemetry.clientMiddleware)
 	// The standalone SSE stream stays on. An upstream may deliver a tools/call
@@ -197,7 +220,9 @@ func (p *proxyBackend) toolHandler(name string) mcp.ToolHandler {
 				return toolError(fmt.Errorf("invalid tool arguments: %w", err)), nil
 			}
 		}
-		resp, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		upCtx, cancel := upstreamContext(ctx)
+		defer cancel()
+		resp, err := session.CallTool(upCtx, &mcp.CallToolParams{Name: name, Arguments: args})
 		if err != nil {
 			return toolError(err), nil
 		}
@@ -318,6 +343,8 @@ func (p *proxyBackend) ensureFresh(ctx context.Context, name string) error {
 // docs/DESIGN.md for why a co-located digest-pinned sidecar cannot drift
 // underneath the long-lived session anyway.
 func (p *proxyBackend) probeTools(ctx context.Context, session *mcp.ClientSession) (*mcp.ListToolsResult, error) {
+	ctx, cancel := upstreamContext(ctx)
+	defer cancel()
 	if session == nil {
 		return nil, fmt.Errorf("mcp-beaver: upstream MCP session is closed")
 	}
