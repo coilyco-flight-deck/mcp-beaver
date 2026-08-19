@@ -11,6 +11,9 @@
 // It parses the spec through umbra's opcore engine, projects one MCP tool
 // plus one POST /api/{tool-name} endpoint per grant, and binds one HTTP
 // listener. It never binds stdio: these run as remote pods reached by URL.
+//
+// A `sql` grant reaches a database through the drivers this binary registers.
+// Postgres (`database pgx { ... }`) is the only one linked today.
 package main
 
 import (
@@ -30,6 +33,15 @@ import (
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/mcpserver"
 	internaltelemetry "forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/telemetry"
+
+	// Registers the "pgx" database/sql driver a `database pgx { ... }` guardfile
+	// names. umbra deliberately imports no driver, so the choice of which
+	// databases this image can reach is made HERE, in the binary, and is the
+	// only reason a `sql` grant runs rather than erroring on an unknown driver.
+	//
+	// Postgres alone on purpose: it is what the fleet runs, and every driver
+	// linked is image weight and supply-chain surface for a database nobody has.
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 const shutdownTimeout = 5 * time.Second
