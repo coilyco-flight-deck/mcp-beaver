@@ -121,6 +121,13 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err := validateCaches(caches, descs, confirmations); err != nil {
 		return nil, err
 	}
+	rejectEmpties, err := parseRejectEmpty(src)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRejectEmpty(rejectEmpties, descs); err != nil {
+		return nil, err
+	}
 	queryPins, err := parseQueryPins(src)
 	if err != nil {
 		return nil, err
@@ -171,6 +178,11 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		desc := d
 		spec := toolSpec(desc)
 		handler := toolHandler(rt, desc, queryPins[spec.Name], extracts[spec.Name])
+		// Innermost, so it reads the upstream's own answer: an empty result
+		// becomes a tool error before anything downstream can cache it.
+		if _, declared := rejectEmpties[spec.Name]; declared {
+			handler = withRejectEmpty(spec.Name, handler)
+		}
 		// Inside the confirmation gate: a call awaiting a human's accept must
 		// not hold an upstream slot, and a declined call must not have spent
 		// one. The bucket is for requests that actually go out.

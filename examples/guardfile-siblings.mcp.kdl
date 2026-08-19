@@ -49,6 +49,12 @@ rate-limit "1/1s"
 // caching a destructive or `confirm`-gated grant is a build error.
 cache "get_thing" ttl="15m"
 
+// An empty answer is indistinguishable from a real one once it reaches a
+// model, which posts blank messages rather than saying it found nothing.
+// Off by default: a search with no hits is a correct empty answer, and only
+// the author knows which this is. `false` and `0` are never refused.
+reject-empty "get_thing"
+
 // State a verb that is left out ON PURPOSE, so an agent stops inferring from
 // silence. Absence otherwise means four things at once - withheld by policy,
 // unimplemented, not offered upstream, or simply not matched by the agent's
