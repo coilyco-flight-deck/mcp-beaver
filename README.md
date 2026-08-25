@@ -4,8 +4,6 @@ A MCP server generator with a natural flow
 
 ![mcp-beaver // .mcp.kdl - A MCP server generator with a natural flow](assets/banner/mcp-beaver-banner.jpg)
 
-**A dam is not a wall. It decides what gets through.**
-
 mcp-beaver renders an [umbra](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra)
 guardfile into a guarded MCP server and HTTP tool API, baked into one generic
 OCI image. One runtime, many guardfiles. No per-server Go, no per-server
@@ -102,6 +100,8 @@ Every push to canonical `main` publishes the runtime as
 the trusted publisher verifies the remote manifest.
 
 ## Naming
+
+**A dam is not a wall. It decides what gets through.**
 
 mcp-beaver shares no code with
 [ward](https://forgejo.coilysiren.me/coilyco-flight-deck/ward), whose name this
