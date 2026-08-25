@@ -667,10 +667,13 @@ func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin, ex
 				return toolError(fmt.Errorf("invalid tool arguments: %w", err)), nil
 			}
 		}
+		if unknown := undeclaredArgs(schemaNames(schema), rawArgs); len(unknown) > 0 {
+			return toolError(undeclaredArgError(toolName(desc), unknown, schemaNames(schema))), nil
+		}
 		args := splitArgs(schema, rawArgs)
-		// Applied after splitArgs, which drops anything the schema does not
-		// name. A pinned parameter is absent from the schema, so the caller
-		// cannot supply it and this assignment cannot be contested.
+		// A pinned parameter is absent from the schema, so a caller supplying it
+		// is now refused above rather than silently overruled here, and this
+		// assignment still cannot be contested.
 		if len(pins) > 0 {
 			resolved, err := resolveQueryPins(ctx, pins)
 			if err != nil {

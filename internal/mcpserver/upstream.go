@@ -220,6 +220,14 @@ func (p *proxyBackend) toolHandler(name string) mcp.ToolHandler {
 				return toolError(fmt.Errorf("invalid tool arguments: %w", err)), nil
 			}
 		}
+		// The proxy forwards the argument map verbatim, so an argument the
+		// upstream does not declare would reach it and be ignored there. Refuse
+		// it here instead: this is the layer that knows the declared surface.
+		if declared, closed := p.declaredArgs(name); closed {
+			if unknown := undeclaredArgs(declared, args); len(unknown) > 0 {
+				return toolError(undeclaredArgError(name, unknown, declared)), nil
+			}
+		}
 		upCtx, cancel := upstreamContext(ctx)
 		defer cancel()
 		resp, err := session.CallTool(upCtx, &mcp.CallToolParams{Name: name, Arguments: args})
@@ -228,6 +236,20 @@ func (p *proxyBackend) toolHandler(name string) mcp.ToolHandler {
 		}
 		return resp, nil
 	}
+}
+
+// declaredArgs reads the selected tool's declared argument names off the
+// snapshot taken at startup, so the answer comes from the contract this runtime
+// accepted rather than from whatever the upstream is advertising right now.
+func (p *proxyBackend) declaredArgs(name string) (map[string]bool, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, tool := range p.selected {
+		if tool.Name == name {
+			return declaredProperties(tool.InputSchema)
+		}
+	}
+	return nil, false
 }
 
 // ensureFreshOrReconnect runs the drift check, replacing the session once if it

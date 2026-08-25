@@ -95,3 +95,14 @@ func toolError(err error) *mcp.CallToolResult {
 	out.SetError(err)
 	return out
 }
+
+// schemaNames is the declared argument surface of a generated tool. The schema
+// is umbra's own projection of the operation, so it is closed by construction:
+// a name it does not carry is a name the tool does not have.
+func schemaNames(schema opcore.Schema) map[string]bool {
+	out := make(map[string]bool, len(schema.Properties))
+	for name := range schema.Properties {
+		out[name] = true
+	}
+	return out
+}

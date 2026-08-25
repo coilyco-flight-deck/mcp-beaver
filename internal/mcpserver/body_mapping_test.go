@@ -42,12 +42,15 @@ func TestBodyMappingProjectsSameRequestThroughMCPAndHTTP(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
+	// `secret` rides inside a declared property: the mapping projects `summary`
+	// and nothing else, so it must not reach the upstream. A top-level name the
+	// tool does not declare is a different question, refused outright and
+	// covered by TestUndeclaredTopLevelArgumentIsRefused.
 	arguments := map[string]any{
 		"commonAnnotations": map[string]any{
 			"summary": "API error rate is high",
 			"secret":  "must-not-leak",
 		},
-		"ignored": "must-not-leak",
 	}
 	rawArguments, err := json.Marshal(arguments)
 	if err != nil {
@@ -129,5 +132,33 @@ func TestBodyMappingRejectsMissingAndNonStringWithoutUpstream(t *testing.T) {
 	}
 	if got := calls.Load(); got != 0 {
 		t.Fatalf("upstream calls = %d, want 0", got)
+	}
+}
+
+// TestUndeclaredTopLevelArgumentIsRefused is the negative control for
+// mcp-beaver#94: an argument the tool does not declare ends the call, rather
+// than being dropped so the tool runs without it and reports success.
+func TestUndeclaredTopLevelArgumentIsRefused(t *testing.T) {
+	var calls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		calls.Add(1)
+	}))
+	defer upstream.Close()
+
+	s, err := New("mapper", "mapper.mcp.kdl", []byte(bodyMappingSpec(upstream.URL)))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	body := `{"commonAnnotations":{"summary":"ok"},"searchText":"zzzzz-nonexistent-qqqq"}`
+	resp := postAPI(t, ts.Client(), ts.URL+"/api/create_message", "application/json", body)
+	result := decodeAPIResult(t, resp)
+	if resp.StatusCode != http.StatusBadGateway || result["isError"] != true {
+		t.Fatalf("status/body = %d %v, want 502 and isError=true", resp.StatusCode, result)
+	}
+	if got := calls.Load(); got != 0 {
+		t.Errorf("upstream calls = %d, want 0: a refused call must not reach the upstream", got)
 	}
 }

@@ -76,19 +76,41 @@ func TestQueryPinReachesUpstream(t *testing.T) {
 	}
 }
 
-// The whole point: a caller cannot substitute its own scope. The pinned name
-// is absent from the tool schema, so splitArgs drops it before it can reach
-// the request - this is "anyone's library" versus "Kai's library".
+// The whole point: a caller cannot substitute its own scope - this is
+// "anyone's library" versus "Kai's library". The pinned name is absent from the
+// tool schema, so supplying it is now refused outright rather than dropped and
+// overruled. Both hold the scope; refusing also stops the caller being told its
+// request succeeded when a different one ran (mcp-beaver#94).
 func TestQueryPinIsNotCallerSupplied(t *testing.T) {
 	t.Setenv("STEAM_API_KEY", "test-key")
 	t.Setenv("STEAM_STEAMID64", "76561190000000000")
 	ts, seen := pinnedServer(t, pinnedSpec)
 
-	postToServer(t, ts.Client(), ts.URL+"/mcp", "",
+	resp := postToServer(t, ts.Client(), ts.URL+"/mcp", "",
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_owned_games","arguments":{"steamid":"76561199999999999"}}}`)
+	var result map[string]any
+	if err := json.Unmarshal(decodeRPCResponse(t, resp).Result, &result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if isErr, _ := result["isError"].(bool); !isErr {
+		t.Fatalf("supplying a pinned parameter must be refused, got: %v", result)
+	}
+	if got := seen().Get("steamid"); got == "76561199999999999" {
+		t.Fatalf("steamid = %q: a caller overrode the server-side scope", got)
+	}
+}
+
+// A call that does not contest the pin still gets the pinned scope.
+func TestQueryPinAppliesWhenUncontested(t *testing.T) {
+	t.Setenv("STEAM_API_KEY", "test-key")
+	t.Setenv("STEAM_STEAMID64", "76561190000000000")
+	ts, seen := pinnedServer(t, pinnedSpec)
+
+	postToServer(t, ts.Client(), ts.URL+"/mcp", "",
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_owned_games","arguments":{}}}`)
 
 	if got := seen().Get("steamid"); got != "76561190000000000" {
-		t.Fatalf("steamid = %q, want the pinned value: a caller overrode the server-side scope", got)
+		t.Fatalf("steamid = %q, want the pinned value", got)
 	}
 }
 
