@@ -131,9 +131,11 @@ func TestPreflightUpstreamHeadersFailsOnAnUnsetSecret(t *testing.T) {
 	}
 }
 
-// The value is a credential, so no error path may carry it.
+// The value is a credential, so no error path may carry it. The newline that
+// reaches this guard is an embedded one: umbra trims a surrounding one in the
+// env provider itself, so a secret read from a file no longer fails the header.
 func TestUpstreamHeaderErrorsNeverCarryTheValue(t *testing.T) {
-	t.Setenv("TOKEN", "sk-live-should-never-appear\n")
+	t.Setenv("TOKEN", "sk-live-should\nnever-appear")
 	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -142,8 +144,25 @@ func TestUpstreamHeaderErrorsNeverCarryTheValue(t *testing.T) {
 	if err == nil {
 		t.Fatal("a header value containing a newline was accepted")
 	}
-	if strings.Contains(err.Error(), "sk-live-should-never-appear") {
+	if strings.Contains(err.Error(), "sk-live-should") {
 		t.Fatalf("error leaked the resolved value: %q", err)
+	}
+}
+
+// A trailing newline is the ordinary shape of a secret read from a file or a
+// parameter store, and umbra trims it rather than refusing the header.
+func TestUpstreamHeaderToleratesASurroundingNewline(t *testing.T) {
+	t.Setenv("TOKEN", "sk-live-trailing\n")
+	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	got, err := header.resolve(context.Background(), providersForTest())
+	if err != nil {
+		t.Fatalf("a trailing newline was refused: %v", err)
+	}
+	if got != "Bearer sk-live-trailing" {
+		t.Errorf("resolve = %q, want the trimmed value", got)
 	}
 }
 

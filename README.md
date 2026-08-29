@@ -58,6 +58,13 @@ worked hello-world, and its body is the whole contract.
   policy fixes one bucket, the media types it will serve, the public base URL,
   and an optional key prefix. See [docs/s3.md](docs/s3.md).
 
+A guardfile may also name an API document with `spec <file>` and let umbra
+resolve `can get repo` against it, and compose from another guardfile with
+`inherit`. A tier can only narrow its base unless it writes `override` by name,
+so a weaker surface is structural rather than asserted. `flatten` resolves the
+composition into the one self-contained file a runtime mounts. See
+[docs/spec-mode.md](docs/spec-mode.md).
+
 `lint` and `lint-upstream` are the same paths minus the listener, for validating
 a guardfile in CI. See [docs/lint.md](docs/lint.md).
 

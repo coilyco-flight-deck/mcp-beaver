@@ -33,6 +33,12 @@
 spec: ""
 # The <name> in /spec/<name>.mcp.kdl. Defaults to the release name.
 specName: ""
+# A swagger-resolved guardfile states `spec <file>` and resolves it beside
+# itself. Supply that document with `--set-file apiDocument=<file>` and name it
+# with apiDocumentName, spelled exactly as the guardfile spells it. Both stay
+# empty for an inline-grammar guardfile, which names no document.
+apiDocument: ""
+apiDocumentName: ""
 
 replicaCount: 1
 

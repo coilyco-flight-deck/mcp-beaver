@@ -65,7 +65,7 @@ func run(argv []string) error {
 
 func runContext(ctx context.Context, argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: mcp-beaver serve <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-ssm <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-s3 <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...] | mcp-beaver lint <spec.mcp.kdl> | mcp-beaver lint-upstream --tool <name> [--read-only heuristic|strict] [--upstream <mcp-url>]")
+		return fmt.Errorf("usage: mcp-beaver serve <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-ssm <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-s3 <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...] | mcp-beaver lint <spec.mcp.kdl> | mcp-beaver lint-upstream --tool <name> [--read-only heuristic|strict] [--upstream <mcp-url>] | mcp-beaver flatten <spec.mcp.kdl> [-o <out>] [--check]")
 	}
 	switch argv[0] {
 	case "serve":
@@ -80,8 +80,10 @@ func runContext(ctx context.Context, argv []string) error {
 		return runLint(os.Stdout, argv[1:])
 	case "lint-upstream":
 		return runLintUpstream(ctx, os.Stdout, argv[1:])
+	case "flatten":
+		return runFlatten(os.Stdout, argv[1:])
 	default:
-		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-s3, serve-upstream, lint, lint-upstream)", argv[0])
+		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-s3, serve-upstream, lint, lint-upstream, flatten)", argv[0])
 	}
 }
 

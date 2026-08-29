@@ -2,8 +2,12 @@
 {{- if not .Values.spec }}
 {{- fail "mcp-beaver: .Values.spec is empty - supply the guardfile with `--set-file spec=<name>.mcp.kdl`" }}
 {{- end }}
-# The .mcp.kdl guardfile, mounted into the runtime at {{ include "mcp-beaver.specPath" . }}.
-# This is the ONLY per-MCP artifact; the runtime image is shared across releases.
+{{- if and .Values.apiDocument (not .Values.apiDocumentName) }}
+{{- fail "mcp-beaver: .Values.apiDocument needs .Values.apiDocumentName matching the guardfile's `spec <file>`" }}
+{{- end }}
+# The .mcp.kdl guardfile, mounted into the runtime at {{ include "mcp-beaver.specPath" . }},
+# beside the optional API document a swagger-resolved guardfile names.
+# The runtime image stays shared across releases and parses neither here.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -17,4 +21,10 @@ metadata:
 data:
   {{ include "mcp-beaver.specName" . }}.mcp.kdl: |
     {{- .Values.spec | nindent 4 }}
+{{- if .Values.apiDocument }}
+# binaryData because a vendored API document is usually gzipped, and a
+# ConfigMap `data` value has to be valid UTF-8.
+binaryData:
+  {{ .Values.apiDocumentName }}: {{ .Values.apiDocument | b64enc }}
+{{- end }}
 {{- end }}

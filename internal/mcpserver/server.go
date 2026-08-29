@@ -60,7 +60,7 @@ func (s *Server) SetRequestTimeout(d time.Duration) {
 // and matching HTTP endpoint per grant, with opcore still owning the guardfile
 // parse, guard, and upstream request execution.
 func New(name, specPath string, src []byte) (*Server, error) {
-	descs, cfg, err := opcore.ParseInline(src)
+	descs, cfg, err := parseSource(specPath, src)
 	if err != nil {
 		return nil, err
 	}

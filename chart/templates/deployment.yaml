@@ -36,6 +36,9 @@ spec:
         # Roll the pod whenever the mounted guardfile changes - a ConfigMap
         # edit alone does not restart a running container.
         checksum/spec: {{ .Values.spec | sha256sum }}
+        {{- if .Values.apiDocument }}
+        checksum/api-document: {{ .Values.apiDocument | sha256sum }}
+        {{- end }}
         {{- end }}
         {{- with .Values.commonAnnotations }}
         {{- toYaml . | nindent 8 }}
