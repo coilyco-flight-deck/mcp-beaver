@@ -12,6 +12,15 @@
 # Forgejo runner does not know, so a gate pinned to it matched no runner and
 # the repo queued zero tasks (mcp-beaver#10).
 #
+# The gate covers more than the Go build. A chart change and a committed example
+# guardfile both reach production without touching a Go file, and `go test`
+# cannot see either. `check-app-mount` is the one that spans the chart-to-runtime
+# seam: it renders the chart, materializes the mount as kubelet projects it, and
+# lints the result with the real runtime, because both halves of mcp-beaver#110
+# validated clean on their own while the pod failed at startup. They run through
+# `just` so a verb cannot pass on a laptop and differ here, and the image
+# carries go, helm, yq, and just already.
+#
 # A trusted main-only host runner publishes one private source-sha image and
 # verifies the remote manifest after the source gate passes.
 name: ci
@@ -33,6 +42,13 @@ jobs:
         run: go vet ./...
       - name: test
         run: go test ./...
+
+      - name: lint examples
+        run: just lint-examples
+      - name: lint chart
+        run: just helm-lint-chart
+      - name: check app mount
+        run: just check-app-mount
 
       - name: Alert Telegram on main failure
         if: ${{ failure() && github.ref == 'refs/heads/main' }}

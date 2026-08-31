@@ -1,10 +1,11 @@
 # CI
 
 [`.forgejo/workflows/ci.yml`](../.forgejo/workflows/ci.yml) is the whole
-automation surface: a **gate** that builds, vets, and tests the runtime on
-every push and pull request, and a **publish** step that, on a push to `main`
-or an authorized manual dispatch of `main`, builds the image, publishes it to
-Forgejo OCI under the full source sha, and verifies the remote manifest.
+automation surface: a **gate** that builds, vets, and tests the runtime and
+validates the chart and examples on every push and pull request, and a
+**publish** step that, on a push to `main` or an authorized manual dispatch of
+`main`, builds the image, publishes it to Forgejo OCI under the full source
+sha, and verifies the remote manifest.
 
 ## gate
 
@@ -13,6 +14,15 @@ advertise, inside the moving `:release` aos dev-base image which already ships
 Go and the Docker CLI. `GOPRIVATE=forgejo.coilysiren.me` keeps umbra, a private
 module fetched anonymously, off the public proxy and sumdb, and the Dockerfile
 sets the same var for its own fetch. Then `go build`, `go vet`, `go test`.
+
+Three more verbs follow, through `just` so a verb cannot pass on a laptop and
+differ here. `lint-examples` keeps a committed example guardfile from rotting.
+`helm-lint-chart` covers the chart in both its plain and `app`-bearing value
+shapes. `check-app-mount` renders the chart, materializes the mount the way
+kubelet projects it, and lints the result with the real runtime: a chart change
+and a guardfile change both reach production without touching a Go file, and
+`go test` sees neither. The image carries go, helm, yq, and just, so the three
+need nothing installed. See [apps.md](apps.md).
 
 ## publish
 
