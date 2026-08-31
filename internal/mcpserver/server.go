@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -40,6 +41,8 @@ type Server struct {
 	cfg            opcore.RuntimeConfig
 	tools          []*mcp.Tool
 	resources      []mcp.Resource
+	apps           []mcp.Resource
+	appTools       map[string]string
 	prompts        []mcp.Prompt
 	handlers       map[string]mcp.ToolHandler
 	upstreams      []adminUpstreamResponse
@@ -88,6 +91,12 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		return nil, err
 	}
 	prompts, err := parsePrompts(src)
+	if err != nil {
+		return nil, err
+	}
+	// A widget's body is a file beside the guardfile, so this is the one
+	// sibling node that needs the spec's own directory rather than its bytes.
+	apps, err := parseApps(src, filepath.Dir(specPath))
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +178,15 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err := validateConfirmations(confirmations, tools); err != nil {
 		return nil, err
 	}
+	// After the surface is final, so an `app` cannot claim the info tool or a
+	// `withhold` stub by name and have it pass unnoticed.
+	if err := validateApps(apps, tools, resources); err != nil {
+		return nil, err
+	}
+	appMeta := appToolMeta(apps)
+	for _, tool := range tools {
+		applyAppMeta(appMeta, tool)
+	}
 
 	instrumentation, err := newInstrumentation("spec", tools)
 	if err != nil {
@@ -192,6 +210,7 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	for _, d := range descs {
 		desc := d
 		spec := toolSpec(desc)
+		applyAppMeta(appMeta, spec)
 		handler := toolHandler(rt, desc, queryPins[spec.Name], extracts[spec.Name])
 		// Innermost, so it reads the upstream's own answer: an empty result
 		// becomes a tool error before anything downstream can cache it.
@@ -218,6 +237,7 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		s.registerTool(spec, handler)
 	}
 	s.registerResources(resources)
+	s.registerApps(apps)
 	s.registerPrompts(prompts)
 	s.registerServerInfo(infoTool)
 	s.registerWithheld(stubs, stubTools)

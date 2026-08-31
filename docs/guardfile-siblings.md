@@ -28,6 +28,12 @@ warns.
 error, since a half-filled prompt reads as a complete one. Claude Code surfaces
 these as slash commands.
 
+## Apps
+
+`app "<name>" uri="ui://..." file="..."` serves an interactive widget and links
+it to the tools that render it. Its body is a file rather than `text` children,
+and it is the only sibling that reads one. See [apps.md](apps.md).
+
 ## Server info
 
 One read-only tool reporting the server's identity, mode, and tool inventory.

@@ -1,6 +1,6 @@
 // guardfile-siblings.mcp.kdl - the worked reference for the nodes that ride
 // BESIDE `wrap`: `instructions`, `server-info`, `cache`, `withhold`, `confirm`,
-// `resource`, `prompt`.
+// `resource`, `prompt`, `app`.
 //
 // `opcore.ParseInline` reads only the `wrap` node, so none of these touch the
 // frozen inline grammar or the umbra pin. Every one fails closed. All are
@@ -104,6 +104,30 @@ prompt "triage" title="Triage an incident" {
     text "You are triaging {service}."
     text "Read beaver://runbook/oncall before taking any action."
     text "Look back {since} and report what you find before changing anything."
+}
+
+// An MCP App: an interactive widget a host renders in place of the tool's
+// text result. The body is a FILE beside this guardfile, not `text` children,
+// because a real widget is a few hundred KB of bundled script. Reading it once
+// at startup reaches no network, so it opens no egress path the way an
+// upstream-proxying resource would.
+//
+// `tool` is what makes a host fetch the widget at all: it puts
+// `_meta.ui.resourceUri` on that projected tool. An app naming no tool, or
+// naming one this spec does not mint, is a build error - a widget attached to
+// nothing renders for nobody and lints identically to a working one.
+//
+// `visibility "app"` says the agent does not see the tool and the widget may
+// still call it. That is a DECLARATION to the host, which owns the sandbox and
+// the postMessage bridge; the enforceable bound is still the `can` grants
+// below, which is the whole reason to serve a widget from a guarded server.
+//
+// Every csp list omitted means the host allows no origin at all, so a
+// self-contained bundle needs no `csp` node. Declare only what the widget
+// actually reaches.
+app "thing-card" uri="ui://thing-card/mcp-app.html" file="widgets/things.html" prefers-border=#true {
+    description "The thing this tool returned, as a card"
+    tool "get_thing"
 }
 
 wrap ward mcp things {

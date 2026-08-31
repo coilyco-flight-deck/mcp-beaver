@@ -1,0 +1,81 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Thing</title>
+<!--
+  The widget half of examples/guardfile-siblings.mcp.kdl's `app` node.
+
+  mcp-beaver's contract stops at the declaration: it serves these bytes at the
+  `ui://` URI with mime text/html;profile=mcp-app, and puts
+  `_meta.ui.resourceUri` on the linked tool. The page below is the widget
+  AUTHOR's code, kept small and dependency-free so the reference reads. A real
+  widget uses the `App` class from @modelcontextprotocol/ext-apps and ships as
+  one bundled file, which is why `app` takes `file` rather than inline text.
+
+  Method names and the ui/initialize result shape are from ext-apps
+  specification/2026-01-26. The host answers ui/initialize with hostInfo,
+  hostCapabilities, and hostContext - NOT the MCP-server shape of
+  protocolVersion, capabilities, serverInfo, which a widget rejects.
+-->
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; }
+  dt { font-weight: 600; }
+  dd { margin: 0 0 8px; }
+  #empty { opacity: 0.7; }
+</style>
+<h1 id="title">Thing</h1>
+<p id="empty">Waiting for a tool result.</p>
+<dl id="fields"></dl>
+<script>
+  // The host may hand over a MessagePort on its first message. Until it does,
+  // window.parent is the channel, which is what the reference host uses.
+  let port = null;
+  let nextId = 1;
+
+  function send(message) {
+    const envelope = { jsonrpc: "2.0", ...message };
+    if (port) port.postMessage(envelope);
+    else window.parent.postMessage(envelope, "*");
+  }
+
+  function render(result) {
+    const structured = result && (result.structuredContent || result);
+    document.getElementById("empty").hidden = true;
+    const list = document.getElementById("fields");
+    list.replaceChildren();
+    for (const [key, value] of Object.entries(structured || {})) {
+      const term = document.createElement("dt");
+      term.textContent = key;
+      const detail = document.createElement("dd");
+      detail.textContent = typeof value === "string" ? value : JSON.stringify(value);
+      list.append(term, detail);
+    }
+  }
+
+  function receive(event) {
+    if (event.ports && event.ports.length > 0) port = event.ports[0];
+    const message = event.data;
+    if (!message || message.jsonrpc !== "2.0") return;
+    // The host pushes the tool's own result in, so the widget renders the
+    // same bytes the model read rather than fetching its own copy.
+    if (message.method === "ui/notifications/tool-result") render(message.params && message.params.result);
+    if (message.id === 1) {
+      send({ method: "ui/notifications/initialized" });
+      send({
+        method: "ui/notifications/size-changed",
+        params: { width: document.body.scrollWidth, height: document.body.scrollHeight },
+      });
+    }
+  }
+
+  window.addEventListener("message", receive);
+  send({
+    id: nextId++,
+    method: "ui/initialize",
+    params: {
+      appInfo: { name: "Thing", version: "1.0.0" },
+      appCapabilities: {},
+      protocolVersion: "2026-01-26",
+    },
+  });
+</script>

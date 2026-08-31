@@ -58,6 +58,12 @@ worked hello-world, and its body is the whole contract.
   policy fixes one bucket, the media types it will serve, the public base URL,
   and an optional key prefix. See [docs/s3.md](docs/s3.md).
 
+An `app` node serves an MCP App: an interactive widget at a `ui://` resource,
+plus the `_meta.ui.resourceUri` link a host renders it from. The widget calls
+tools back through the host, and the tools that exist are the `can` grants and
+nothing else, so its blast radius is the same audited file as the agent's. See
+[docs/apps.md](docs/apps.md).
+
 A guardfile may also name an API document with `spec <file>` and let umbra
 resolve `can get repo` against it, and compose from another guardfile with
 `inherit`. A tier can only narrow its base unless it writes `override` by name,

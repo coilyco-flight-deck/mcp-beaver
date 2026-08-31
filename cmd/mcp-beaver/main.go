@@ -224,6 +224,7 @@ func runLint(out io.Writer, argv []string) error {
 func runLintTo(out, warn io.Writer, argv []string) error {
 	fs := flag.NewFlagSet("lint", flag.ContinueOnError)
 	methods := fs.Bool("methods", false, "print the resolved HTTP method beside each tool, as `name<TAB>METHOD`")
+	apps := fs.Bool("apps", false, "print the MCP App widget uri beside each tool that carries one, as `name<TAB>URI`")
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
 		return err
 	}
@@ -248,8 +249,14 @@ func runLintTo(out, warn io.Writer, argv []string) error {
 	if err := lintWarnResourceAudience(warn, srv.ResourcesWithoutAudience()); err != nil {
 		return err
 	}
+	if *methods && *apps {
+		return fmt.Errorf("lint takes --methods or --apps, not both: each owns the second column")
+	}
 	if *methods {
 		return lintPrintMethods(out, srv)
+	}
+	if *apps {
+		return lintPrintApps(out, srv)
 	}
 	for _, name := range srv.ToolNames() {
 		if _, err := fmt.Fprintln(out, name); err != nil {
@@ -298,6 +305,24 @@ func lintWarnResourceAudience(warn io.Writer, resources []string) error {
 			name,
 		)
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// lintPrintApps is the MCP App inventory, kept off the default stdout listing
+// for the same reason --methods is: that listing is the diff a consumer pins,
+// and a second column is a change to it. A tool with no widget prints "-", so
+// the surface reads as a whole rather than as the linked subset.
+func lintPrintApps(out io.Writer, srv *mcpserver.Server) error {
+	widgets := srv.AppTools()
+	for _, name := range srv.ToolNames() {
+		uri, linked := widgets[name]
+		if !linked {
+			uri = "-"
+		}
+		if _, err := fmt.Fprintf(out, "%s\t%s\n", name, uri); err != nil {
 			return err
 		}
 	}

@@ -14,6 +14,13 @@ per line. That is how a consumer repo reads its served surface off the owning
 loader instead of writing a second parser. A rejected spec exits non-zero with
 the failure on stderr and writes nothing to stdout.
 
+## Second columns
+
+`--methods` prints the resolved HTTP method beside each tool, and `--apps`
+prints the MCP App widget uri beside each tool that carries one, `-` where a
+tool carries none. Both are opt-in and mutually exclusive, because the bare
+listing is the diff a consumer pins and a second column is a change to it.
+
 ## Warnings
 
 Two facts invisible from every other surface, so a spec carrying one lints

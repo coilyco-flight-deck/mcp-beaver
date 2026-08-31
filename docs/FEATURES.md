@@ -19,6 +19,8 @@ generic Helm chart.
 
 - [guardfile-siblings.md](guardfile-siblings.md) - instructions, resources,
   prompts, server-info.
+- [apps.md](apps.md) - MCP App widgets: a `ui://` resource plus the
+  `_meta.ui.resourceUri` link a host renders from.
 - [guardfile-controls.md](guardfile-controls.md) - pins, rate limit, cache,
   withheld verbs, confirmations.
 - [extraction.md](extraction.md) - reading a PDF or feed an upstream returns.
