@@ -1,9 +1,9 @@
 # MCP Apps
 
 An MCP App is an interactive HTML widget a host renders in place of a tool's
-text result. The `app` node declares one, and mcp-beaver serves it: the bytes
-at a `ui://` URI with mime `text/html;profile=mcp-app`, and
-`_meta.ui.resourceUri` on each tool that carries it.
+text result. The `app` node declares one, and mcp-beaver serves it: the bytes at
+a `ui://` URI with mime `text/html;profile=mcp-app`, and `_meta.ui.resourceUri`
+on each tool that carries it.
 
 ```kdl
 app "thing-card" uri="ui://thing-card/mcp-app.html" file="widgets/things.html" prefers-border=#true {
@@ -35,11 +35,10 @@ agent's.
 
 ## The body is a file
 
-`file` resolves against the guardfile's own directory, so a spec and its
-widgets move together, and a deployment mounting the spec mounts the widget
-beside it. An absolute path is refused, because a guardfile is mounted into a
-container that has no such path and the failure would land at startup on the
-deployment rather than at lint on the author's machine.
+`file` resolves against the directory of the guardfile that declared it, so a
+spec and its widgets move together. An absolute path is refused: a guardfile is
+mounted into a container that has no such path, and the failure would land at
+startup on the deployment rather than at lint on the author's machine.
 
 This is the one place `app` departs from
 [`resource`](guardfile-siblings.md), which is inline-only. That rule is about
@@ -69,9 +68,9 @@ the normal shape.
 
 ## csp and permissions
 
-Both ride on the resource, never on the tool, and hosts ignore them there.
-Every omitted csp list is `'none'` at the host, so a self-contained bundle
-needs no `csp` node at all and declaring one narrows nothing that was open.
+Both ride on the resource, never on the tool, and hosts ignore them there. Every
+omitted csp list is `'none'`, so a self-contained bundle needs no `csp` node and
+declaring one narrows nothing that was open.
 
 - `connect` - fetch, XHR, WebSocket origins
 - `resource` - images, scripts, stylesheets, fonts, media
@@ -79,15 +78,14 @@ needs no `csp` node at all and declaring one narrows nothing that was open.
 - `base-uri` - allowed document base URIs
 
 `permission` takes `camera`, `microphone`, `geolocation`, or `clipboardWrite`,
-and a host MAY honour them, so a widget still needs feature detection.
-`domain` asks for a dedicated sandbox origin, worth stating only when a widget
-needs a stable one for OAuth callbacks or an API-key allowlist.
+and a host MAY honour them, so a widget still needs feature detection. `domain`
+asks for a dedicated sandbox origin, worth stating only when a widget needs a
+stable one for OAuth callbacks or an API-key allowlist.
 
 ## Deploying one
 
-The chart mounts the guardfile at `/spec/<specName>.mcp.kdl`, and a widget has
-to land beside it at the path the guardfile names. One `widgets` entry per
-`app file=` does that:
+The chart mounts the guardfile at `/spec/<specName>.mcp.kdl`, and a widget lands
+beside it at the path the guardfile names. One `widgets` entry per `app file=`:
 
 ```sh
 helm upgrade --install things mcp-beaver \
@@ -99,22 +97,24 @@ helm upgrade --install things mcp-beaver \
 `path` is spelled exactly as the guardfile spells it. A missing `content`, a
 path holding `..`, and two paths colliding on one ConfigMap key are all
 template-time failures naming the offending path. `just check-app-mount` renders
-the chart, materializes the mount as kubelet projects it, and lints the result
-with the real runtime, so that seam is checked rather than assumed.
+the chart, materializes the mount as kubelet projects it, and lints that with the
+real runtime, so the seam is checked rather than assumed.
 
 Widgets are base64-encoded into the guardfile's own ConfigMap, so they cost a
 third more than their file size against its 1 MiB cap, and the chart refuses at
 template time rather than letting the apply fail.
 
+A `flatten`ed guardfile is no different, and [inherit.md](inherit.md) says why.
+
 ## Worked example
 
 [`examples/guardfile-siblings.mcp.kdl`](../examples/guardfile-siblings.mcp.kdl)
-declares `thing-card`, and
-[`examples/widgets/things.html`](../examples/widgets/things.html) is the widget
-it serves: a dependency-free page doing the `ui/initialize` handshake and
-rendering the tool result the host pushes in.
+declares `thing-card`, and served beside it
+[`examples/widgets/things.html`](../examples/widgets/things.html) is a
+dependency-free page doing the `ui/initialize` handshake and rendering the tool
+result the host pushes in.
 
 Wire shapes are measured against the published `server-basic-vanillajs` and
-`server-map`, and against the types shipped in `@modelcontextprotocol/ext-apps`
-(specification 2026-01-26). Tool `_meta` carries the flattened `ui/resourceUri`
-beside the nested object, matching both, so a host of either era finds the link.
+`server-map`, and the types in `@modelcontextprotocol/ext-apps` (specification
+2026-01-26). Tool `_meta` carries the flattened `ui/resourceUri` beside the
+nested object, matching both, so a host of either era finds the link.

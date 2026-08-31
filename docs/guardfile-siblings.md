@@ -62,6 +62,7 @@ tool it does not mint stays an error: that one is a typo.
 
 Before mcp-beaver#113 none of this happened: a parent's siblings were dropped
 in silence while its grants survived, so a child came out wider than its base.
+The grant half is in [inherit.md](inherit.md).
 
 ## Server info
 

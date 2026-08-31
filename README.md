@@ -65,11 +65,12 @@ nothing else, so its blast radius is the same audited file as the agent's. See
 [docs/apps.md](docs/apps.md).
 
 A guardfile may also name an API document with `spec <file>` and let umbra
-resolve `can get repo` against it, and compose from another guardfile with
-`inherit`. A tier can only narrow its base unless it writes `override` by name,
-so a weaker surface is structural rather than asserted. `flatten` resolves the
-composition into the one self-contained file a runtime mounts. See
-[docs/spec-mode.md](docs/spec-mode.md).
+resolve `can get repo` against it ([docs/spec-mode.md](docs/spec-mode.md)), and
+compose from another guardfile with `inherit`. A tier can only narrow its base
+unless it writes `override` by name, and a base tier's `confirm` and `withhold`
+bind on every tier below it, so a weaker surface is structural rather than
+asserted. `flatten` resolves the composition into the one guardfile a runtime
+mounts. See [docs/inherit.md](docs/inherit.md).
 
 `lint` and `lint-upstream` are the same paths minus the listener, for validating
 a guardfile in CI. See [docs/lint.md](docs/lint.md).

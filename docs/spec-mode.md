@@ -1,4 +1,4 @@
-# spec mode and `inherit`: composing a guardfile
+# spec mode: resolving grants against an API document
 
 A `.mcp.kdl` reaches its operations two ways now. Both end at the same
 `opcore.Descriptor` and the same guarded `Execute`, so nothing downstream of the
@@ -9,9 +9,9 @@ parse changes.
 - **spec mode** - the guardfile states `spec <file>` and each grant names a verb
   and a resource. umbra resolves those against the API document by convention.
 
-`parseSource` picks between them: `inherit` flattens first, then a `spec` node in
+`parseSource` picks between them: `inherit` composes first, then a `spec` node in
 the result selects resolution. A guardfile with neither takes exactly the path it
-took before, byte for byte.
+took before, byte for byte. Composition is in [inherit.md](inherit.md).
 
 ## Why spec mode
 
@@ -35,61 +35,6 @@ wrap ward mcp forgejo {
 The document is a **sibling** of the guardfile, named by file and never by path.
 A `.gz` is decompressed on read, bounded at 16 MiB, so a vendored spec stays
 small enough to travel in a ConfigMap.
-
-## Composing tiers with `inherit`
-
-```kdl
-wrap ward mcp forgejo {
-    inherit "operator/forgejo.kdl"
-    auth header-token { header Authorization; prefix "token "; value env "FORGEJO_TOKEN" }
-    never delete repo
-    never create repo
-}
-```
-
-Grants merge. `spec`, `base-url`, and `auth` are child-wins singletons, so a tier
-states its own credential and inherits the policy. `restrict` dedupes by param.
-
-A child can only **narrow**. Its `never` shadows an inherited `can`, and a bare
-`can` that crosses an inherited `never` is a parse error naming
-`override can <verb> <resource>` as the way to escalate on purpose. That is what
-makes "this tier is weaker than its base" structural rather than a claim to
-re-check by reading two files.
-
-**A denied leaf mints no tool.** It is not a tool that refuses. Deny-by-absence
-is the whole guarantee, so a `never` removes the operation from `tools/list` and
-from `/api/` entirely.
-
-## Siblings compose too
-
-The nodes beside `wrap` travel the same chain. Most union, so a base tier's
-`confirm` and `withhold` bind on every tier below it. `instructions`,
-`server-info`, and `rate-limit` are child-wins. Rules and the reason:
-[guardfile-siblings.md](guardfile-siblings.md).
-
-## Narrowing needs spec mode
-
-The inline grammar accepts only `can`. It has no `never`, so an inline guardfile
-can inherit to **add** and cannot inherit to subtract. A tier that exists to be a
-strict subset of its base has to be in spec mode.
-
-## Flatten before you mount
-
-A pod holds one mounted file and cannot follow a relative path, so the
-composition is resolved at author time and the result is committed:
-
-```sh
-mcp-beaver flatten services/forgejo-mcp/forgejo.mcp.kdl -o services/forgejo-mcp/forgejo.flat.mcp.kdl
-mcp-beaver flatten services/forgejo-mcp/forgejo.mcp.kdl -o services/forgejo-mcp/forgejo.flat.mcp.kdl --check
-```
-
-The flattened artifact is what the chart mounts, so it is what a reviewer reads.
-`--check` regenerates and compares without writing, failing on a stale committed
-file, which is the CI half. The output leads with a banner naming the source to
-edit instead.
-
-Comments do not survive the flatten: KDL re-emission keeps data and drops prose.
-Rationale belongs in `describe`, which is data and does survive.
 
 ## Deploying a spec-mode guardfile
 
@@ -115,6 +60,7 @@ replaced comes back in generated form, and `lint` does not warn. See #108.
 
 ## See also
 
+- [inherit.md](inherit.md) - composing tiers, and what `flatten` covers.
 - [serve.md](serve.md) - the runtime and the grant-to-tool projection.
 - [lint.md](lint.md) - validation, which covers both modes through `New`.
 - [chart.md](chart.md) - the deployment surface.
