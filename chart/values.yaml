@@ -40,6 +40,11 @@ specName: ""
 apiDocument: ""
 apiDocumentName: ""
 
+# Widget bodies for an `app`-bearing guardfile, one entry per `app file=`. Each
+# entry is {path, content}: `path` is spelled exactly as the guardfile spells
+# it, and `content` is the file itself. See docs/apps.md.
+widgets: []
+
 replicaCount: 1
 
 runtime:

@@ -5,9 +5,34 @@
 {{- if and .Values.apiDocument (not .Values.apiDocumentName) }}
 {{- fail "mcp-beaver: .Values.apiDocument needs .Values.apiDocumentName matching the guardfile's `spec <file>`" }}
 {{- end }}
+{{- $keys := dict }}
+{{- $bytes := len .Values.spec }}
+{{- range $i, $w := .Values.widgets }}
+{{- if not $w.path }}
+{{- fail (printf "mcp-beaver: widgets[%d] needs `path`, spelled exactly as the guardfile's `app file=` spells it" $i) }}
+{{- end }}
+{{- if not $w.content }}
+{{- fail (printf "mcp-beaver: widgets[%d] (%s) needs `content` - supply it with `--set-file widgets[%d].content=<file>`" $i $w.path $i) }}
+{{- end }}
+{{- if or (hasPrefix "/" $w.path) (contains ".." $w.path) }}
+{{- fail (printf "mcp-beaver: widget path %q must be relative to the guardfile and hold no `..`" $w.path) }}
+{{- end }}
+{{- $key := include "mcp-beaver.widgetKey" $w.path }}
+{{- if not (regexMatch "^[-._a-zA-Z0-9]+$" $key) }}
+{{- fail (printf "mcp-beaver: widget path %q derives ConfigMap key %q, which is not [-._a-zA-Z0-9]+" $w.path $key) }}
+{{- end }}
+{{- if hasKey $keys $key }}
+{{- fail (printf "mcp-beaver: widget paths %q and %q both derive ConfigMap key %q" (get $keys $key) $w.path $key) }}
+{{- end }}
+{{- $_ := set $keys $key $w.path }}
+{{- $bytes = add $bytes (div (mul (len $w.content) 4) 3) }}
+{{- end }}
+{{- if gt (int $bytes) 900000 }}
+{{- fail (printf "mcp-beaver: the spec ConfigMap would hold about %d bytes, and a ConfigMap caps at 1 MiB. Widgets are base64-encoded, so they cost a third more than their file size. Split the release or shrink a bundle." (int $bytes)) }}
+{{- end }}
 # The .mcp.kdl guardfile, mounted into the runtime at {{ include "mcp-beaver.specPath" . }},
-# beside the optional API document a swagger-resolved guardfile names.
-# The runtime image stays shared across releases and parses neither here.
+# beside the optional API document a swagger-resolved guardfile names and any
+# widget an `app` node reads. The runtime image stays shared and parses none of it.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -21,10 +46,16 @@ metadata:
 data:
   {{ include "mcp-beaver.specName" . }}.mcp.kdl: |
     {{- .Values.spec | nindent 4 }}
-{{- if .Values.apiDocument }}
-# binaryData because a vendored API document is usually gzipped, and a
-# ConfigMap `data` value has to be valid UTF-8.
+{{- if or .Values.apiDocument .Values.widgets }}
+# binaryData because a vendored API document is usually gzipped, and a widget is
+# a few hundred KB of bundled script whose trailing whitespace and line endings a
+# block scalar would not preserve. A ConfigMap `data` value has to be valid UTF-8.
 binaryData:
+  {{- if .Values.apiDocument }}
   {{ .Values.apiDocumentName }}: {{ .Values.apiDocument | b64enc }}
+  {{- end }}
+  {{- range .Values.widgets }}
+  {{ include "mcp-beaver.widgetKey" .path }}: {{ .content | b64enc }}
+  {{- end }}
 {{- end }}
 {{- end }}

@@ -55,9 +55,18 @@ serve-example *ARGS:
 lint-examples *ARGS:
     @bash scripts/ward-command.sh lint-examples "$@"
 
-# Lint the auth-neutral mcp-beaver chart.
+# Lint the auth-neutral mcp-beaver chart, both without and with an `app` widget.
 helm-lint-chart *ARGS:
     @helm lint chart --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml "$@"
+    @helm lint chart --set-file spec=examples/guardfile-siblings.mcp.kdl --set-file widgets[0].content=examples/widgets/things.html --set widgets[0].path=widgets/things.html "$@"
+
+# Render the app-bearing chart, materialize its mount, and lint it as the pod would.
+check-app-mount *ARGS:
+    @bash scripts/check-app-mount.sh "$@"
+
+# Render the chart for the app-bearing example, so a widget mount is readable.
+helm-template-app *ARGS:
+    @helm template mcp-beaver chart --set-file spec=examples/guardfile-siblings.mcp.kdl --set-file widgets[0].content=examples/widgets/things.html --set widgets[0].path=widgets/things.html "$@"
 
 # Render the default ClusterIP chart shape.
 helm-template-clusterip *ARGS:

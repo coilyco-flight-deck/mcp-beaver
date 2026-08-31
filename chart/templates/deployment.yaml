@@ -136,6 +136,11 @@ spec:
         - name: spec
           configMap:
             name: {{ include "mcp-beaver.fullname" . }}-spec
+            # Enumerated rather than projected whole: a widget key is flattened
+            # in the ConfigMap and has to land back at the nested path the
+            # guardfile's `app file=` names.
+            items:
+              {{- include "mcp-beaver.specItems" . | nindent 14 }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

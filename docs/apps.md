@@ -24,14 +24,14 @@ through a live handshake.
 
 ## What beaver owns, and what it does not
 
-Beaver is the producer end. It declares the widget and the link. The host owns
+Beaver is the producer end: it declares the widget and the link. The host owns
 the sandboxed iframe, the postMessage bridge, and every rendering decision, and
-the widget itself is the author's code.
+the widget is the author's code.
 
-What a guarded server adds over an unguarded one is the tool surface: a widget
-calls tools back through the host, and the tools that exist here are the `can`
-grants and nothing else. The widget's blast radius is the same audited file as
-the agent's.
+What a guarded server adds is the tool surface. A widget calls tools back
+through the host, and the tools that exist here are the `can` grants and
+nothing else, so the widget's blast radius is the same audited file as the
+agent's.
 
 ## The body is a file
 
@@ -78,13 +78,33 @@ needs no `csp` node at all and declaring one narrows nothing that was open.
 - `frame` - nested iframes
 - `base-uri` - allowed document base URIs
 
-`permission` takes `camera`, `microphone`, `geolocation`, or `clipboardWrite`.
-A host MAY honour them on the iframe, so a widget still needs feature
-detection.
+`permission` takes `camera`, `microphone`, `geolocation`, or `clipboardWrite`,
+and a host MAY honour them, so a widget still needs feature detection.
+`domain` asks for a dedicated sandbox origin, worth stating only when a widget
+needs a stable one for OAuth callbacks or an API-key allowlist.
 
-`domain` asks the host for a dedicated sandbox origin, which is worth stating
-only when a widget needs a stable origin for OAuth callbacks or an API-key
-allowlist. Its format is host-specific.
+## Deploying one
+
+The chart mounts the guardfile at `/spec/<specName>.mcp.kdl`, and a widget has
+to land beside it at the path the guardfile names. One `widgets` entry per
+`app file=` does that:
+
+```sh
+helm upgrade --install things mcp-beaver \
+  --set-file spec=things.mcp.kdl \
+  --set-file widgets[0].content=widgets/things.html \
+  --set widgets[0].path=widgets/things.html
+```
+
+`path` is spelled exactly as the guardfile spells it. A missing `content`, a
+path holding `..`, and two paths colliding on one ConfigMap key are all
+template-time failures naming the offending path. `just check-app-mount` renders
+the chart, materializes the mount as kubelet projects it, and lints the result
+with the real runtime, so that seam is checked rather than assumed.
+
+Widgets are base64-encoded into the guardfile's own ConfigMap, so they cost a
+third more than their file size against its 1 MiB cap, and the chart refuses at
+template time rather than letting the apply fail.
 
 ## Worked example
 
@@ -94,9 +114,7 @@ declares `thing-card`, and
 it serves: a dependency-free page doing the `ui/initialize` handshake and
 rendering the tool result the host pushes in.
 
-Wire shapes here are measured against the published reference servers
-`@modelcontextprotocol/server-basic-vanillajs` and
-`@modelcontextprotocol/server-map`, and against the types shipped in
-`@modelcontextprotocol/ext-apps` (specification 2026-01-26). Tool `_meta`
-carries the flattened `ui/resourceUri` beside the nested object, matching both,
-so a host of either era finds the link.
+Wire shapes are measured against the published `server-basic-vanillajs` and
+`server-map`, and against the types shipped in `@modelcontextprotocol/ext-apps`
+(specification 2026-01-26). Tool `_meta` carries the flattened `ui/resourceUri`
+beside the nested object, matching both, so a host of either era finds the link.

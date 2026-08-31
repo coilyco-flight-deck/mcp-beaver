@@ -21,7 +21,9 @@ exposure charts and owns rollout.
 ## What it templates
 
 - `configmap-spec.yaml` renders only in spec mode, mounting the `.mcp.kdl` at
-  `/spec/<name>.mcp.kdl`.
+  `/spec/<name>.mcp.kdl` beside any `widgets` an `app`-bearing guardfile reads.
+  The volume enumerates what it projects, so a ConfigMap key added without a
+  matching item stays unmounted. See [apps.md](apps.md).
 - `deployment.yaml` renders the runtime in spec or upstream mode, injects
   application tokens when requested, and appends optional co-located
   containers.

@@ -10,6 +10,11 @@ The values reference for [chart.md](chart.md).
 - **`spec`** - the guardfile body, supplied with `--set-file`. Written to a
   ConfigMap at `/spec/<specName>.mcp.kdl`. Empty by default so a spec-mode
   render fails loud. **`specName`** defaults to the release name.
+- **`widgets`** - one `{path, content}` per `app file=` an `app`-bearing
+  guardfile names. `path` is spelled exactly as the guardfile spells it, and
+  the chart lands the content back at `/spec/<path>`. A guardfile declaring an
+  `app` with no matching entry fails at pod startup rather than at template
+  time, because the chart never parses the guardfile. See [apps.md](apps.md).
 - **`upstream.url`** - required in upstream mode. **`upstream.tools`** is the
   exact allowlist and needs at least one entry. **`upstream.name`** defaults to
   the release fullname, **`upstream.connectTimeout`** is `2m`, and
