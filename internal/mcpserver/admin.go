@@ -55,11 +55,15 @@ func upstreamAuthScheme(headers []UpstreamHeader) string {
 }
 
 type adminConfigResponse struct {
-	AuthScheme    string `json:"authScheme"`
-	AuthHeader    string `json:"authHeader,omitempty"`
-	AuthPrefix    string `json:"authPrefix,omitempty"`
-	BaseURLMode   string `json:"baseUrlMode"`
-	RestrictCount int    `json:"restrictCount"`
+	AuthScheme string `json:"authScheme"`
+	AuthHeader string `json:"authHeader,omitempty"`
+	AuthPrefix string `json:"authPrefix,omitempty"`
+	// OAuth2Clients names the declared minted clients. Names only: never an
+	// endpoint, never a client secret, never a token. An operator otherwise
+	// cannot tell a server that mints from one that reads.
+	OAuth2Clients []string `json:"oauth2Clients,omitempty"`
+	BaseURLMode   string   `json:"baseUrlMode"`
+	RestrictCount int      `json:"restrictCount"`
 }
 
 type adminReloadResponse struct {
@@ -89,6 +93,7 @@ func (s *Server) adminDescribe() adminDescribeResponse {
 	out.Config.AuthScheme = s.cfg.Auth.Scheme
 	out.Config.AuthHeader = s.cfg.Auth.Header
 	out.Config.AuthPrefix = s.cfg.Auth.Prefix
+	out.Config.OAuth2Clients = s.OAuth2ClientNames()
 	out.Config.BaseURLMode = adminBaseURLMode(s.cfg)
 	out.Config.RestrictCount = len(s.cfg.Restrict)
 	out.Reload = adminReloadResponse{

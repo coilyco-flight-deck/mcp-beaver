@@ -13,6 +13,8 @@ generic Helm chart.
   grants, and `flatten`.
 - [upstream.md](upstream.md) - the guarded passthrough proxy, and the
   credential it presents to an authenticated upstream.
+- [oauth2.md](oauth2.md) - `oauth2-client`, the one credential this runtime
+  mints rather than reads.
 - [ssm.md](ssm.md) - the exact-parameter AWS reader.
 - [s3.md](s3.md) - the asset publisher, and the one write-capable mode.
 

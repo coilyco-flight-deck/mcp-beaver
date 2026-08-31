@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
-	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/pkg/valuesource"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -43,6 +42,8 @@ type Server struct {
 	apps           []mcp.Resource
 	appTools       map[string]string
 	vacated        []string
+	oauth2Clients  []string
+	providers      ProviderSet
 	prompts        []mcp.Prompt
 	handlers       map[string]mcp.ToolHandler
 	upstreams      []adminUpstreamResponse
@@ -67,7 +68,22 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg.Providers = valuesource.Builtins()
+	// The composed chain and its minted clients resolve first: the runtime
+	// takes the finished registry, and two sibling parsers below validate
+	// against it.
+	sources, err := inheritedSources(specPath, src)
+	if err != nil {
+		return nil, err
+	}
+	oauth2Clients, err := parseOAuth2Clients(sources)
+	if err != nil {
+		return nil, err
+	}
+	providers, err := NewProviderSet(oauth2Clients, nil)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Providers = providers.providers
 	rt := opcore.NewRuntime(cfg)
 
 	tools, err := localTools(descs)
@@ -82,10 +98,6 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	// Composed across the whole `inherit` chain, base first. umbra flattens
 	// the wrap body and never sees these, so before #113 a base tier's
 	// `confirm` and `withhold` vanished while its grants survived.
-	sources, err := inheritedSources(specPath, src)
-	if err != nil {
-		return nil, err
-	}
 	// A control a BASE stated on a tool the child narrowed away is vacated
 	// rather than violated, so it is dropped and reported. See compose.go.
 	inheritedControls, err := inheritedToolControls(sources)
@@ -174,7 +186,7 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err := validateRejectEmptyArguments(emptyArgs, descs); err != nil {
 		return nil, err
 	}
-	queryPins, err := parseQueryPins(sources)
+	queryPins, err := parseQueryPins(sources, providers)
 	if err != nil {
 		return nil, err
 	}
@@ -225,6 +237,8 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	sort.Strings(vacated)
 	s := &Server{
 		vacated:        vacated,
+		oauth2Clients:  providers.names,
+		providers:      providers,
 		name:           name,
 		specPath:       specPath,
 		descs:          descs,
@@ -240,7 +254,7 @@ func New(name, specPath string, src []byte) (*Server, error) {
 		desc := d
 		spec := toolSpec(desc)
 		applyAppMeta(appMeta, spec)
-		handler := toolHandler(rt, desc, queryPins[spec.Name], extracts[spec.Name])
+		handler := toolHandler(rt, desc, queryPins[spec.Name], extracts[spec.Name], providers)
 		// Innermost, so it reads the upstream's own answer: an empty result
 		// becomes a tool error before anything downstream can cache it.
 		if _, declared := rejectEmpties[spec.Name]; declared {
@@ -298,6 +312,9 @@ type ProxyOptions struct {
 	// HTTPClient overrides the default upstream client, for tests and for a
 	// caller that has already chosen its own bounds.
 	HTTPClient *http.Client
+	// Providers is the value registry headers resolve through. The zero value
+	// is umbra's built-in readers, which is every caller that mints nothing.
+	Providers ProviderSet
 }
 
 // NewProxyWithOptions is the full upstream-proxy constructor. NewProxy and
@@ -321,7 +338,7 @@ func NewProxyWithOptions(ctx context.Context, name, specPath, upstreamURL string
 	if err := ValidateUpstreamHeaders(opts.Headers); err != nil {
 		return nil, err
 	}
-	proxy, err := newProxyBackend(ctx, upstreamURL, allowTools, opts.Headers, httpClient, instrumentation)
+	proxy, err := newProxyBackend(ctx, upstreamURL, allowTools, opts.Headers, opts.Providers, httpClient, instrumentation)
 	if err != nil {
 		return nil, err
 	}
@@ -333,6 +350,7 @@ func NewProxyWithOptions(ctx context.Context, name, specPath, upstreamURL string
 		tools:          proxy.selectedTools(),
 		handlers:       make(map[string]mcp.ToolHandler, len(allowTools)),
 		upstreams:      []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http", Auth: upstreamAuthScheme(opts.Headers)}},
+		oauth2Clients:  opts.Providers.names,
 		sdk:            newSDKServer(name, nil, ""),
 		telemetry:      instrumentation,
 		requestTimeout: DefaultRequestTimeout,
@@ -717,7 +735,7 @@ func toolSpec(d opcore.Descriptor) *mcp.Tool {
 	}
 }
 
-func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin, extract *extractSpec) mcp.ToolHandler {
+func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin, extract *extractSpec, providers ProviderSet) mcp.ToolHandler {
 	schema := desc.InputSchema()
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var rawArgs map[string]any
@@ -734,7 +752,7 @@ func toolHandler(rt *opcore.Runtime, desc opcore.Descriptor, pins []queryPin, ex
 		// is now refused above rather than silently overruled here, and this
 		// assignment still cannot be contested.
 		if len(pins) > 0 {
-			resolved, err := resolveQueryPins(ctx, pins)
+			resolved, err := resolveQueryPins(ctx, pins, providers)
 			if err != nil {
 				return toolError(err), nil
 			}

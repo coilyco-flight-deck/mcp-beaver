@@ -13,7 +13,8 @@
 #   at /spec/<specName>.mcp.kdl; the runtime ENTRYPOINT reads it from there,
 #   never baked. specName defaults to the release name.
 # - upstream: streamable-HTTP endpoint, outward server name, exact tool
-#   allowlist, and bounded startup-connect timeout for upstream mode.
+#   allowlist, bounded startup-connect timeout, and any OAuth client whose
+#   token a header mints, for upstream mode.
 # - extraContainers: optional co-located upstreams or support containers.
 # - image.tag defaults to .Chart.appVersion; a rollout sets it to the built
 #   mcp-beaver runtime sha. image.repository defaults to the canonical Forgejo
@@ -60,6 +61,11 @@ upstream:
   # `<name>=<template>` where a `{env:VAR}` span resolves in the container.
   # Pair with `secret` so the value arrives from a Secret rather than here.
   headers: []
+  # client_credentials clients a header may address as {oauth2:<name>}, one
+  # entry per client, as
+  # `name=..,token-url=..,client-id=..,client-secret={env:VAR}`. Pair with
+  # `secret` so the client secret arrives from a Secret rather than from here.
+  oauth2Clients: []
 
 image:
   # The publish path followed the forge rename: scripts/publish-image.sh writes

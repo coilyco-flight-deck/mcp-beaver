@@ -85,6 +85,12 @@ then reads rows with no caveat and answers as though the view were complete.
 Coverage names every array in the payload and its length, because a count in
 meaning is what changes an answer. See [docs/DESIGN.md](docs/DESIGN.md).
 
+An `oauth2-client` node declares a `client_credentials` client, and
+`value oauth2 "<name>"` presents a token this runtime **mints** rather than
+reads. Every other credential is read from somewhere holding it already; an
+OAuth upstream holds nothing until one is fetched. See
+[docs/oauth2.md](docs/oauth2.md).
+
 ## Authentication is the deployment's job
 
 mcp-beaver performs no inbound authentication. Consuming deployments own caller

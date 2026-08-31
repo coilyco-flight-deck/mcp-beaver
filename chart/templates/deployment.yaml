@@ -75,6 +75,10 @@ spec:
             - --tool
             - {{ . | quote }}
             {{- end }}
+            {{- range .Values.upstream.oauth2Clients }}
+            - --oauth2-client
+            - {{ . | quote }}
+            {{- end }}
             {{- range .Values.upstream.headers }}
             - --upstream-header
             - {{ . | quote }}

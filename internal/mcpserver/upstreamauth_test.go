@@ -8,13 +8,12 @@ import (
 	"sync"
 	"testing"
 
-	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/pkg/valuesource"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // providersForTest reads the same registry the runtime reads, so a test cannot
 // pass against a resolver the deployment does not have.
-func providersForTest() map[string]valuesource.Provider { return valuesource.Builtins() }
+func providersForTest() ProviderSet { return BaseProviders() }
 
 func TestParseUpstreamHeaderAcceptsTheTemplateForms(t *testing.T) {
 	t.Setenv("TOKEN", "secret-value")
@@ -33,9 +32,9 @@ func TestParseUpstreamHeaderAcceptsTheTemplateForms(t *testing.T) {
 	}
 	for label, tc := range cases {
 		t.Run(label, func(t *testing.T) {
-			header, err := ParseUpstreamHeader(tc.raw)
+			header, err := ParseUpstreamHeader(tc.raw, BaseProviders())
 			if err != nil {
-				t.Fatalf("ParseUpstreamHeader(%q): %v", tc.raw, err)
+				t.Fatalf("ParseUpstreamHeader(%q, BaseProviders()): %v", tc.raw, err)
 			}
 			if header.Name != tc.name {
 				t.Errorf("name = %q, want %q", header.Name, tc.name)
@@ -66,9 +65,9 @@ func TestParseUpstreamHeaderRejects(t *testing.T) {
 	}
 	for label, tc := range cases {
 		t.Run(label, func(t *testing.T) {
-			_, err := ParseUpstreamHeader(tc.raw)
+			_, err := ParseUpstreamHeader(tc.raw, BaseProviders())
 			if err == nil {
-				t.Fatalf("ParseUpstreamHeader(%q) was accepted", tc.raw)
+				t.Fatalf("ParseUpstreamHeader(%q, BaseProviders()) was accepted", tc.raw)
 			}
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error = %q, want it to mention %q", err, tc.want)
@@ -80,7 +79,7 @@ func TestParseUpstreamHeaderRejects(t *testing.T) {
 // A template with no source would put the whole header value in argv, which is
 // the hazard the grammar exists to make impossible by accident.
 func TestParseUpstreamHeaderRefusesALiteralValueInArgv(t *testing.T) {
-	_, err := ParseUpstreamHeader("Authorization=Bearer sk-live-not-a-real-token")
+	_, err := ParseUpstreamHeader("Authorization=Bearer sk-live-not-a-real-token", BaseProviders())
 	if err == nil {
 		t.Fatal("a bare literal header value was accepted")
 	}
@@ -96,11 +95,11 @@ func TestParseUpstreamHeaderRefusesALiteralValueInArgv(t *testing.T) {
 // one an author would not spot by reading their own values file.
 func TestValidateUpstreamHeadersRejectsADuplicate(t *testing.T) {
 	t.Setenv("TOKEN", "v")
-	first, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}")
+	first, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}", BaseProviders())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	second, err := ParseUpstreamHeader("authorization=token {env:TOKEN}")
+	second, err := ParseUpstreamHeader("authorization=token {env:TOKEN}", BaseProviders())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -113,11 +112,11 @@ func TestValidateUpstreamHeadersRejectsADuplicate(t *testing.T) {
 }
 
 func TestPreflightUpstreamHeadersFailsOnAnUnsetSecret(t *testing.T) {
-	header, err := ParseUpstreamHeader("Authorization=Bearer {env:MCP_BEAVER_ABSENT_TOKEN}")
+	header, err := ParseUpstreamHeader("Authorization=Bearer {env:MCP_BEAVER_ABSENT_TOKEN}", BaseProviders())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	err = PreflightUpstreamHeaders(context.Background(), []UpstreamHeader{header})
+	err = PreflightUpstreamHeaders(context.Background(), []UpstreamHeader{header}, BaseProviders())
 	if err == nil {
 		t.Fatal("an unset secret passed preflight")
 	}
@@ -126,7 +125,7 @@ func TestPreflightUpstreamHeadersFailsOnAnUnsetSecret(t *testing.T) {
 	}
 
 	t.Setenv("MCP_BEAVER_ABSENT_TOKEN", "now-set")
-	if err := PreflightUpstreamHeaders(context.Background(), []UpstreamHeader{header}); err != nil {
+	if err := PreflightUpstreamHeaders(context.Background(), []UpstreamHeader{header}, BaseProviders()); err != nil {
 		t.Errorf("a resolvable header failed preflight: %v", err)
 	}
 }
@@ -136,7 +135,7 @@ func TestPreflightUpstreamHeadersFailsOnAnUnsetSecret(t *testing.T) {
 // env provider itself, so a secret read from a file no longer fails the header.
 func TestUpstreamHeaderErrorsNeverCarryTheValue(t *testing.T) {
 	t.Setenv("TOKEN", "sk-live-should\nnever-appear")
-	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}")
+	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}", BaseProviders())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -153,7 +152,7 @@ func TestUpstreamHeaderErrorsNeverCarryTheValue(t *testing.T) {
 // parameter store, and umbra trims it rather than refusing the header.
 func TestUpstreamHeaderToleratesASurroundingNewline(t *testing.T) {
 	t.Setenv("TOKEN", "sk-live-trailing\n")
-	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}")
+	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}", BaseProviders())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -170,7 +169,7 @@ func TestUpstreamHeaderToleratesASurroundingNewline(t *testing.T) {
 // effect on the next request rather than the next restart.
 func TestUpstreamHeaderResolvesPerRequest(t *testing.T) {
 	t.Setenv("TOKEN", "first")
-	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}")
+	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}", BaseProviders())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -190,11 +189,11 @@ func TestUpstreamHeaderResolvesPerRequest(t *testing.T) {
 // in the other order silently drops the time-to-first-byte bound.
 func TestUpstreamHeadersKeepTheResponseHeaderBound(t *testing.T) {
 	t.Setenv("TOKEN", "v")
-	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}")
+	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}", BaseProviders())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	client := withUpstreamHeaders(boundedUpstreamClient(nil), []UpstreamHeader{header})
+	client := withUpstreamHeaders(boundedUpstreamClient(nil), []UpstreamHeader{header}, BaseProviders())
 	wrapper, ok := client.Transport.(*upstreamHeaderTransport)
 	if !ok {
 		t.Fatalf("transport = %T, want the header wrapper outermost", client.Transport)
@@ -212,19 +211,19 @@ func TestUpstreamHeadersKeepTheResponseHeaderBound(t *testing.T) {
 // mutate the caller's client while adding the header.
 func TestUpstreamHeadersDoNotMutateTheCallerClient(t *testing.T) {
 	t.Setenv("TOKEN", "v")
-	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}")
+	header, err := ParseUpstreamHeader("Authorization=Bearer {env:TOKEN}", BaseProviders())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	caller := &http.Client{}
-	wrapped := withUpstreamHeaders(caller, []UpstreamHeader{header})
+	wrapped := withUpstreamHeaders(caller, []UpstreamHeader{header}, BaseProviders())
 	if caller.Transport != nil {
 		t.Error("the caller's client was mutated")
 	}
 	if wrapped == caller {
 		t.Error("the wrapper returned the caller's own client")
 	}
-	if withUpstreamHeaders(caller, nil) != caller {
+	if withUpstreamHeaders(caller, nil, BaseProviders()) != caller {
 		t.Error("no headers should leave the client untouched")
 	}
 }
@@ -275,7 +274,7 @@ func authedUpstream(t *testing.T, want string) (*httptest.Server, func() []strin
 func TestProxyPresentsTheUpstreamHeader(t *testing.T) {
 	t.Setenv("MOXN_TOKEN", "workspace-token")
 	upstream, seen := authedUpstream(t, "Bearer workspace-token")
-	header, err := ParseUpstreamHeader("Authorization=Bearer {env:MOXN_TOKEN}")
+	header, err := ParseUpstreamHeader("Authorization=Bearer {env:MOXN_TOKEN}", BaseProviders())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

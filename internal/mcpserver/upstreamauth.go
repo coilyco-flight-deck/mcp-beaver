@@ -56,7 +56,7 @@ const (
 )
 
 // ParseUpstreamHeader reads the `<name>=<template>` CLI form.
-func ParseUpstreamHeader(raw string) (UpstreamHeader, error) {
+func ParseUpstreamHeader(raw string, providers ProviderSet) (UpstreamHeader, error) {
 	name, template, found := strings.Cut(raw, "=")
 	if !found {
 		return UpstreamHeader{}, fmt.Errorf("mcp-beaver: upstream header %q must be <name>=<value template>, e.g. 'Authorization=Bearer {env:MOXN_TOKEN}'", raw)
@@ -65,7 +65,7 @@ func ParseUpstreamHeader(raw string) (UpstreamHeader, error) {
 	if err := validateHeaderName(name, raw); err != nil {
 		return UpstreamHeader{}, err
 	}
-	segments, err := parseHeaderTemplate(template, name)
+	segments, err := parseHeaderTemplate(template, name, providers)
 	if err != nil {
 		return UpstreamHeader{}, err
 	}
@@ -84,7 +84,7 @@ func validateHeaderName(name, raw string) error {
 
 // parseHeaderTemplate splits the template into literal and value-source
 // segments. Braces are the only metacharacters and they do not nest.
-func parseHeaderTemplate(template, name string) ([]headerSegment, error) {
+func parseHeaderTemplate(template, name string, providers ProviderSet) ([]headerSegment, error) {
 	if strings.ContainsAny(template, "\r\n") {
 		return nil, fmt.Errorf("mcp-beaver: upstream header %q value may not contain a newline", name)
 	}
@@ -102,7 +102,7 @@ func parseHeaderTemplate(template, name string) ([]headerSegment, error) {
 			if end < 0 {
 				return nil, fmt.Errorf("mcp-beaver: upstream header %q has an unclosed %q", name, string(upstreamHeaderOpen))
 			}
-			segment, err := parseHeaderSource(template[i+1:i+end], name)
+			segment, err := parseHeaderSource(template[i+1:i+end], name, providers)
 			if err != nil {
 				return nil, err
 			}
@@ -126,14 +126,14 @@ func parseHeaderTemplate(template, name string) ([]headerSegment, error) {
 	return segments, nil
 }
 
-func parseHeaderSource(body, name string) (headerSegment, error) {
+func parseHeaderSource(body, name string, providers ProviderSet) (headerSegment, error) {
 	provider, address, found := strings.Cut(body, ":")
 	if !found {
 		return headerSegment{}, fmt.Errorf("mcp-beaver: upstream header %q: {%s} must be {<provider>:<address>}, e.g. {env:MOXN_TOKEN}", name, body)
 	}
 	provider, address = strings.TrimSpace(provider), strings.TrimSpace(address)
-	if _, ok := valuesource.Builtins()[provider]; !ok {
-		return headerSegment{}, fmt.Errorf("mcp-beaver: upstream header %q names unknown provider %q (want env | file | literal; fail-closed)", name, provider)
+	if err := providers.checkSource(provider, address); err != nil {
+		return headerSegment{}, fmt.Errorf("mcp-beaver: upstream header %q %w", name, err)
 	}
 	if address == "" {
 		return headerSegment{}, fmt.Errorf("mcp-beaver: upstream header %q: provider %q has an empty address", name, provider)
@@ -162,8 +162,7 @@ func ValidateUpstreamHeaders(headers []UpstreamHeader) error {
 //
 // Without it a `--connect-timeout 2m` deployment spends two minutes retrying
 // what is a configuration error, and reports it as an unreachable upstream.
-func PreflightUpstreamHeaders(ctx context.Context, headers []UpstreamHeader) error {
-	providers := valuesource.Builtins()
+func PreflightUpstreamHeaders(ctx context.Context, headers []UpstreamHeader, providers ProviderSet) error {
 	for _, h := range headers {
 		if _, err := h.resolve(ctx, providers); err != nil {
 			return err
@@ -178,14 +177,14 @@ func PreflightUpstreamHeaders(ctx context.Context, headers []UpstreamHeader) err
 //
 // No error path carries the resolved value. An error names the header and the
 // address it failed to read, both of which are already in the flag.
-func (h UpstreamHeader) resolve(ctx context.Context, providers map[string]valuesource.Provider) (string, error) {
+func (h UpstreamHeader) resolve(ctx context.Context, providers ProviderSet) (string, error) {
 	var out strings.Builder
 	for _, segment := range h.segments {
 		if segment.Provider == "" {
 			out.WriteString(segment.Literal)
 			continue
 		}
-		value, err := valuesource.Resolve(ctx, providers, segment.Provider, segment.Address)
+		value, err := valuesource.Resolve(ctx, providers.registry(), segment.Provider, segment.Address)
 		if err != nil {
 			return "", fmt.Errorf("mcp-beaver: resolve upstream header %q from %s %q: %w", h.Name, segment.Provider, segment.Address, err)
 		}
@@ -203,7 +202,7 @@ func (h UpstreamHeader) resolve(ctx context.Context, providers map[string]values
 type upstreamHeaderTransport struct {
 	base      http.RoundTripper
 	headers   []UpstreamHeader
-	providers map[string]valuesource.Provider
+	providers ProviderSet
 }
 
 func (t *upstreamHeaderTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -223,7 +222,7 @@ func (t *upstreamHeaderTransport) RoundTrip(req *http.Request) (*http.Response, 
 // client. Order matters: boundedTransport only recognizes an *http.Transport
 // and leaves anything else alone, so wrapping first would silently drop the
 // time-to-first-byte bound that #79 exists to keep.
-func withUpstreamHeaders(client *http.Client, headers []UpstreamHeader) *http.Client {
+func withUpstreamHeaders(client *http.Client, headers []UpstreamHeader, providers ProviderSet) *http.Client {
 	if len(headers) == 0 {
 		return client
 	}
@@ -232,6 +231,6 @@ func withUpstreamHeaders(client *http.Client, headers []UpstreamHeader) *http.Cl
 		base = http.DefaultTransport
 	}
 	out := *client
-	out.Transport = &upstreamHeaderTransport{base: base, headers: headers, providers: valuesource.Builtins()}
+	out.Transport = &upstreamHeaderTransport{base: base, headers: headers, providers: providers}
 	return &out
 }

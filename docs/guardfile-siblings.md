@@ -64,6 +64,13 @@ Before mcp-beaver#113 none of this happened: a parent's siblings were dropped
 in silence while its grants survived, so a child came out wider than its base.
 The grant half is in [inherit.md](inherit.md).
 
+## OAuth2 clients
+
+`oauth2-client "<name>" { token-url ...; client-id ...; client-secret <provider>
+"<address>" }` declares a `client_credentials` client, and `value oauth2
+"<name>"` presents its token. The one value this runtime mints rather than
+reads. See [oauth2.md](oauth2.md).
+
 ## Server info
 
 One read-only tool reporting the server's identity, mode, and tool inventory.

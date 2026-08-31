@@ -199,7 +199,7 @@ wrap ward mcp steam {
 
 // A guardfile with no pins is untouched.
 func TestQueryPinAbsentByDefault(t *testing.T) {
-	pins, err := parseQueryPins(singleSource([]byte(roundTripSpec("http://127.0.0.1:1")), "."))
+	pins, err := parseQueryPins(singleSource([]byte(roundTripSpec("http://127.0.0.1:1")), "."), BaseProviders())
 	if err != nil {
 		t.Fatalf("parseQueryPins: %v", err)
 	}

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
-	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/pkg/valuesource"
 	kdl "github.com/calico32/kdl-go"
 )
 
@@ -53,7 +52,7 @@ const queryFromPrefix = "query:"
 //	}
 //
 // The argument is the PROJECTED TOOL NAME, matching `confirm` and `withhold`.
-func parseQueryPins(sources []guardSource) (map[string][]queryPin, error) {
+func parseQueryPins(sources []guardSource, providers ProviderSet) (map[string][]queryPin, error) {
 	nodes, err := parseInlineNodes(sources, "pin")
 	if err != nil {
 		return nil, err
@@ -74,7 +73,7 @@ func parseQueryPins(sources []guardSource) (map[string][]queryPin, error) {
 		if len(n.Properties()) > 0 {
 			return nil, fmt.Errorf("mcp-beaver: `pin` %q takes no properties, only `query` children (fail-closed)", tool)
 		}
-		pins, err := parseQueryPinChildren(n, tool)
+		pins, err := parseQueryPinChildren(n, tool, providers)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +85,7 @@ func parseQueryPins(sources []guardSource) (map[string][]queryPin, error) {
 	return out, nil
 }
 
-func parseQueryPinChildren(n *kdl.Node, tool string) ([]queryPin, error) {
+func parseQueryPinChildren(n *kdl.Node, tool string, providers ProviderSet) ([]queryPin, error) {
 	var pins []queryPin
 	seen := map[string]bool{}
 	for _, child := range n.Children().Nodes {
@@ -116,8 +115,8 @@ func parseQueryPinChildren(n *kdl.Node, tool string) ([]queryPin, error) {
 		case pin.Source == "":
 			return nil, fmt.Errorf("mcp-beaver: `pin` %q: query %q has an empty source", tool, pin.Name)
 		}
-		if _, ok := valuesource.Builtins()[pin.Provider]; !ok {
-			return nil, fmt.Errorf("mcp-beaver: `pin` %q: query %q names unknown provider %q (want env | file | literal; fail-closed)", tool, pin.Name, pin.Provider)
+		if err := providers.checkSource(pin.Provider, pin.Source); err != nil {
+			return nil, fmt.Errorf("mcp-beaver: `pin` %q: query %q %w", tool, pin.Name, err)
 		}
 		if seen[pin.Name] {
 			return nil, fmt.Errorf("mcp-beaver: `pin` %q pins query %q twice", tool, pin.Name)
@@ -168,11 +167,10 @@ func validateQueryPins(pins map[string][]queryPin, descs []opcore.Descriptor) er
 // resolveQueryPins reads each pin's source at CALL time, matching how `auth`
 // resolves its value: nothing is baked into the image, and a rotated env var
 // takes effect on the next call rather than the next restart.
-func resolveQueryPins(ctx context.Context, pins []queryPin) (map[string]string, error) {
-	providers := valuesource.Builtins()
+func resolveQueryPins(ctx context.Context, pins []queryPin, providers ProviderSet) (map[string]string, error) {
 	out := make(map[string]string, len(pins))
 	for _, pin := range pins {
-		provider, ok := providers[pin.Provider]
+		provider, ok := providers.registry()[pin.Provider]
 		if !ok {
 			return nil, fmt.Errorf("mcp-beaver: unknown value provider %q", pin.Provider)
 		}

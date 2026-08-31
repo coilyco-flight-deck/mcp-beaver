@@ -38,3 +38,7 @@ fails any tool the upstream leaves un-annotated by `readOnlyHint`, so it belongs
 in a rollout or smoke path. `--upstream` builds the same proxy `serve-upstream`
 builds, so an absent tool fails here too and `--upstream-header` reaches an
 authenticated one.
+
+**A minted credential.** `--oauth2-client` declares a `client_credentials`
+client that a header addresses as `{oauth2:<name>}`, for a hosted upstream whose
+token is fetched rather than stored. See [oauth2.md](oauth2.md).
