@@ -35,13 +35,14 @@ type confirmConfig map[string]string
 // runs headless deployments where a blanket prompt would wedge every write.
 // The annotations already advertise destructiveness for clients that want to
 // decide for themselves; this is for the cases where the server insists.
-func parseConfirmations(src []byte) (confirmConfig, error) {
-	doc, err := parseInlineDoc(src, "confirmations")
+func parseConfirmations(sources []guardSource) (confirmConfig, error) {
+	nodes, err := parseInlineNodes(sources, "confirmations")
 	if err != nil {
 		return nil, err
 	}
 	out := confirmConfig{}
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "confirm" {
 			continue
 		}

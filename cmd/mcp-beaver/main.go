@@ -249,6 +249,9 @@ func runLintTo(out, warn io.Writer, argv []string) error {
 	if err := lintWarnResourceAudience(warn, srv.ResourcesWithoutAudience()); err != nil {
 		return err
 	}
+	if err := lintWarnVacatedControls(warn, srv.VacatedControls()); err != nil {
+		return err
+	}
 	if *methods && *apps {
 		return fmt.Errorf("lint takes --methods or --apps, not both: each owns the second column")
 	}
@@ -279,6 +282,25 @@ func lintWarnFallthrough(warn io.Writer, methods []mcpserver.ToolMethod) error {
 		_, err := fmt.Fprintf(warn,
 			"mcp-beaver: warning: %s: verb %q is not in opcore's method table and resolved to %s by fallthrough. Confirm the upstream expects %s on this path.\n",
 			m.Tool, m.Verb, m.Method, m.Method,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// lintWarnVacatedControls reports a control an inherited guardfile stated on a
+// tool this tier narrowed away. Dropping it is correct, since there is nothing
+// left to gate, and staying quiet would not be: the author wrote it in another
+// file and cannot see from this one that it stopped applying.
+func lintWarnVacatedControls(warn io.Writer, controls []string) error {
+	for _, name := range controls {
+		_, err := fmt.Fprintf(warn,
+			"mcp-beaver: warning: inherited control on %q was dropped, because this "+
+				"tier does not mint that tool. Nothing is left ungated, and the base "+
+				"guardfile still reads as though the control applies here.\n",
+			name,
 		)
 		if err != nil {
 			return err

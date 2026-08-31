@@ -34,14 +34,15 @@ const maxInstructionsLen = 500
 //
 // The shared sentence stays. This is what a guardfile adds under it, and a
 // guardfile that declares nothing publishes exactly what it published before.
-func parseInstructions(src []byte) (string, error) {
-	doc, err := parseInlineDoc(src, "instructions")
+func parseInstructions(sources []guardSource) (string, error) {
+	nodes, err := parseInlineNodes(sources, "instructions")
 	if err != nil {
 		return "", err
 	}
 	found := false
 	text := ""
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "instructions" {
 			continue
 		}

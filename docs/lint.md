@@ -23,12 +23,13 @@ listing is the diff a consumer pins and a second column is a change to it.
 
 ## Warnings
 
-Two facts invisible from every other surface, so a spec carrying one lints
+Three facts invisible from every other surface, so a spec carrying one lints
 identically to a working spec. An unknown verb resolving to POST by
-fallthrough, and a `resource` stating no `audience`. Both are legitimate, so
-both warn rather than fail, and both stay off stdout so a warning never edits
-the diffable surface. The fallthrough warning reads opcore's `MethodInferred`,
-so a grant stating `method` is owed no warning.
+fallthrough, a `resource` stating no `audience`, and an inherited control
+dropped because this tier narrowed away the tool it gated. All three are
+legitimate, so all three warn rather than fail, and all stay off stdout so a
+warning never edits the diffable surface. The fallthrough warning reads
+opcore's `MethodInferred`, so a grant stating `method` is owed no warning.
 
 ## Stated HTTP method
 

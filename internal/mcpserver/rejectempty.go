@@ -31,13 +31,14 @@ type rejectEmptyConfig map[string]struct{}
 //
 // Stated beside `wrap` rather than inside it, like `cache` and `rate-limit`,
 // because the wrap body is opcore's frozen grammar.
-func parseRejectEmpty(src []byte) (rejectEmptyConfig, error) {
-	doc, err := parseInlineDoc(src, "reject-empty")
+func parseRejectEmpty(sources []guardSource) (rejectEmptyConfig, error) {
+	nodes, err := parseInlineNodes(sources, "reject-empty")
 	if err != nil {
 		return nil, err
 	}
 	out := rejectEmptyConfig{}
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "reject-empty" {
 			continue
 		}

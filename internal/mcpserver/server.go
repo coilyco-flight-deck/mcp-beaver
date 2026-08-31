@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -43,6 +42,7 @@ type Server struct {
 	resources      []mcp.Resource
 	apps           []mcp.Resource
 	appTools       map[string]string
+	vacated        []string
 	prompts        []mcp.Prompt
 	handlers       map[string]mcp.ToolHandler
 	upstreams      []adminUpstreamResponse
@@ -74,45 +74,65 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Top-level `icon`, `instructions`, `resource`, `prompt`, `server-info`,
-	// `confirm`, and `withhold` nodes ride beside `wrap`, outside the frozen
-	// inline grammar opcore owns (deploy#255) - parsed here, projected onto
-	// the served surface below.
-	icons, err := parseIcons(src)
+	// Top-level `icon`, `instructions`, `resource`, `prompt`, `app`,
+	// `server-info`, `confirm`, and `withhold` nodes ride beside `wrap`,
+	// outside the frozen inline grammar opcore owns (deploy#255) - parsed
+	// here, projected onto the served surface below.
+	//
+	// Composed across the whole `inherit` chain, base first. umbra flattens
+	// the wrap body and never sees these, so before #113 a base tier's
+	// `confirm` and `withhold` vanished while its grants survived.
+	sources, err := inheritedSources(specPath, src)
 	if err != nil {
 		return nil, err
 	}
-	instructions, err := parseInstructions(src)
+	// A control a BASE stated on a tool the child narrowed away is vacated
+	// rather than violated, so it is dropped and reported. See compose.go.
+	inheritedControls, err := inheritedToolControls(sources)
 	if err != nil {
 		return nil, err
 	}
-	resources, err := parseResources(src)
+	minted := make(map[string]bool, len(tools))
+	for _, tool := range tools {
+		minted[tool.Name] = true
+	}
+	var vacated []string
+	icons, err := parseIcons(sources)
 	if err != nil {
 		return nil, err
 	}
-	prompts, err := parsePrompts(src)
+	instructions, err := parseInstructions(sources)
 	if err != nil {
 		return nil, err
 	}
-	// A widget's body is a file beside the guardfile, so this is the one
-	// sibling node that needs the spec's own directory rather than its bytes.
-	apps, err := parseApps(src, filepath.Dir(specPath))
+	resources, err := parseResources(sources)
 	if err != nil {
 		return nil, err
 	}
-	infoCfg, err := parseServerInfo(src)
+	prompts, err := parsePrompts(sources)
 	if err != nil {
 		return nil, err
 	}
-	confirmations, err := parseConfirmations(src)
+	// A widget's body is a file beside the guardfile that DECLARED it, which
+	// is why the chain carries a directory per source rather than one path.
+	apps, err := parseApps(sources)
 	if err != nil {
 		return nil, err
 	}
-	stubs, err := parseWithheld(src)
+	infoCfg, err := parseServerInfo(sources)
 	if err != nil {
 		return nil, err
 	}
-	rateCfg, err := parseRateLimit(src)
+	confirmations, err := parseConfirmations(sources)
+	if err != nil {
+		return nil, err
+	}
+	vacated = append(vacated, dropVacantControls(confirmations, inheritedControls, minted)...)
+	stubs, err := parseWithheld(sources)
+	if err != nil {
+		return nil, err
+	}
+	rateCfg, err := parseRateLimit(sources)
 	if err != nil {
 		return nil, err
 	}
@@ -122,38 +142,43 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	caches, err := parseCaches(src)
+	caches, err := parseCaches(sources)
 	if err != nil {
 		return nil, err
 	}
-	extracts, err := parseExtracts(src)
+	vacated = append(vacated, dropVacantControls(caches, inheritedControls, minted)...)
+	extracts, err := parseExtracts(sources)
 	if err != nil {
 		return nil, err
 	}
+	vacated = append(vacated, dropVacantControls(extracts, inheritedControls, minted)...)
 	if err := validateExtracts(extracts, descs); err != nil {
 		return nil, err
 	}
 	if err := validateCaches(caches, descs, confirmations); err != nil {
 		return nil, err
 	}
-	rejectEmpties, err := parseRejectEmpty(src)
+	rejectEmpties, err := parseRejectEmpty(sources)
 	if err != nil {
 		return nil, err
 	}
+	vacated = append(vacated, dropVacantControls(rejectEmpties, inheritedControls, minted)...)
 	if err := validateRejectEmpty(rejectEmpties, descs); err != nil {
 		return nil, err
 	}
-	emptyArgs, err := parseRejectEmptyArguments(src)
+	emptyArgs, err := parseRejectEmptyArguments(sources)
 	if err != nil {
 		return nil, err
 	}
+	vacated = append(vacated, dropVacantControls(emptyArgs, inheritedControls, minted)...)
 	if err := validateRejectEmptyArguments(emptyArgs, descs); err != nil {
 		return nil, err
 	}
-	queryPins, err := parseQueryPins(src)
+	queryPins, err := parseQueryPins(sources)
 	if err != nil {
 		return nil, err
 	}
+	vacated = append(vacated, dropVacantControls(queryPins, inheritedControls, minted)...)
 	if err := validateQueryPins(queryPins, descs); err != nil {
 		return nil, err
 	}
@@ -180,6 +205,8 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	}
 	// After the surface is final, so an `app` cannot claim the info tool or a
 	// `withhold` stub by name and have it pass unnoticed.
+	apps, appVacated := dropVacantAppLinks(apps, minted)
+	vacated = append(vacated, appVacated...)
 	if err := validateApps(apps, tools, resources); err != nil {
 		return nil, err
 	}
@@ -195,7 +222,9 @@ func New(name, specPath string, src []byte) (*Server, error) {
 	// Before the first handler can fail and report the URL it failed on.
 	registerBaseURLPath(context.Background(), rt)
 
+	sort.Strings(vacated)
 	s := &Server{
+		vacated:        vacated,
 		name:           name,
 		specPath:       specPath,
 		descs:          descs,
@@ -387,6 +416,14 @@ func (s *Server) ResourcesWithoutAudience() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// VacatedControls names each inherited control dropped because the tool it
+// gated is not minted here. Reported rather than silent: the author wrote the
+// control in a base tier and cannot see from this guardfile that it stopped
+// applying.
+func (s *Server) VacatedControls() []string {
+	return append([]string(nil), s.vacated...)
 }
 
 // WithheldTools returns the served tool names that are `withhold` stubs. A

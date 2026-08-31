@@ -45,13 +45,14 @@ type cacheConfig map[string]time.Duration
 //
 // Stated beside `wrap` rather than inside it, like `rate-limit` and for the
 // same reason: the wrap body is opcore's frozen grammar.
-func parseCaches(src []byte) (cacheConfig, error) {
-	doc, err := parseInlineDoc(src, "cache")
+func parseCaches(sources []guardSource) (cacheConfig, error) {
+	nodes, err := parseInlineNodes(sources, "cache")
 	if err != nil {
 		return nil, err
 	}
 	out := cacheConfig{}
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "cache" {
 			continue
 		}

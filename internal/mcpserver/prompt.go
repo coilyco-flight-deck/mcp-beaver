@@ -31,14 +31,15 @@ type inlinePrompt struct {
 // body, joined with newlines. `{name}` is substituted with the argument the
 // client supplies; an unsupplied optional argument substitutes to empty.
 // The body is static text, so a prompt reaches no upstream and needs no guard.
-func parsePrompts(src []byte) ([]inlinePrompt, error) {
-	doc, err := parseInlineDoc(src, "prompts")
+func parsePrompts(sources []guardSource) ([]inlinePrompt, error) {
+	nodes, err := parseInlineNodes(sources, "prompts")
 	if err != nil {
 		return nil, err
 	}
 	var out []inlinePrompt
 	seen := map[string]bool{}
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "prompt" {
 			continue
 		}

@@ -33,13 +33,14 @@ type emptyArgConfig map[string][]string
 // Named per field rather than "any required argument", because emptiness is
 // legitimate for some inputs and a control that refuses a write must say
 // exactly what it is refusing.
-func parseRejectEmptyArguments(src []byte) (emptyArgConfig, error) {
-	doc, err := parseInlineDoc(src, "reject-empty-argument")
+func parseRejectEmptyArguments(sources []guardSource) (emptyArgConfig, error) {
+	nodes, err := parseInlineNodes(sources, "reject-empty-argument")
 	if err != nil {
 		return nil, err
 	}
 	out := emptyArgConfig{}
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "reject-empty-argument" {
 			continue
 		}

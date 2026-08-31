@@ -29,13 +29,14 @@ import (
 // sketched it as a wrap-body node, but that body is opcore's frozen grammar
 // and the umbra pin, so a sibling keeps the runtime's half of the change here
 // where it belongs.
-func parseRateLimit(src []byte) (*rateLimitConfig, error) {
-	doc, err := parseInlineDoc(src, "rate-limit")
+func parseRateLimit(sources []guardSource) (*rateLimitConfig, error) {
+	nodes, err := parseInlineNodes(sources, "rate-limit")
 	if err != nil {
 		return nil, err
 	}
 	var cfg *rateLimitConfig
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "rate-limit" {
 			continue
 		}

@@ -53,13 +53,14 @@ const queryFromPrefix = "query:"
 //	}
 //
 // The argument is the PROJECTED TOOL NAME, matching `confirm` and `withhold`.
-func parseQueryPins(src []byte) (map[string][]queryPin, error) {
-	doc, err := parseInlineDoc(src, "pin")
+func parseQueryPins(sources []guardSource) (map[string][]queryPin, error) {
+	nodes, err := parseInlineNodes(sources, "pin")
 	if err != nil {
 		return nil, err
 	}
 	out := map[string][]queryPin{}
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "pin" {
 			continue
 		}

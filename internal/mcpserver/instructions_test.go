@@ -93,7 +93,7 @@ func TestParseInstructionsRejectsMalformedNodes(t *testing.T) {
 		"over budget":    {"instructions {\n    text \"" + strings.Repeat("x", maxInstructionsLen+1) + "\"\n}", "over the 500-character budget"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := parseInstructions([]byte(specWithInstructions(tc.body)))
+			_, err := parseInstructions(singleSource([]byte(specWithInstructions(tc.body)), "."))
 			if err == nil {
 				t.Fatalf("parseInstructions accepted %q", tc.body)
 			}
@@ -108,7 +108,7 @@ func TestParseInstructionsRejectsMalformedNodes(t *testing.T) {
 // rejects the stated maximum is the kind of thing an author debugs for an hour.
 func TestParseInstructionsAcceptsTheBudgetExactly(t *testing.T) {
 	body := "instructions {\n    text \"" + strings.Repeat("x", maxInstructionsLen) + "\"\n}"
-	got, err := parseInstructions([]byte(specWithInstructions(body)))
+	got, err := parseInstructions(singleSource([]byte(specWithInstructions(body)), "."))
 	if err != nil {
 		t.Fatalf("parseInstructions: %v", err)
 	}

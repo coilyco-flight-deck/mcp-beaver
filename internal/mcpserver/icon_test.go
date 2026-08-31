@@ -19,7 +19,7 @@ const iconTestWrap = `wrap ward mcp test {
 }`
 
 func TestParseIconsAbsent(t *testing.T) {
-	icons, err := parseIcons([]byte(iconTestWrap))
+	icons, err := parseIcons(singleSource([]byte(iconTestWrap), "."))
 	if err != nil {
 		t.Fatalf("parseIcons: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestParseIconsAbsent(t *testing.T) {
 
 func TestParseIconsDataURI(t *testing.T) {
 	doc := `icon "data:image/png;base64,aGVsbG8="` + "\n" + iconTestWrap
-	icons, err := parseIcons([]byte(doc))
+	icons, err := parseIcons(singleSource([]byte(doc), "."))
 	if err != nil {
 		t.Fatalf("parseIcons: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestParseIconsDataURI(t *testing.T) {
 
 func TestParseIconsExplicitProps(t *testing.T) {
 	doc := `icon "https://static.example/icon.svg" mime="image/svg+xml" sizes="any"` + "\n" + iconTestWrap
-	icons, err := parseIcons([]byte(doc))
+	icons, err := parseIcons(singleSource([]byte(doc), "."))
 	if err != nil {
 		t.Fatalf("parseIcons: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestParseIconsMultiple(t *testing.T) {
 	doc := `icon "data:image/png;base64,aGVsbG8=" sizes="256x256"
 icon "data:image/png;base64,d29ybGQ=" sizes="48x48"
 ` + iconTestWrap
-	icons, err := parseIcons([]byte(doc))
+	icons, err := parseIcons(singleSource([]byte(doc), "."))
 	if err != nil {
 		t.Fatalf("parseIcons: %v", err)
 	}
@@ -77,14 +77,14 @@ icon "data:image/png;base64,d29ybGQ=" sizes="48x48"
 
 func TestParseIconsRejectsMissingSrc(t *testing.T) {
 	doc := "icon\n" + iconTestWrap
-	if _, err := parseIcons([]byte(doc)); err == nil {
+	if _, err := parseIcons(singleSource([]byte(doc), ".")); err == nil {
 		t.Fatal("want error for icon with no src argument")
 	}
 }
 
 func TestParseIconsRejectsUnknownProperty(t *testing.T) {
 	doc := `icon "data:image/png;base64,aGVsbG8=" theme="dark"` + "\n" + iconTestWrap
-	if _, err := parseIcons([]byte(doc)); err == nil {
+	if _, err := parseIcons(singleSource([]byte(doc), ".")); err == nil {
 		t.Fatal("want fail-closed error for unknown icon property")
 	}
 }

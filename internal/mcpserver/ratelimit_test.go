@@ -96,7 +96,7 @@ func TestRateLimitSerialisesUpstreamCalls(t *testing.T) {
 
 // No node, no bucket. An existing guardfile must not start queueing.
 func TestRateLimitAbsentByDefault(t *testing.T) {
-	limiter, err := parseRateLimit([]byte(roundTripSpec("http://127.0.0.1:1")))
+	limiter, err := parseRateLimit(singleSource([]byte(roundTripSpec("http://127.0.0.1:1")), "."))
 	if err != nil {
 		t.Fatalf("parseRateLimit: %v", err)
 	}

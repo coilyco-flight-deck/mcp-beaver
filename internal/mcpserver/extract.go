@@ -50,13 +50,14 @@ type extractConfig map[string]*extractSpec
 // they are three very different amounts of work with three very different
 // dependency footprints - the property exists to make the next one additive,
 // which is what `feed-entries` then was.
-func parseExtracts(src []byte) (extractConfig, error) {
-	doc, err := parseInlineDoc(src, "extract")
+func parseExtracts(sources []guardSource) (extractConfig, error) {
+	nodes, err := parseInlineNodes(sources, "extract")
 	if err != nil {
 		return nil, err
 	}
 	out := extractConfig{}
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "extract" {
 			continue
 		}

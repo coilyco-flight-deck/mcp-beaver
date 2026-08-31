@@ -27,14 +27,15 @@ import (
 // Prefer `data:` URIs: the gated deploys sit behind oauth2-proxy, where a
 // hosted icon URL would 401 for the connecting client, and a data URI rides
 // inside the initialize payload with no external dependency.
-func parseIcons(src []byte) ([]mcp.Icon, error) {
-	doc, err := parseInlineDoc(src, "icons")
+func parseIcons(sources []guardSource) ([]mcp.Icon, error) {
+	nodes, err := parseInlineNodes(sources, "icons")
 	if err != nil {
 		return nil, err
 	}
 
 	var icons []mcp.Icon
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "icon" {
 			continue
 		}

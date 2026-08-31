@@ -60,6 +60,13 @@ re-check by reading two files.
 is the whole guarantee, so a `never` removes the operation from `tools/list` and
 from `/api/` entirely.
 
+## Siblings compose too
+
+The nodes beside `wrap` travel the same chain. Most union, so a base tier's
+`confirm` and `withhold` bind on every tier below it. `instructions`,
+`server-info`, and `rate-limit` are child-wins. Rules and the reason:
+[guardfile-siblings.md](guardfile-siblings.md).
+
 ## Narrowing needs spec mode
 
 The inline grammar accepts only `can`. It has no `never`, so an inline guardfile
@@ -68,28 +75,26 @@ strict subset of its base has to be in spec mode.
 
 ## Flatten before you mount
 
-`inherit` resolves against the filesystem by relative path. A pod holds one
-mounted file and cannot follow one, so the composition is resolved at author time
-and the result is committed:
+A pod holds one mounted file and cannot follow a relative path, so the
+composition is resolved at author time and the result is committed:
 
 ```sh
 mcp-beaver flatten services/forgejo-mcp/forgejo.mcp.kdl -o services/forgejo-mcp/forgejo.flat.mcp.kdl
 mcp-beaver flatten services/forgejo-mcp/forgejo.mcp.kdl -o services/forgejo-mcp/forgejo.flat.mcp.kdl --check
 ```
 
-The flattened artifact is what the chart mounts, so it is what a reviewer must
-read. `--check` regenerates and compares without writing, and fails when the
-committed file is stale, which is the CI half. The output leads with a generated
-banner naming the source to edit instead.
+The flattened artifact is what the chart mounts, so it is what a reviewer reads.
+`--check` regenerates and compares without writing, failing on a stale committed
+file, which is the CI half. The output leads with a banner naming the source to
+edit instead.
 
 Comments do not survive the flatten: KDL re-emission keeps data and drops prose.
-Rationale belongs in the source guardfiles and in `describe`, which is data and
-does survive.
+Rationale belongs in `describe`, which is data and does survive.
 
 ## Deploying a spec-mode guardfile
 
-The chart mounts the whole ConfigMap at `/spec`, so the API document lands beside
-the guardfile with no volume change:
+The volume enumerates what it projects, and the API document is already in that
+list, so it lands beside the guardfile with no chart change:
 
 ```sh
 helm upgrade --install forgejo-mcp mcp-beaver \
@@ -100,15 +105,13 @@ helm upgrade --install forgejo-mcp mcp-beaver \
 
 `apiDocumentName` must be spelled exactly as the guardfile's `spec` node spells
 it, because the runtime resolves the sibling by that name. It rides in
-`binaryData`, since a gzipped document is not valid UTF-8. Supplying the document
-without naming it fails the render rather than mounting something unreachable.
-The chart still parses neither file.
+`binaryData`, since a gzipped document is not valid UTF-8. Supplying the
+document without naming it fails the render. The chart parses neither file.
 
 ## Known gap
 
 An inherited guardfile drops its parent's `action` nodes, so a leaf the parent
-replaced comes back in generated form. `lint` does not warn about that yet. See
-issue #108.
+replaced comes back in generated form, and `lint` does not warn. See #108.
 
 ## See also
 

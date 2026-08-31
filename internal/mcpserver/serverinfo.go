@@ -63,14 +63,15 @@ type serverInfoConfig struct {
 // describing its own capabilities. Both only pay off if it is reliably there:
 // present-on-some-servers is worse than either extreme, because absence then
 // carries no meaning an agent can read.
-func parseServerInfo(src []byte) (*serverInfoConfig, error) {
-	doc, err := parseInlineDoc(src, "server-info")
+func parseServerInfo(sources []guardSource) (*serverInfoConfig, error) {
+	nodes, err := parseInlineNodes(sources, "server-info")
 	if err != nil {
 		return nil, err
 	}
 	cfg := &serverInfoConfig{toolName: defaultServerInfoTool}
 	seen := false
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "server-info" {
 			continue
 		}

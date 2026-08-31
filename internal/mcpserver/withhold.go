@@ -63,14 +63,15 @@ type withheldStub struct {
 //
 // A stub is not a weakening of deny-by-absence. It reaches no upstream, holds
 // no credential, and refuses every call. It converts silence into a statement.
-func parseWithheld(src []byte) ([]withheldStub, error) {
-	doc, err := parseInlineDoc(src, "withhold")
+func parseWithheld(sources []guardSource) ([]withheldStub, error) {
+	nodes, err := parseInlineNodes(sources, "withhold")
 	if err != nil {
 		return nil, err
 	}
 	var out []withheldStub
 	seen := map[string]bool{}
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "withhold" {
 			continue
 		}

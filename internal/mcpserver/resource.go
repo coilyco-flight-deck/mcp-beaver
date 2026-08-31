@@ -36,14 +36,15 @@ type inlineResource struct {
 // gates on `audience` sees an unannotated resource as not meant for the model
 // and skips it, so serving reference material to an agent needs the annotation
 // stated here rather than assumed downstream.
-func parseResources(src []byte) ([]inlineResource, error) {
-	doc, err := parseInlineDoc(src, "resources")
+func parseResources(sources []guardSource) ([]inlineResource, error) {
+	nodes, err := parseInlineNodes(sources, "resources")
 	if err != nil {
 		return nil, err
 	}
 	var out []inlineResource
 	seen := map[string]bool{}
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "resource" {
 			continue
 		}

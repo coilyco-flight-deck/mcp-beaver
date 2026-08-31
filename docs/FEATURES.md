@@ -8,8 +8,8 @@ generic Helm chart.
 
 - [serve.md](serve.md) - the generic runtime, grant-to-tool projection.
 - [lint.md](lint.md) - offline validation, and `lint-upstream`.
-- [spec-mode.md](spec-mode.md) - swagger-resolved grants, `inherit` tiers, and
-  `flatten` for the self-contained artifact a runtime mounts.
+- [spec-mode.md](spec-mode.md) - swagger-resolved grants, `inherit` tiers that
+  compose the sibling nodes as well as the grants, and `flatten`.
 - [upstream.md](upstream.md) - the guarded passthrough proxy, and the
   credential it presents to an authenticated upstream.
 - [ssm.md](ssm.md) - the exact-parameter AWS reader.

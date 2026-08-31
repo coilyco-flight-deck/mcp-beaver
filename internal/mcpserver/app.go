@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	kdl "github.com/calico32/kdl-go"
@@ -53,6 +54,9 @@ type mcpApp struct {
 	body     string
 	uiMeta   map[string]any
 	tools    []appTool
+	// inherited marks an app a BASE tier declared, so a tool link the child
+	// narrowed away is vacated rather than a mistake. See compose.go.
+	inherited bool
 }
 
 // appTool is one `tool` child: the projected tool name that carries the link,
@@ -113,22 +117,26 @@ var appCSPDirectives = map[string]string{
 // The path resolves against the guardfile's own directory, so a spec and its
 // widgets move together. A deployment mounting the spec now mounts the widget
 // beside it.
-func parseApps(src []byte, specDir string) ([]mcpApp, error) {
-	doc, err := parseInlineDoc(src, "apps")
+func parseApps(sources []guardSource) ([]mcpApp, error) {
+	nodes, err := parseInlineNodes(sources, "apps")
 	if err != nil {
 		return nil, err
 	}
 	var out []mcpApp
 	seenURI := map[string]bool{}
 	seenName := map[string]bool{}
-	for _, n := range doc.Nodes {
+	for _, sn := range nodes {
+		n := sn.node
 		if n.Name() != "app" {
 			continue
 		}
-		app, err := parseApp(n, specDir)
+		// The declaring guardfile's directory, not the mounted one: an
+		// inherited `app` names a widget beside the file that declared it.
+		app, err := parseApp(n, sn.dir)
 		if err != nil {
 			return nil, err
 		}
+		app.inherited = sn.index < len(sources)-1
 		if seenName[app.resource.Name] {
 			return nil, fmt.Errorf("mcp-beaver: duplicate `app` name %q", app.resource.Name)
 		}
@@ -452,4 +460,35 @@ func (s *Server) AppTools() map[string]string {
 		out[name] = uri
 	}
 	return out
+}
+
+// dropVacantAppLinks removes a link an inherited `app` states to a tool the
+// child narrowed away, and the whole app once no link is left. Same reasoning
+// as dropVacantControls: a widget with no tool pointing at it is fetched by
+// nobody, and refusing would strand a base tier that gated a tool this tier
+// correctly removed.
+func dropVacantAppLinks(apps []mcpApp, minted map[string]bool) ([]mcpApp, []string) {
+	var kept []mcpApp
+	var vacated []string
+	for _, app := range apps {
+		if !app.inherited {
+			kept = append(kept, app)
+			continue
+		}
+		var links []appTool
+		for _, tool := range app.tools {
+			if minted[tool.name] {
+				links = append(links, tool)
+				continue
+			}
+			vacated = append(vacated, fmt.Sprintf("app %q link to %s", app.resource.Name, tool.name))
+		}
+		if len(links) == 0 {
+			continue
+		}
+		app.tools = links
+		kept = append(kept, app)
+	}
+	sort.Strings(vacated)
+	return kept, vacated
 }

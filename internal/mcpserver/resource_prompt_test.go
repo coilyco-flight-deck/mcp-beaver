@@ -106,7 +106,7 @@ func TestResourceAnnotationsReachTheWire(t *testing.T) {
 // Annotations stay opt-in, so a spec written before they existed serves the
 // same bytes it did and never gains an audience it did not ask for.
 func TestResourceWithoutAnnotationsOmitsThem(t *testing.T) {
-	resources, err := parseResources([]byte(`resource "r" uri="ward://r" { text "x" }`))
+	resources, err := parseResources(singleSource([]byte(`resource "r" uri="ward://r" { text "x" }`), "."))
 	if err != nil {
 		t.Fatalf("parseResources: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestResourceWithoutAnnotationsOmitsThem(t *testing.T) {
 // panic across kinds, so a whole number is the case that would crash rather
 // than the one that obviously works.
 func TestResourcePriorityAcceptsWholeNumbers(t *testing.T) {
-	resources, err := parseResources([]byte(`resource "r" uri="ward://r" priority=1 { text "x" }`))
+	resources, err := parseResources(singleSource([]byte(`resource "r" uri="ward://r" priority=1 { text "x" }`), "."))
 	if err != nil {
 		t.Fatalf("parseResources: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestResourceAnnotationsFailClosed(t *testing.T) {
 		"unknown child":         `resource "r" uri="ward://r" { audiance "assistant"` + "\n" + `text "x" }`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := parseResources([]byte(spec)); err == nil {
+			if _, err := parseResources(singleSource([]byte(spec), ".")); err == nil {
 				t.Fatal("parseResources accepted a malformed annotation")
 			}
 		})
@@ -153,7 +153,7 @@ func TestResourcePriorityRangeIsEnforcedAsRange(t *testing.T) {
 		"below zero": `resource "r" uri="ward://r" priority=-0.1 { text "x" }`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := parseResources([]byte(spec))
+			_, err := parseResources(singleSource([]byte(spec), "."))
 			if err == nil {
 				t.Fatal("parseResources accepted an out-of-range priority")
 			}
@@ -261,12 +261,12 @@ func TestSiblingNodesFailClosed(t *testing.T) {
 // silently reads every boolean as false and quietly downgrades a required
 // argument to optional. Pin the parse rather than only the behaviour above.
 func TestPromptArgumentRequiredParsesAsBool(t *testing.T) {
-	prompts, err := parsePrompts([]byte(`prompt "p" {
+	prompts, err := parsePrompts(singleSource([]byte(`prompt "p" {
     argument "yes" required=#true
     argument "no" required=#false
     argument "unset"
     text "x"
-}`))
+}`), "."))
 	if err != nil {
 		t.Fatalf("parsePrompts: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestPromptArgumentRequiredParsesAsBool(t *testing.T) {
 }
 
 func TestPromptArgumentRequiredRejectsNonBool(t *testing.T) {
-	_, err := parsePrompts([]byte(`prompt "p" { argument "a" required="yes"` + "\n" + `text "x" }`))
+	_, err := parsePrompts(singleSource([]byte(`prompt "p" { argument "a" required="yes"`+"\n"+`text "x" }`), "."))
 	if err == nil {
 		t.Fatal("parsePrompts accepted a non-boolean required")
 	}
