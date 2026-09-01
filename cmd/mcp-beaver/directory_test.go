@@ -225,3 +225,58 @@ func TestDirectoryTimesOutAHungUpstreamWithoutHoldingTheSweep(t *testing.T) {
 		t.Fatalf("states = %v", states)
 	}
 }
+
+// openStreamUpstream answers the handshake and then holds the standalone GET
+// SSE stream open with headers already sent, which is the shape that parked
+// five workers inside the SDK's Connect on the second full sweep.
+func openStreamUpstream(t *testing.T) *httptest.Server {
+	t.Helper()
+	inner := hintedUpstream(t)
+	t.Cleanup(inner.Close)
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			<-r.Context().Done()
+			return
+		}
+		inner.Config.Handler.ServeHTTP(w, r)
+	}))
+}
+
+func TestDirectoryTimesOutAnUpstreamThatHoldsItsStreamOpen(t *testing.T) {
+	upstream := hintedUpstream(t)
+	defer upstream.Close()
+	open := openStreamUpstream(t)
+	defer open.Close()
+	registry := pagedRegistry(t, upstream.URL+"/mcp", open.URL+"/mcp")
+	defer registry.Close()
+
+	dir := filepath.Join(t.TempDir(), "out")
+	started := time.Now()
+	if err := runDirectory(context.Background(), &bytes.Buffer{}, []string{"--registry", registry.URL, "--timeout", "500ms", "-o", dir}); err != nil {
+		t.Fatalf("runDirectory: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed > 10*time.Second {
+		t.Fatalf("the open stream held the sweep for %s", elapsed)
+	}
+	rec, err := directory.ReadRecord(filepath.Join(dir, directory.RecordFile))
+	if err != nil {
+		t.Fatalf("ReadRecord: %v", err)
+	}
+	for _, s := range rec.Servers {
+		switch s.Name {
+		case "test/things":
+			if s.State != "ok" {
+				t.Fatalf("answering upstream settled as %q", s.State)
+			}
+		case "test/locked":
+			if s.State != "timeout" && s.State != "ok" {
+				t.Fatalf("open-stream upstream settled as %q", s.State)
+			}
+		}
+	}
+}

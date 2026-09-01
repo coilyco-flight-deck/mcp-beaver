@@ -238,10 +238,16 @@ func sweepOne(ctx context.Context, entry RegistryEntry, timeout time.Duration, b
 		copied := *base
 		client = &copied
 	}
+	// The SDK opens its standalone SSE stream on a context of its own, so a
+	// deadline on ctx never reaches a server that holds that GET open. A
+	// client timeout does, and a probe never needs a long-lived stream.
+	if client.Timeout == 0 || client.Timeout > timeout {
+		client.Timeout = timeout
+	}
 	status := &statusCapture{base: client.Transport}
 	client.Transport = status
 	swept := SweptServer{RegistryEntry: entry}
-	pulled, err := Pull(ctx, entry.Name, PullOptions{Upstream: entry.URL, HTTPClient: client})
+	pulled, err := pullWithin(ctx, entry, client, timeout)
 	if err != nil {
 		swept.State = refusalState(status.last(), err)
 		if swept.State != SweepStateTimeout && status.last() == 0 && (errors.Is(err, context.DeadlineExceeded) || ctx.Err() == context.DeadlineExceeded) {
@@ -302,4 +308,26 @@ func refusalState(code int, err error) string {
 		return "no result"
 	}
 	return text
+}
+
+// pullWithin runs Pull and gives up at the deadline even when Pull has not
+// returned. The client timeout above makes that the rare case, and a
+// goroutine parked on a stream the SDK will eventually drop is a bounded
+// leak in a command-line run rather than a pinned worker.
+func pullWithin(ctx context.Context, entry RegistryEntry, client *http.Client, timeout time.Duration) (*Pulled, error) {
+	type result struct {
+		pulled *Pulled
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		pulled, err := Pull(ctx, entry.Name, PullOptions{Upstream: entry.URL, HTTPClient: client})
+		done <- result{pulled, err}
+	}()
+	select {
+	case r := <-done:
+		return r.pulled, r.err
+	case <-ctx.Done():
+		return nil, fmt.Errorf("mcp-beaver: upstream %q ran past %s: %w", entry.URL, timeout, context.DeadlineExceeded)
+	}
 }
