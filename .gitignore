@@ -1,2 +1,3 @@
 scripts/registry-probe/out/
 __pycache__/
+dist/

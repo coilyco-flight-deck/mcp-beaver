@@ -190,7 +190,7 @@ func probeUpstream(ctx context.Context, endpoint string, client *http.Client) ([
 	probing.Transport = capture
 	ctx, cancel := upstreamContext(ctx)
 	defer cancel()
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "mcp-beaver-pull", Version: "0.1.0"}, nil).
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "mcp-beaver-pull", Version: Version}, nil).
 		Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: &probing}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("mcp-beaver: connect upstream %q: %w", endpoint, err)

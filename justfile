@@ -55,6 +55,18 @@ serve-example *ARGS:
 lint-examples *ARGS:
     @bash scripts/ward-command.sh lint-examples "$@"
 
+# Cross-compile the release binaries into dist/, stamped with the current tag.
+release-build *ARGS:
+    @sh scripts/release-build.sh "$@"
+
+# Render the brew formula from the dist/ binaries. Needs an exact release tag.
+release-package *ARGS:
+    @sh scripts/render-packaging.sh "$@"
+
+# Decide whether one validated revision should publish a release.
+release-impact *ARGS:
+    @sh scripts/release-impact.sh "$@"
+
 # Sweep the MCP registry into a directory of guardfiles and pages. Pass `-o <dir>` and any `directory` flag after `--`.
 directory *ARGS:
     @bash scripts/ward-command.sh directory "$@"

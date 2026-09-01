@@ -1,0 +1,120 @@
+# Forgejo-canonical binary release train. Every main push validates, and a
+# revision that changes what the binary ships publishes a tagged release with
+# installable artifacts. A docs or chart commit validates and stops, so a
+# version is never minted that nobody can tell apart from the last one.
+#
+# Separate from ci.yml on purpose: that one publishes the OCI image deploy
+# consumes by source sha, which is a different artifact on a different cadence.
+# The image is how the fleet runs beaver; this is how a stranger installs it.
+#
+# The tag and release steps are agentic-os's shared composite actions, consumed
+# by ref rather than forked, the way agent-compose consumes them.
+#
+# Major versions are hand-driven: dispatch this workflow with bump: major.
+# Nothing in commit history can escalate a bump.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing or explicit version tag for a retry."
+        required: false
+        default: ""
+      bump:
+        description: "Version bump when tag is empty."
+        required: false
+        default: "minor"
+        type: choice
+        options: [minor, patch, major]
+
+concurrency:
+  group: release-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: docker
+    timeout-minutes: 30
+    container:
+      image: forgejo.coilysiren.me/coilyco-flight-deck/agentic-os:release
+    env:
+      GOPRIVATE: forgejo.coilysiren.me
+    outputs:
+      publish: ${{ steps.impact.outputs.publish }}
+      tag: ${{ steps.tag.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate the release commit
+        run: just test
+
+      - id: impact
+        name: Classify release impact
+        env:
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_BASE: ${{ github.event.before }}
+          RELEASE_HEAD: ${{ github.sha }}
+        run: sh scripts/ci/release-impact.sh
+
+      - id: tag
+        if: ${{ steps.impact.outputs.publish == 'true' }}
+        uses: coilyco-flight-deck/agentic-os/actions/tag-bump@main
+        with:
+          bump: ${{ github.event.inputs.bump || 'minor' }}
+          tag_name: ${{ github.event.inputs.tag || '' }}
+          create_tag: true
+          release_sha: ${{ github.sha }}
+
+      - name: Fetch the release tag into the build checkout
+        if: ${{ steps.impact.outputs.publish == 'true' }}
+        run: git fetch --tags --force
+
+      - name: Build binaries and package metadata
+        if: ${{ steps.impact.outputs.publish == 'true' }}
+        run: sh scripts/ci/release-build.sh
+
+      - id: create
+        if: ${{ steps.impact.outputs.publish == 'true' }}
+        uses: coilyco-flight-deck/agentic-os/actions/create-release@main
+        with:
+          tag: ${{ steps.tag.outputs.new_tag }}
+          name: mcp-beaver ${{ steps.tag.outputs.new_tag }}
+          body: ${{ steps.tag.outputs.changelog }}
+
+      - name: Attach release artifacts
+        if: ${{ steps.impact.outputs.publish == 'true' }}
+        env:
+          FORGEJO_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.create.outputs.release_id }}
+          FORGEJO_API: https://forgejo.coilysiren.me/api/v1/repos/${{ github.repository }}
+        run: sh scripts/ci/release-attach-assets.sh
+
+      - name: Update the Homebrew tap
+        if: ${{ steps.impact.outputs.publish == 'true' }}
+        env:
+          TAP_WRITE_TOKEN: ${{ secrets.TAP_WRITE_TOKEN }}
+          TAG: ${{ steps.tag.outputs.new_tag }}
+        run: sh scripts/ci/release-publish-tap.sh
+
+      - name: Alert Telegram on main failure
+        if: ${{ failure() && github.ref == 'refs/heads/main' }}
+        continue-on-error: true
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_RED_CHAT_ID }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.workflow }}
+          JOB: ${{ github.job }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          API_BASE: https://api.telegram.org
+        run: python3 scripts/ci-telegram-alert.py

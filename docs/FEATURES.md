@@ -15,6 +15,8 @@ generic Helm chart.
   `wrap mcp upstream` guardfile, and the credential it presents upstream.
 - [pull.md](pull.md) - `pull`, a `wrap mcp upstream` guardfile written from a
   registry entry and the upstream's own `readOnlyHint`.
+- `version` - the release this binary was built from, stamped at build time and
+  advertised in every MCP handshake. See [release.md](release.md).
 - [directory.md](directory.md) - `directory`, the registry swept into a
   guardfile per server, a sweep record, and the two pages that index them.
 - [oauth2.md](oauth2.md) - `oauth2-client`, the one credential this runtime
@@ -44,8 +46,9 @@ generic Helm chart.
 - [logs.md](logs.md) - structured logs and redaction.
 - [telemetry.md](telemetry.md) - opt-in OpenTelemetry.
 
-**Distribution.** - [image.md](image.md), [ci.md](ci.md), [chart.md](chart.md),
-  [chart-values.md](chart-values.md).
+**Distribution.** - [release.md](release.md) is the installable binary and its
+  Homebrew formula. [image.md](image.md), [ci.md](ci.md), [chart.md](chart.md),
+  and [chart-values.md](chart-values.md) are the image the fleet deploys.
 - [DESIGN.md](DESIGN.md) - why it is shaped this way.
 
 ## See also

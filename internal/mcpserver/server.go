@@ -718,7 +718,7 @@ func cloneTool(tool *mcp.Tool) *mcp.Tool {
 
 func newSDKServer(name string, icons []mcp.Icon, instructions string) *mcp.Server {
 	return mcp.NewServer(
-		&mcp.Implementation{Name: name, Version: "0.1.0", Icons: icons},
+		&mcp.Implementation{Name: name, Version: Version, Icons: icons},
 		&mcp.ServerOptions{
 			Instructions: renderInstructions(instructions),
 			// Empty rather than nil: nil means the SDK's historical

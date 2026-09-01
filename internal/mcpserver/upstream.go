@@ -134,7 +134,7 @@ func upstreamContext(ctx context.Context) (context.Context, context.CancelFunc) 
 func (p *proxyBackend) dial(ctx context.Context) (*mcp.ClientSession, error) {
 	ctx, cancel := upstreamContext(ctx)
 	defer cancel()
-	client := mcp.NewClient(&mcp.Implementation{Name: "mcp-beaver", Version: "0.1.0"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "mcp-beaver", Version: Version}, nil)
 	client.AddSendingMiddleware(p.telemetry.clientMiddleware)
 	// The standalone SSE stream stays on. An upstream may deliver a tools/call
 	// result over it, and with no stream that call hangs. See #80.
