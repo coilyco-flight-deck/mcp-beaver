@@ -1,0 +1,122 @@
+<title>Thirty Guardfiles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#141019; --surface:#1d1823; --surface-2:#262030;
+    --line:#362d42; --ink:#f2ebe4; --ink-2:#b0a29c; --ink-3:#7d7280;
+    --wood:#c98b3f; --wood-soft:rgba(201,139,63,.14);
+    --ok:#4bb98a; --ok-soft:rgba(75,185,138,.13);
+    --warn:#d9a441; --warn-soft:rgba(217,164,65,.13);
+    --risk:#e0685f; --risk-soft:rgba(224,104,95,.13);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --ground:#faf7f3; --surface:#fff; --surface-2:#f4efe9; --line:#e3dbd2;
+      --ink:#1a1520; --ink-2:#5e5460; --ink-3:#877c8a;
+      --wood:#9a5f18; --wood-soft:rgba(154,95,24,.10);
+      --ok:#0f7f5c; --ok-soft:rgba(15,127,92,.11);
+      --warn:#8a6212; --warn-soft:rgba(138,98,18,.11);
+      --risk:#bf3c33; --risk-soft:rgba(191,60,51,.10);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:#faf7f3; --surface:#fff; --surface-2:#f4efe9; --line:#e3dbd2;
+    --ink:#1a1520; --ink-2:#5e5460; --ink-3:#877c8a;
+    --wood:#9a5f18; --wood-soft:rgba(154,95,24,.10);
+    --ok:#0f7f5c; --ok-soft:rgba(15,127,92,.11);
+    --warn:#8a6212; --warn-soft:rgba(138,98,18,.11);
+    --risk:#bf3c33; --risk-soft:rgba(191,60,51,.10);
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif; line-height:1.62; margin:0; padding:3.5rem 1.5rem 6rem; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:62rem; margin:0 auto; display:flex; flex-direction:column; gap:4rem; }
+  .mono, code { font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace; }
+  code { font-size:.85em; background:var(--surface-2); padding:.05rem .3rem; border-radius:2px; }
+  .eyebrow { font-family:"IBM Plex Mono",monospace; font-size:.7rem; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-3); margin:0; }
+  h1 { font-family:"Bricolage Grotesque",sans-serif; font-size:clamp(2.5rem,6vw,4rem); font-weight:800; letter-spacing:-.04em; line-height:.98; margin:.8rem 0 0; text-wrap:balance; }
+  h2 { font-family:"Bricolage Grotesque",sans-serif; font-size:clamp(1.4rem,2.8vw,1.85rem); font-weight:600; letter-spacing:-.025em; line-height:1.12; margin:0; text-wrap:balance; }
+  p { margin:0; max-width:66ch; }
+  .lede { font-size:1.15rem; color:var(--ink-2); margin-top:1.5rem; max-width:56ch; }
+  .lede strong { color:var(--ink); font-weight:600; }
+  header.page { border-bottom:1px solid var(--line); padding-bottom:2.75rem; }
+  .sec-head { display:flex; flex-direction:column; gap:.5rem; margin-bottom:.4rem; }
+  .sec-head p { color:var(--ink-2); font-size:.93rem; }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(9rem,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:3px; overflow:hidden; margin-top:2rem; }
+  .stat { background:var(--surface); padding:1rem 1.1rem; }
+  .stat__n { font-family:"IBM Plex Mono",monospace; font-size:1.8rem; font-weight:600; line-height:1; display:block; font-variant-numeric:tabular-nums; }
+  .stat__l { font-size:.76rem; color:var(--ink-2); margin-top:.45rem; display:block; line-height:1.35; }
+  .s-ok .stat__n{color:var(--ok);} .s-warn .stat__n{color:var(--warn);} .s-risk .stat__n{color:var(--risk);} .s-wood .stat__n{color:var(--wood);}
+
+  .grp { display:flex; flex-direction:column; gap:1rem; scroll-margin-top:2rem; }
+  .grp .eyebrow { font-weight:600; }
+  .grp--declared .eyebrow { color:var(--ok); }
+  .grp--partial .eyebrow { color:var(--warn); }
+  .grp--undeclared .eyebrow { color:var(--risk); }
+
+  .gf { border:1px solid var(--line); border-radius:4px; overflow:hidden; background:var(--surface); }
+  .grp--declared .gf { border-left:3px solid var(--ok); }
+  .grp--partial .gf { border-left:3px solid var(--warn); }
+  .grp--undeclared .gf { border-left:3px solid var(--risk); }
+  .gf__h { display:flex; flex-wrap:wrap; gap:.5rem 1rem; align-items:baseline; justify-content:space-between; padding:.6rem .9rem; background:var(--surface-2); border-bottom:1px solid var(--line); }
+  .gf__n { font-family:"IBM Plex Mono",monospace; font-size:.82rem; font-weight:600; word-break:break-all; }
+  .gf__m { font-family:"IBM Plex Mono",monospace; font-size:.68rem; color:var(--ink-3); }
+  .gf pre { margin:0; padding:.9rem 1rem; overflow-x:auto; background:transparent; font-family:"IBM Plex Mono",monospace; font-size:.73rem; line-height:1.55; color:var(--ink-2); }
+
+  .note { border:1px solid var(--line); border-left:3px solid var(--wood); background:var(--wood-soft); border-radius:2px; padding:1.15rem 1.3rem; display:flex; flex-direction:column; gap:.65rem; }
+  .note p { font-size:.91rem; color:var(--ink-2); } .note strong { color:var(--ink); font-weight:600; }
+  footer { border-top:1px solid var(--line); padding-top:1.4rem; font-family:"IBM Plex Mono",monospace; font-size:.71rem; color:var(--ink-3); line-height:1.75; }
+  a { color:var(--wood); }
+  a:focus-visible { outline:2px solid var(--wood); outline-offset:3px; }
+  @media (max-width:34rem){ body{padding:2.5rem 1rem 4rem;} .gf pre{font-size:.68rem;} }
+</style>
+
+<div class="wrap">
+
+  <header class="page">
+    <p class="eyebrow">mcp-beaver &nbsp;//&nbsp; generated guardfiles &nbsp;//&nbsp; {{STAMP}}</p>
+    <h1>Thirty Guardfiles</h1>
+    <p class="lede">Every guardfile <code>gen_kdl.py</code> wrote from the probe, all {{N}} of them, formatted with <code>kdlfmt</code>. <strong>All 30 parse.</strong></p>
+    <p class="lede" style="margin-top:.9rem;">Grouped by whether the upstream declares <code>readOnlyHint</code>, because that decides whether a guardfile can allow anything at all.</p>
+    <div class="stats">
+      <div class="stat s-ok"><span class="stat__n">{{NDEC}}</span><span class="stat__l">declare every tool</span></div>
+      <div class="stat s-warn"><span class="stat__n">{{NPART}}</span><span class="stat__l">declare some</span></div>
+      <div class="stat s-risk"><span class="stat__n">{{NUND}}</span><span class="stat__l">declare nothing</span></div>
+      <div class="stat s-wood"><span class="stat__n">{{NALLOW}}<span style="font-size:1rem;color:var(--ink-3)">/{{NTOOLS}}</span></span><span class="stat__l">tools allowed of tools served</span></div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <h2>The mark is the content</h2>
+      <p>Dropping the {{NUND}} silent servers would have kept the index safe and lost the most interesting thing in it. They stay, carrying <code>annotation-coverage undeclared</code>, which a consumer can filter on rather than parsing comments.</p>
+    </div>
+    <div class="note">
+      <p><strong>Safety is unchanged by the mark.</strong> A silent tool is simply not in the allowlist, and the allowlist is closed by construction: anything absent is denied without being named. Nothing is exposed on the strength of a guess.</p>
+      <p><strong>What the mark buys.</strong> The index keeps all {{N}} servers, and the thing nobody publishes becomes queryable: which servers tell you what their tools do. A server that annotates is safer to adopt than one that does not, and that is now a field rather than an impression.</p>
+      <p><strong>There are no withhold blocks, and there were.</strong> An earlier pass generated one per excluded tool. <code>withhold</code> mints a <em>discoverable stub</em> that appears in <code>tools/list</code>, so that would have advertised 208 tools of which 96 are callable: <strong>54% of the surface refusing every call</strong>, paid for by the consumer on every turn. beaver bounds its own <code>instructions</code> node at 500 characters for exactly that reason. A denial list also enforces nothing and only goes stale, since a tool the upstream adds tomorrow is denied by absence anyway. <code>withhold</code> stays what it was built to be: a hand-authoring device for the two or three omissions a caller will actually reach for. Dropping them took the 30 files from 34,118 bytes to 24,061.</p>
+    </div>
+  </section>
+
+  {{SECTIONS}}
+
+  <section>
+    <div class="sec-head"><h2>What this run does not settle</h2></div>
+    <div class="note">
+      <p><strong>The grammar is proposed, not parsed by beaver.</strong> <code>wrap mcp upstream</code> and <code>annotation-coverage</code> do not exist in beaver today. These files are valid KDL, which <code>kdlfmt</code> confirms, and they are not yet a valid guardfile. What runs today is <code>serve-upstream --upstream &lt;url&gt; --tool &lt;name&gt;</code>, which needs no new grammar.</p>
+      <p><strong>No schemas here, deliberately.</strong> beaver's DESIGN.md says there is no per-tool input schema because the engine derives it. <code>serve-upstream</code> already snapshots the upstream contracts at connect time and fails closed on drift, so restating them would duplicate a source of truth that rots.</p>
+      <p><strong>readOnlyHint is self-declared.</strong> An upstream that mislabels is trusted here. Nothing in this pipeline calls a tool to find out, and nothing should.</p>
+      <p><strong>One reading, one day.</strong> Surfaces move. A real directory needs the run on a schedule and a history, which is also what would let it show drift rather than a snapshot.</p>
+    </div>
+  </section>
+
+  <footer>
+    Delphi // Frontend Engineer &nbsp;·&nbsp; generated {{STAMP}}<br>
+    Source: the official MCP registry, then a live MCP handshake against each advertised remote. Server names, endpoints, tool names, annotations and every count come from that run. Formatted by kdlfmt; blank-line stripping and bare identifiers are its canonical style, not mine.<br>
+    Grouping, the withhold policy and the coverage marker are mine. Whether any attention goes here belongs to Portia.
+  </footer>
+
+</div>

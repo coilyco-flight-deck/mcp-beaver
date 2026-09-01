@@ -1,0 +1,297 @@
+<title>Thirty Guardfiles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#141019; --surface:#1d1823; --surface-2:#262030;
+    --line:#362d42; --ink:#f2ebe4; --ink-2:#b0a29c; --ink-3:#7d7280;
+    --wood:#c98b3f; --wood-soft:rgba(201,139,63,.14);
+    --ok:#4bb98a; --ok-soft:rgba(75,185,138,.13);
+    --warn:#d9a441; --warn-soft:rgba(217,164,65,.13);
+    --risk:#e0685f; --risk-soft:rgba(224,104,95,.13);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --ground:#faf7f3; --surface:#fff; --surface-2:#f1ece5; --line:#e3dbd2;
+      --ink:#1a1520; --ink-2:#5e5460; --ink-3:#877c8a;
+      --wood:#9a5f18; --wood-soft:rgba(154,95,24,.10);
+      --ok:#0f7f5c; --ok-soft:rgba(15,127,92,.11);
+      --warn:#8a6212; --warn-soft:rgba(138,98,18,.11);
+      --risk:#bf3c33; --risk-soft:rgba(191,60,51,.10);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:#faf7f3; --surface:#fff; --surface-2:#f1ece5; --line:#e3dbd2;
+    --ink:#1a1520; --ink-2:#5e5460; --ink-3:#877c8a;
+    --wood:#9a5f18; --wood-soft:rgba(154,95,24,.10);
+    --ok:#0f7f5c; --ok-soft:rgba(15,127,92,.11);
+    --warn:#8a6212; --warn-soft:rgba(138,98,18,.11);
+    --risk:#bf3c33; --risk-soft:rgba(191,60,51,.10);
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif; line-height:1.62; margin:0; padding:3.5rem 1.5rem 6rem; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:64rem; margin:0 auto; display:flex; flex-direction:column; gap:3.5rem; }
+  .mono, code { font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace; }
+  code { font-size:.85em; background:var(--surface-2); padding:.05rem .3rem; border-radius:2px; }
+  .eyebrow { font-family:"IBM Plex Mono",monospace; font-size:.7rem; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-3); margin:0; }
+  h1 { font-family:"Bricolage Grotesque",sans-serif; font-size:clamp(2.5rem,6vw,4rem); font-weight:800; letter-spacing:-.04em; line-height:.98; margin:.8rem 0 0; text-wrap:balance; }
+  h2 { font-family:"Bricolage Grotesque",sans-serif; font-size:clamp(1.35rem,2.6vw,1.8rem); font-weight:600; letter-spacing:-.025em; line-height:1.12; margin:0; text-wrap:balance; }
+  p { margin:0; max-width:66ch; }
+  .lede { font-size:1.15rem; color:var(--ink-2); margin-top:1.5rem; max-width:56ch; }
+  .lede strong { color:var(--ink); font-weight:600; }
+  header.page { border-bottom:1px solid var(--line); padding-bottom:2.5rem; }
+  .sec-head { display:flex; flex-direction:column; gap:.5rem; margin-bottom:.2rem; }
+  .sec-head p { color:var(--ink-2); font-size:.93rem; }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(9rem,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:3px; overflow:hidden; margin-top:2rem; }
+  .stat { background:var(--surface); padding:1rem 1.1rem; }
+  .stat__n { font-family:"IBM Plex Mono",monospace; font-size:1.8rem; font-weight:600; line-height:1; display:block; font-variant-numeric:tabular-nums; }
+  .stat__l { font-size:.76rem; color:var(--ink-2); margin-top:.45rem; display:block; line-height:1.35; }
+  .s-ok .stat__n{color:var(--ok);} .s-warn .stat__n{color:var(--warn);} .s-risk .stat__n{color:var(--risk);} .s-wood .stat__n{color:var(--wood);}
+
+  /* ---- segmented controls ---- */
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:100px; overflow:hidden; background:var(--ground); }
+  .seg button {
+    font-family:"IBM Plex Mono",monospace; font-size:.64rem; letter-spacing:.06em;
+    padding:.3rem .7rem; border:0; background:transparent; color:var(--ink-3);
+    cursor:pointer; line-height:1.5; white-space:nowrap;
+  }
+  .seg button[aria-pressed="true"] { background:var(--wood-soft); color:var(--wood); font-weight:600; }
+  .seg button:hover:not([aria-pressed="true"]) { color:var(--ink-2); }
+  .seg button:focus-visible { outline:2px solid var(--wood); outline-offset:-2px; }
+
+  .globalbar {
+    display:flex; flex-wrap:wrap; gap:.75rem 1.25rem; align-items:center;
+    border:1px solid var(--line); border-radius:4px; padding:.85rem 1rem;
+    background:var(--surface); position:sticky; top:.5rem; z-index:5;
+  }
+  .globalbar .lbl { font-family:"IBM Plex Mono",monospace; font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); }
+  .globalbar .spacer { flex:1 1 auto; }
+
+  .grp { display:flex; flex-direction:column; gap:1rem; }
+  .grp .eyebrow { font-weight:600; }
+  .grp--declared .eyebrow { color:var(--ok); }
+  .grp--partial .eyebrow { color:var(--warn); }
+  .grp--undeclared .eyebrow { color:var(--risk); }
+
+  .gf { border:1px solid var(--line); border-radius:4px; overflow:hidden; background:var(--surface); }
+  .grp--declared .gf { border-left:3px solid var(--ok); }
+  .grp--partial .gf { border-left:3px solid var(--warn); }
+  .grp--undeclared .gf { border-left:3px solid var(--risk); }
+  .gf__h { display:flex; flex-wrap:wrap; gap:.5rem .9rem; align-items:center; padding:.6rem .9rem; background:var(--surface-2); border-bottom:1px solid var(--line); }
+  .gf__n { font-family:"IBM Plex Mono",monospace; font-size:.8rem; font-weight:600; word-break:break-all; }
+  .gf__m { font-family:"IBM Plex Mono",monospace; font-size:.66rem; color:var(--ink-3); }
+  .gf__ctl { margin-left:auto; display:flex; gap:.4rem; flex-wrap:wrap; }
+  .gf pre { margin:0; padding:.9rem 1rem; overflow-x:auto; background:transparent; font-family:"IBM Plex Mono",monospace; font-size:.73rem; line-height:1.55; color:var(--ink-2); }
+  .gf pre .c { color:var(--ink-3); }
+  .gf pre .k { color:var(--wood); }
+  .gf pre .s { color:var(--ok); }
+  .gf pre .w { color:var(--risk); }
+
+  .note { border:1px solid var(--line); border-left:3px solid var(--wood); background:var(--wood-soft); border-radius:2px; padding:1.15rem 1.3rem; display:flex; flex-direction:column; gap:.65rem; }
+  .note p { font-size:.91rem; color:var(--ink-2); } .note strong { color:var(--ink); font-weight:600; }
+  footer { border-top:1px solid var(--line); padding-top:1.4rem; font-family:"IBM Plex Mono",monospace; font-size:.71rem; color:var(--ink-3); line-height:1.75; }
+  a { color:var(--wood); }
+  a:focus-visible { outline:2px solid var(--wood); outline-offset:3px; }
+  @media (max-width:40rem){ .gf__ctl{margin-left:0; width:100%;} }
+  @media (max-width:34rem){ body{padding:2.5rem 1rem 4rem;} .gf pre{font-size:.68rem;} }
+</style>
+
+<div class="wrap">
+
+  <header class="page">
+    <p class="eyebrow">mcp-beaver &nbsp;//&nbsp; generated guardfiles &nbsp;//&nbsp; {{STAMP}}</p>
+    <h1>Thirty Guardfiles</h1>
+    <p class="lede">Every guardfile the probe can write, all {{N}} of them. Generated <strong>chatty</strong>, and stripped by whoever is reading.</p>
+    <p class="lede" style="margin-top:.9rem;">Each one re-renders in place, and opens at <strong>read-write</strong> and <strong>terse</strong>. Both narrowing and reaching for the undeclared are deliberate acts.</p>
+    <div class="stats">
+      <div class="stat s-ok"><span class="stat__n">{{NDEC}}</span><span class="stat__l">declare every tool</span></div>
+      <div class="stat s-warn"><span class="stat__n">{{NPART}}</span><span class="stat__l">declare some</span></div>
+      <div class="stat s-risk"><span class="stat__n">{{NUND}}</span><span class="stat__l">declare nothing</span></div>
+      <div class="stat s-wood"><span class="stat__n">{{NALLOW}}<span style="font-size:1rem;color:var(--ink-3)">/{{NTOOLS}}</span></span><span class="stat__l">tools declared read-only</span></div>
+    </div>
+  </header>
+
+  <div class="globalbar">
+    <span class="lbl">Set all</span>
+    <div class="seg" data-global="scope">
+      <button data-v="read" aria-pressed="false">read-only</button>
+      <button data-v="write" aria-pressed="true">read-write</button>
+      <button data-v="all" aria-pressed="false">+ undeclared</button>
+    </div>
+    <div class="seg" data-global="voice">
+      <button data-v="verbose" aria-pressed="false">verbose</button>
+      <button data-v="terse" aria-pressed="true">terse</button>
+    </div>
+    <span class="spacer"></span>
+    <span class="lbl" id="tally"></span>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <h2>Chatty by default, stripped on the way out</h2>
+    </div>
+    <div class="note">
+      <p><strong>The generator no longer decides for you.</strong> An earlier pass emitted the minimum it could defend and threw the rest away, which meant the reader could never see what had been excluded. Now every file carries the whole surface and the controls take things off.</p>
+      <p><strong>Scope is an evidence axis before it is a capability one.</strong> <em>read-only</em> is tools the upstream declares <code>readOnlyHint: true</code>. <em>read-write</em> is tools it declares either way, so the label is literally true: reads and writes, both asserted by the author. <em>+ undeclared</em> adds the tools that assert nothing, which is 88 of 208 and the group no heuristic reads reliably. Separating that third step is the point: an undeclared tool is not a write, it is unasserted, and it should cost a deliberate click rather than ride along inside a word.</p>
+      <p><strong>Voice</strong> is the noise axis. <em>verbose</em> keeps the header, the coverage marker, the instructions and a comment per tool. <em>terse</em> is names and structure only, no comments at all.</p>
+      <p><strong>Read-write and terse is the browsing default. Read-only is the deploying one.</strong> The page opens showing the whole surface because hiding it by default hides the interesting part, and comments cost nothing at runtime while an exposed tool costs a consumer context on every turn.</p>
+    </div>
+  </section>
+
+  {{SECTIONS}}
+
+  <section>
+    <div class="sec-head"><h2>What this does not settle</h2></div>
+    <div class="note">
+      <p><strong>The grammar is proposed.</strong> <code>wrap mcp upstream</code> and <code>annotation-coverage</code> do not exist in beaver today. The output is valid KDL, confirmed by <code>kdlfmt</code> over all 30, and it is not yet a valid guardfile. What runs today with no new grammar is <code>serve-upstream --upstream &lt;url&gt; --tool &lt;name&gt;</code>.</p>
+      <p><strong>No schemas, deliberately.</strong> beaver's DESIGN.md says there is no per-tool input schema because the engine derives it. <code>serve-upstream</code> snapshots the upstream contracts at connect time and fails closed on drift, so restating them here would duplicate a source of truth that rots.</p>
+      <p><strong>readOnlyHint is self-declared.</strong> An upstream that mislabels is trusted here. Nothing calls a tool to find out, and nothing should.</p>
+      <p><strong>One reading, one day.</strong> 30 of 60 servers answered anonymously; the rest wanted a token. A real directory needs the run on a schedule and a history, which is also what would let it show drift instead of a snapshot.</p>
+    </div>
+  </section>
+
+  <footer>
+    Delphi // Frontend Engineer &nbsp;·&nbsp; generated {{STAMP}}<br>
+    Source: the official MCP registry, then a live MCP handshake against each advertised remote. Server names, endpoints, tool names, descriptions and annotations come from that run. The KDL shape, the scope and voice axes and the coverage marker are mine.<br>
+    Whether any attention goes here belongs to Portia.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var DATA = {{DATA}};
+  var KEY = "beaver-guardfile-view-2";
+  var state = { scope: "write", voice: "terse" };
+  try {
+    var saved = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (saved && saved.scope && saved.voice) state = saved;
+  } catch (e) { /* private window, defaults stand */ }
+
+  function esc(s) { return String(s).replace(/[&<>]/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+  function q(s) { return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
+
+  function coverage(s) {
+    var h = s.tools.map(function (t) { return t.r; });
+    if (h.every(function (x) { return x === null; })) return "undeclared";
+    if (h.some(function (x) { return x === null; })) return "partial";
+    return "declared";
+  }
+
+  // Render KDL as HTML with spans, so comments and grants read differently.
+  function render(s, view) {
+    var reads = s.tools.filter(function (t) { return t.r === true; });
+    var muts  = s.tools.filter(function (t) { return t.r === false; });
+    var sil   = s.tools.filter(function (t) { return t.r === null; });
+    // Filter one ordered list, never rebuild it. Concatenating reads then
+    // mutators reordered the file between scopes, so toggling reshuffled lines
+    // instead of only adding them. Upstream tools/list order is preserved, and
+    // each scope is an ordered subset of the next.
+    var shown = s.tools.filter(function (t) {
+      return view.scope === "all" ? true
+           : view.scope === "write" ? t.r !== null
+           : t.r === true;
+    });
+    var verbose = view.voice === "verbose";
+    var L = [];
+    var C = function (t) { return '<span class="c">' + esc(t) + "</span>"; };
+    var K = function (t) { return '<span class="k">' + esc(t) + "</span>"; };
+
+    if (verbose) {
+      L.push(C("// " + s.name + " - from the MCP registry and a live tools/list."));
+      L.push(C("// " + s.tools.length + " tools: " + reads.length + " declared read-only, "
+               + muts.length + " declared mutating, " + sil.length + " undeclared."));
+    }
+    L.push(K("wrap mcp upstream") + " " + q(s.name) + " {");
+    L.push("    " + K("url") + " " + q(s.url));
+    L.push("    " + K("transport") + " streamable-http");
+    if (verbose) {
+      L.push("    " + K("annotation-coverage") + " " + coverage(s)
+             + " annotated=" + (reads.length + muts.length) + " silent=" + sil.length);
+      if (s.description) {
+        L.push("    " + K("instructions") + " {");
+        L.push("        " + K("text") + " " + q(s.description.slice(0, 160)));
+        L.push("    }");
+      }
+    }
+    if (!shown.length) {
+      L.push("    " + C("// nothing this scope will expose"));
+    }
+    shown.forEach(function (t) {
+      if (verbose) {
+        var tag = t.r === true ? "readOnlyHint: true"
+                : t.r === false ? "readOnlyHint: false - mutates" : "no readOnlyHint declared";
+        L.push("    " + C("// " + tag + (t.d ? ". " + t.d.slice(0, 88) : "")));
+      }
+      var cls = t.r === true ? "s" : t.r === false ? "w" : "";
+      var name = cls ? '<span class="' + cls + '">' + esc(q(t.n)) + "</span>" : esc(q(t.n));
+      L.push("    " + K("can") + " " + name);
+    });
+    L.push("}");
+    return L.join("\n");
+  }
+
+  var cards = [];
+  function paint() {
+    cards.forEach(function (c) { c.pre.innerHTML = render(c.server, c.view); });
+    var exposed = cards.reduce(function (n, c) {
+      var t = c.server.tools;
+      return n + (c.view.scope === "read"
+        ? t.filter(function (x) { return x.r === true; }).length
+        : c.view.scope === "write"
+        ? t.filter(function (x) { return x.r !== null; }).length
+        : t.length); }, 0);
+    var tally = document.getElementById("tally");
+    if (tally) tally.textContent = exposed + " of {{NTOOLS}} tools exposed";
+  }
+
+  function wireSeg(seg, get, set) {
+    seg.addEventListener("click", function (ev) {
+      var b = ev.target.closest("button[data-v]");
+      if (!b) return;
+      set(b.getAttribute("data-v"));
+      [].forEach.call(seg.querySelectorAll("button"), function (x) {
+        x.setAttribute("aria-pressed", String(x === b));
+      });
+      paint();
+    });
+    [].forEach.call(seg.querySelectorAll("button"), function (x) {
+      x.setAttribute("aria-pressed", String(x.getAttribute("data-v") === get()));
+    });
+  }
+
+  [].forEach.call(document.querySelectorAll(".gf"), function (el) {
+    var s = DATA.filter(function (d) { return d.name === el.getAttribute("data-server"); })[0];
+    if (!s) return;
+    var card = { server: s, pre: el.querySelector("pre"), view: { scope: state.scope, voice: state.voice } };
+    cards.push(card);
+    [].forEach.call(el.querySelectorAll(".seg[data-axis]"), function (seg) {
+      var axis = seg.getAttribute("data-axis");
+      wireSeg(seg, function () { return card.view[axis]; },
+                   function (v) { card.view[axis] = v; });
+    });
+  });
+
+  [].forEach.call(document.querySelectorAll(".seg[data-global]"), function (seg) {
+    var axis = seg.getAttribute("data-global");
+    wireSeg(seg, function () { return state[axis]; }, function (v) {
+      state[axis] = v;
+      cards.forEach(function (c) {
+        c.view[axis] = v;
+        var s2 = c.pre.closest(".gf").querySelector('.seg[data-axis="' + axis + '"]');
+        if (s2) [].forEach.call(s2.querySelectorAll("button"), function (x) {
+          x.setAttribute("aria-pressed", String(x.getAttribute("data-v") === v));
+        });
+      });
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* fine */ }
+    });
+  });
+
+  paint();
+})();
+</script>

@@ -42,3 +42,7 @@ authenticated one.
 **A minted credential.** `--oauth2-client` declares a `client_credentials`
 client that a header addresses as `{oauth2:<name>}`, for a hosted upstream whose
 token is fetched rather than stored. See [oauth2.md](oauth2.md).
+
+**From a registry entry.** [registry-pull.md](registry-pull.md) is the
+prototype that probes the official registry and writes an allowlist per server
+from `readOnlyHint`, the measured origin of mcp-beaver#119.

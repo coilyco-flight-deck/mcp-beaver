@@ -87,3 +87,19 @@ helm-template-upstream-authed *ARGS:
 # Render the spec-mode sidecar shape, wrapping a co-located non-MCP process.
 helm-template-sidecar *ARGS:
     @helm template mcp-beaver chart --namespace mcp-beaver --set-file spec=examples/sidecar.mcp.kdl -f examples/sidecar.values.yaml "$@"
+
+# Probe the MCP registry live and rewrite scripts/registry-probe/probe.json. Pass a server count after `--`.
+registry-probe *ARGS:
+    @python3 scripts/registry-probe/probe.py "$@"
+
+# Regenerate the prototype guardfiles from the committed probe, offline, then format them.
+registry-guardfiles *ARGS:
+    @python3 scripts/registry-probe/classify.py
+    @python3 scripts/registry-probe/gen_kdl.py "$@"
+    @kdlfmt format scripts/registry-probe/guardfiles/*.mcp.kdl
+
+# Render the prototype directory pages from the committed probe into scripts/registry-probe/out/.
+registry-render *ARGS:
+    @python3 scripts/registry-probe/render.py
+    @python3 scripts/registry-probe/render_all.py
+    @python3 scripts/registry-probe/render_interactive.py
