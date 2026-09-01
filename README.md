@@ -33,12 +33,14 @@ One runtime, many guardfiles.
 ## Install
 
 ```sh
-brew tap coilyco-flight-deck/tap https://forgejo.coilysiren.me/coilyco-flight-deck/homebrew-tap.git
-brew install mcp-beaver
+curl -fsSL -o mcp-beaver https://forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/releases/latest/download/mcp-beaver-darwin-arm64
+chmod +x mcp-beaver && ./mcp-beaver version
 ```
 
-macOS and Linux, on Intel or arm64. Binaries, checksums, and the release train
-itself are in [docs/release.md](docs/release.md).
+macOS and Linux, on Intel or arm64: swap the asset name for your platform.
+Every binary is static and `SHA256SUMS` ships beside it. The Homebrew formula
+is built and attached but not in the tap yet (#125). Release train and
+verification: [docs/release.md](docs/release.md).
 
 ## Quickstart
 

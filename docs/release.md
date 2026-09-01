@@ -11,23 +11,25 @@ same thing.
 
 ## Installing
 
+Take a binary from the [releases
+page](https://forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/releases),
+with `SHA256SUMS` beside it:
+
 ```sh
-brew tap coilyco-flight-deck/tap https://forgejo.coilysiren.me/coilyco-flight-deck/homebrew-tap.git
-brew install mcp-beaver
+curl -fsSLO https://forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/releases/latest/download/mcp-beaver-linux-amd64
+shasum -a 256 -c SHA256SUMS --ignore-missing
+chmod +x mcp-beaver-linux-amd64
+./mcp-beaver-linux-amd64 version
 ```
 
 macOS on Apple Silicon or Intel, and Linux on x86-64 or arm64. Every binary is
 static, `CGO_ENABLED=0`, so it needs nothing installed beside it.
 
-Or take one from the [releases
-page](https://forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/releases)
-directly, with `SHA256SUMS` beside it:
-
-```sh
-curl -fsSLO https://forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/releases/latest/download/mcp-beaver-linux-amd64
-chmod +x mcp-beaver-linux-amd64
-./mcp-beaver-linux-amd64 version
-```
+**Homebrew is not wired yet.** Every release builds `mcp-beaver.rb` and
+attaches it, and the tap step runs, but it skips with a warning because this
+repository has no `TAP_WRITE_TOKEN` secret. Once that is set the formula
+publishes on the next release and `brew install mcp-beaver` works. See
+mcp-beaver#125.
 
 ## What the train does
 

@@ -1,7 +1,0 @@
-A pending major release holds automatic publication.
-
-While this file exists, a push to main validates and stops rather than cutting
-a minor. Cut the major by dispatching the release workflow with bump: major,
-then delete this file so minors flow again.
-
-Held for: v1.0.0, the first release. mcp-beaver#98.
