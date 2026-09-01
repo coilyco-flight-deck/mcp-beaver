@@ -15,6 +15,8 @@ generic Helm chart.
   `wrap mcp upstream` guardfile, and the credential it presents upstream.
 - [pull.md](pull.md) - `pull`, a `wrap mcp upstream` guardfile written from a
   registry entry and the upstream's own `readOnlyHint`.
+- [directory.md](directory.md) - `directory`, the registry swept into a
+  guardfile per server, a sweep record, and the two pages that index them.
 - [oauth2.md](oauth2.md) - `oauth2-client`, the one credential this runtime
   mints rather than reads.
 - [ssm.md](ssm.md) - the exact-parameter AWS reader.

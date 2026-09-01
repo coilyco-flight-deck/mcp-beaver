@@ -83,3 +83,5 @@ lexical at all.
   guardfile grammar.
 - [registry-pull.md](registry-pull.md) - the Python prototype and the
   30-guardfile corpus this was measured on.
+- [directory.md](directory.md) - `directory`, the same pull run across the
+  registry, with the pages that index the result.

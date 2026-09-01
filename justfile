@@ -55,6 +55,10 @@ serve-example *ARGS:
 lint-examples *ARGS:
     @bash scripts/ward-command.sh lint-examples "$@"
 
+# Sweep the MCP registry into a directory of guardfiles and pages. Pass `-o <dir>` and any `directory` flag after `--`.
+directory *ARGS:
+    @bash scripts/ward-command.sh directory "$@"
+
 # Lint the auth-neutral mcp-beaver chart, both without and with an `app` widget.
 helm-lint-chart *ARGS:
     @helm lint chart --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml "$@"

@@ -26,6 +26,9 @@ case "$action" in
   serve-example)
     go run ./cmd/mcp-beaver serve examples/skillsmp.mcp.kdl --http "${1:-:18080}"
     ;;
+  directory)
+    go run ./cmd/mcp-beaver directory "$@"
+    ;;
   lint-examples)
     # A broken committed example is worse than a missing one, and --methods
     # surfaces verb-fallthrough warnings on stderr as it goes.

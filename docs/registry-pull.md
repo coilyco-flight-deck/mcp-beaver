@@ -70,7 +70,8 @@ says so. All 30 files parse under `kdlfmt`.
 ## What it is not
 
 It is not the shipped command. `mcp-beaver pull` in Go is, see
-[pull.md](pull.md), and the runtime parses `wrap mcp upstream` and
+[pull.md](pull.md), `mcp-beaver directory` is the sweep and the index and
+guardfile pages in Go, see [directory.md](directory.md), and the runtime parses `wrap mcp upstream` and
 `annotation-coverage` since that landed. The 30 generated files are the corpus
 that grammar was measured on, so `go test ./cmd/...` lints every one of them
 and expects the 14 that grant nothing to lint to nothing. `readOnlyHint` is

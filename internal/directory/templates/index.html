@@ -1,0 +1,162 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What It Actually Exposes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground:#141019; --surface:#1d1823; --surface-2:#262030;
+    --line:#362d42; --ink:#f2ebe4; --ink-2:#b0a29c; --ink-3:#7d7280;
+    --wood:#c98b3f; --wood-soft:rgba(201,139,63,.14);
+    --ok:#4bb98a; --ok-soft:rgba(75,185,138,.13);
+    --warn:#d9a441; --warn-soft:rgba(217,164,65,.13);
+    --risk:#e0685f; --risk-soft:rgba(224,104,95,.13);
+    --lock:#7f8ec9; --lock-soft:rgba(127,142,201,.14);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --ground:#faf7f3; --surface:#fff; --surface-2:#f4efe9; --line:#e3dbd2;
+      --ink:#1a1520; --ink-2:#5e5460; --ink-3:#877c8a;
+      --wood:#9a5f18; --wood-soft:rgba(154,95,24,.10);
+      --ok:#0f7f5c; --ok-soft:rgba(15,127,92,.11);
+      --warn:#8a6212; --warn-soft:rgba(138,98,18,.11);
+      --risk:#bf3c33; --risk-soft:rgba(191,60,51,.10);
+      --lock:#4457a8; --lock-soft:rgba(68,87,168,.10);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:#faf7f3; --surface:#fff; --surface-2:#f4efe9; --line:#e3dbd2;
+    --ink:#1a1520; --ink-2:#5e5460; --ink-3:#877c8a;
+    --wood:#9a5f18; --wood-soft:rgba(154,95,24,.10);
+    --ok:#0f7f5c; --ok-soft:rgba(15,127,92,.11);
+    --warn:#8a6212; --warn-soft:rgba(138,98,18,.11);
+    --risk:#bf3c33; --risk-soft:rgba(191,60,51,.10);
+    --lock:#4457a8; --lock-soft:rgba(68,87,168,.10);
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif; line-height:1.62; margin:0; padding:3.5rem 1.5rem 6rem; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:66rem; margin:0 auto; display:flex; flex-direction:column; gap:4.5rem; }
+  .mono, code { font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace; }
+  code { font-size:.85em; background:var(--surface-2); padding:.05rem .3rem; border-radius:2px; }
+  .eyebrow { font-family:"IBM Plex Mono",monospace; font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3); margin:0; }
+  h1 { font-family:"Bricolage Grotesque",sans-serif; font-size:clamp(2.6rem,6.5vw,4.4rem); font-weight:800; letter-spacing:-.04em; line-height:.98; margin:.8rem 0 0; max-width:16ch; text-wrap:balance; }
+  h2 { font-family:"Bricolage Grotesque",sans-serif; font-size:clamp(1.5rem,3vw,2rem); font-weight:600; letter-spacing:-.025em; line-height:1.1; margin:0; text-wrap:balance; }
+  h3 { font-size:1.02rem; font-weight:600; margin:0; letter-spacing:-.01em; }
+  p { margin:0; max-width:66ch; }
+  .lede { font-size:1.2rem; color:var(--ink-2); margin-top:1.6rem; max-width:54ch; }
+  .lede strong { color:var(--ink); font-weight:600; }
+  header { border-bottom:1px solid var(--line); padding-bottom:3rem; }
+  section { display:flex; flex-direction:column; gap:1.5rem; }
+  .sec-head { display:flex; flex-direction:column; gap:.6rem; }
+  .sec-head p { color:var(--ink-2); }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:3px; overflow:hidden; margin-top:2.2rem; }
+  .stat { background:var(--surface); padding:1.05rem 1.15rem; }
+  .stat__n { font-family:"IBM Plex Mono",monospace; font-size:1.85rem; font-weight:600; line-height:1; display:block; font-variant-numeric:tabular-nums; }
+  .stat__l { font-size:.78rem; color:var(--ink-2); margin-top:.5rem; display:block; line-height:1.35; }
+  .stat--ok .stat__n{color:var(--ok);} .stat--risk .stat__n{color:var(--risk);} .stat--lock .stat__n{color:var(--lock);} .stat--wood .stat__n{color:var(--wood);} .stat--warn .stat__n{color:var(--warn);}
+  .app { border:1px solid var(--line); border-radius:5px; overflow:hidden; background:var(--surface); }
+  .app__bar { display:flex; align-items:center; gap:.6rem; padding:.6rem .9rem; background:var(--surface-2); border-bottom:1px solid var(--line); font-family:"IBM Plex Mono",monospace; font-size:.7rem; color:var(--ink-3); flex-wrap:wrap; }
+  .app__dot { width:.5rem; height:.5rem; border-radius:50%; background:var(--line); flex:none; }
+  .app__meta { margin-left:auto; }
+  .tbl { display:flex; flex-direction:column; gap:1px; background:var(--line); max-height:36rem; overflow:auto; }
+  .th,.td { background:var(--surface); display:grid; grid-template-columns:minmax(0,1.7fr) 3.4rem 4.2rem 4.6rem 5rem 5.6rem minmax(0,2fr); gap:.8rem; padding:.6rem .9rem; align-items:center; }
+  .th { background:var(--surface-2); font-family:"IBM Plex Mono",monospace; font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3); position:sticky; top:0; z-index:1; }
+  .td--bad { grid-template-columns:minmax(0,1.7fr) 8rem minmax(0,3fr); }
+  .td__n { font-family:"IBM Plex Mono",monospace; font-size:.76rem; word-break:break-all; }
+  .td__n a { color:inherit; text-decoration:none; }
+  .td__n a:hover { color:var(--wood); }
+  .num { font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; font-weight:600; font-size:.82rem; }
+  .num--ok{color:var(--ok);} .num--risk{color:var(--risk);} .num--dim{color:var(--ink-3);}
+  .muted { color:var(--ink-3); font-size:.74rem; }
+  .pill { font-family:"IBM Plex Mono",monospace; font-size:.58rem; font-weight:600; letter-spacing:.07em; text-transform:uppercase; padding:.18rem .42rem; border-radius:2px; white-space:nowrap; display:inline-block; }
+  .p-declared{color:var(--ok);background:var(--ok-soft);} .p-partial{color:var(--warn);background:var(--warn-soft);}
+  .p-undeclared{color:var(--risk);background:var(--risk-soft);} .p-lock{color:var(--lock);background:var(--lock-soft);}
+  .pipe { display:flex; flex-direction:column; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:3px; overflow:hidden; }
+  .step { background:var(--surface); padding:.95rem 1.1rem; display:grid; grid-template-columns:2.2rem minmax(0,1fr); gap:.3rem 1rem; }
+  .step__n { font-family:"IBM Plex Mono",monospace; font-size:.7rem; font-weight:600; color:var(--wood); letter-spacing:.08em; grid-row:1/span 2; padding-top:.15rem; }
+  .step p { font-size:.87rem; color:var(--ink-2); }
+  .note { border:1px solid var(--line); border-left:3px solid var(--wood); background:var(--wood-soft); border-radius:2px; padding:1.2rem 1.35rem; display:flex; flex-direction:column; gap:.7rem; }
+  .note p { font-size:.91rem; color:var(--ink-2); } .note strong { color:var(--ink); font-weight:600; }
+  footer { border-top:1px solid var(--line); padding-top:1.5rem; font-family:"IBM Plex Mono",monospace; font-size:.72rem; color:var(--ink-3); line-height:1.75; }
+  a { color:var(--wood); text-underline-offset:3px; }
+  a:focus-visible { outline:2px solid var(--wood); outline-offset:3px; }
+  @media (max-width:52rem){ .th,.td{grid-template-columns:minmax(0,1.6fr) 3.2rem 3.6rem 3.6rem 4rem 5rem;} .th span:nth-child(7),.td>.muted{display:none;} .td--bad{grid-template-columns:minmax(0,1.6fr) 8rem;} }
+  @media (max-width:34rem){ body{padding:2.5rem 1.1rem 4rem;} }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">mcp-beaver &nbsp;//&nbsp; generated directory &nbsp;//&nbsp; {{.Stamp}}</p>
+    <h1>What It Actually Exposes</h1>
+    <p class="lede">Every MCP directory lists what a README <strong>claims</strong>. This page was produced by connecting to <strong>{{.Listed}} listed servers</strong> and recording what each one serves.</p>
+    <p class="lede" style="margin-top:1rem;">Nothing below about a server was typed. The layout is authored, every fact is generated, and re-running <code>mcp-beaver directory</code> replaces the page.</p>
+    <div class="stats">
+      <div class="stat stat--ok"><span class="stat__n">{{.Answered}}</span><span class="stat__l">answered anonymously, {{.Pct}}% of {{.Listed}}</span></div>
+      <div class="stat stat--wood"><span class="stat__n">{{.Tools}}</span><span class="stat__l">tools recorded</span></div>
+      <div class="stat stat--ok"><span class="stat__n">{{.ReadOnly}}</span><span class="stat__l">declared read-only by their upstream</span></div>
+      <div class="stat stat--risk"><span class="stat__n">{{.Mutating}}</span><span class="stat__l">declared mutating</span></div>
+      <div class="stat stat--warn"><span class="stat__n">{{.Silent}}</span><span class="stat__l">declare nothing</span></div>
+      <div class="stat stat--lock"><span class="stat__n">{{.Refused}}</span><span class="stat__l">refused or unreachable</span></div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <h2>How this page was written</h2>
+      <p>One command. <code>mcp-beaver directory</code> enumerates, connects, writes a guardfile per server, and renders this page and <a href="guardfiles.html">the guardfiles</a> from the same record.</p>
+    </div>
+    <div class="pipe">
+      <div class="step"><span class="step__n">01</span><h3>Enumerate</h3><p><code>GET {{.Registry}}/v0/servers</code>, unauthenticated, paginated. Keep <code>isLatest</code> and <code>status: active</code>, which drops superseded versions and dead listings for free.</p></div>
+      <div class="step"><span class="step__n">02</span><h3>Resolve transport</h3><p>Take the first <code>streamable-http</code> remote. A packages-only server would have to be installed and run, so it is not listed here at all.</p></div>
+      <div class="step"><span class="step__n">03</span><h3>Handshake</h3><p><code>initialize</code>, then <code>notifications/initialized</code>, carrying <code>Mcp-Session-Id</code> forward, the way the proxy connects.</p></div>
+      <div class="step"><span class="step__n">04</span><h3>Introspect, with a retry</h3><p><code>tools/list</code>, twice if the first returns empty. One server answered 0 tools then 25 on the same session shape, so a single reading produces false negatives.</p></div>
+      <div class="step"><span class="step__n">05</span><h3>Read the hint, then emit</h3><p>Each tool's own <code>readOnlyHint</code>, read off the raw JSON so absent and false stay different. A guardfile per server at scope <code>{{.Scope}}</code>, and this page, from the stored record.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>The index</h2>
+      <p>{{.Answered}} servers that answered, sorted by surface size. Every count is the upstream's own declaration, and the name links to the guardfile written from it.</p>
+    </div>
+    <div class="app">
+      <div class="app__bar"><span class="app__dot"></span><span class="app__dot"></span><span class="app__dot"></span><span>beaver.directory / index</span><span class="app__meta">{{.Tools}} tools across {{.Answered}} servers, {{.Allowed}} allowed at {{.Scope}}</span></div>
+      <div class="tbl">
+        <div class="th"><span>Server</span><span>Tools</span><span>Read-only</span><span>Mutating</span><span>Undeclared</span><span>Coverage</span><span>Registry description</span></div>
+        {{range .Rows}}<div class="td"><span class="td__n"><a href="{{.File}}">{{.Name}}</a></span><span class="num">{{.Tools}}</span><span class="num num--ok">{{.ReadOnly}}</span><span class="num num--risk">{{.Mutating}}</span><span class="num num--dim">{{.Silent}}</span><span class="pill p-{{.Coverage}}">{{.Coverage}}</span><span class="muted">{{.Description}}</span></div>
+        {{end}}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>What refused</h2>
+      <p>{{.Refused}} of {{.Listed}}. {{.States}}. Auth is the real denominator, not reachability.</p>
+    </div>
+    <div class="app">
+      <div class="tbl" style="max-height:20rem;">
+        {{range .Refusals}}<div class="td td--bad"><span class="td__n">{{.Name}}</span><span class="pill p-lock">{{.State}}</span><span class="muted">{{.Description}}</span></div>
+        {{end}}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>What this does not establish</h2></div>
+    <div class="note">
+      <p><strong>The hint is self-declared.</strong> An upstream that mislabels a tool is trusted here. Nothing in this pipeline calls a tool to find out what it does, and nothing should. A tool declaring nothing is counted as undeclared rather than guessed at from its name.</p>
+      <p><strong>A refusal is not a verdict on a server.</strong> Requiring a token is normal and often correct. The {{.Refused}} servers above are outside the anonymous corpus, not below it.</p>
+      <p><strong>Everything here is one reading.</strong> Surfaces change and servers go down. A directory that shows drift needs the run on a schedule and a history, and this page is one run.</p>
+    </div>
+  </section>
+
+  <footer>
+    mcp-beaver directory &nbsp;//&nbsp; generated {{.Stamp}}<br>
+    Source: {{.Registry}}, then a live MCP handshake against each server's advertised remote. Server names, descriptions, endpoints, tool names, annotations, and every count on this page come from that run. The layout follows the registry-probe prototype.
+  </footer>
+
+</div>

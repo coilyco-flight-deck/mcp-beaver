@@ -68,7 +68,7 @@ func run(argv []string) error {
 
 func runContext(ctx context.Context, argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: mcp-beaver serve <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-ssm <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-s3 <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-upstream (<spec.mcp.kdl> | --upstream <mcp-url> --tool <name> [--tool <name> ...]) | mcp-beaver lint <spec.mcp.kdl> | mcp-beaver lint-upstream (<spec.mcp.kdl> | --tool <name>) [--read-only heuristic|strict] [--upstream <mcp-url>] | mcp-beaver pull <registry-name> [--scope read-only|read-write|all] [-o <out>] | mcp-beaver flatten <spec.mcp.kdl> [-o <out>] [--check]")
+		return fmt.Errorf("usage: mcp-beaver serve <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-ssm <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-s3 <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-upstream (<spec.mcp.kdl> | --upstream <mcp-url> --tool <name> [--tool <name> ...]) | mcp-beaver lint <spec.mcp.kdl> | mcp-beaver lint-upstream (<spec.mcp.kdl> | --tool <name>) [--read-only heuristic|strict] [--upstream <mcp-url>] | mcp-beaver pull <registry-name> [--scope read-only|read-write|all] [-o <out>] | mcp-beaver directory -o <dir> [--scope read-only|read-write|all] [--limit <n>] [--from <sweep.json>] | mcp-beaver flatten <spec.mcp.kdl> [-o <out>] [--check]")
 	}
 	switch argv[0] {
 	case "serve":
@@ -87,8 +87,10 @@ func runContext(ctx context.Context, argv []string) error {
 		return runFlatten(os.Stdout, argv[1:])
 	case "pull":
 		return runPull(ctx, os.Stdout, argv[1:])
+	case "directory":
+		return runDirectory(ctx, os.Stdout, argv[1:])
 	default:
-		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-s3, serve-upstream, lint, lint-upstream, pull, flatten)", argv[0])
+		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-s3, serve-upstream, lint, lint-upstream, pull, directory, flatten)", argv[0])
 	}
 }
 
