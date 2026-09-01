@@ -46,6 +46,12 @@ def guardfile(s):
     L.append(f"// {len(tools)} tools: {len(allow)} declared read-only, {len(deny)} declared mutating,")
     L.append(f"// {len(unknown)} undeclared. Only declared read-only tools are exposed.")
     L.append("")
+    # `instructions` is a sibling of `wrap`, as in every other beaver guardfile.
+    if s.get("description"):
+        L.append("instructions {")
+        L.append(f"    text {kdl_str(' '.join(s['description'].split())[:180])}")
+        L.append("}")
+        L.append("")
     L.append(f"wrap mcp upstream {kdl_str(s['name'])} {{")
     L.append(f"    url {kdl_str(s['url'])}")
     L.append('    transport "streamable-http"')
@@ -53,11 +59,6 @@ def guardfile(s):
     L.append("    // Machine-readable, so a consumer can filter on it rather than")
     L.append("    // parse the comments above.")
     L.append(f"    annotation-coverage {kdl_str(cov)} annotated={len(allow) + len(deny)} silent={len(unknown)}")
-    if s.get("description"):
-        L.append("")
-        L.append("    instructions {")
-        L.append(f"        text {kdl_str(s['description'][:180])}")
-        L.append("    }")
     if allow:
         L.append("")
         L.append("    // readOnlyHint: true, declared by the upstream")

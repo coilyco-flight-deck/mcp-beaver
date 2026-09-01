@@ -6,7 +6,9 @@
 //	mcp-beaver serve /spec/<name>.mcp.kdl --http :8080
 //	mcp-beaver lint /spec/<name>.mcp.kdl [--methods]
 //	mcp-beaver serve-upstream --upstream <url> --tool <name> [--pin <tool>.<arg>=<value>] [--upstream-header <name>=<template>]
+//	mcp-beaver serve-upstream /spec/<name>.mcp.kdl
 //	mcp-beaver lint-upstream --tool <name> --read-only heuristic
+//	mcp-beaver pull <registry-name> [--scope read-only|read-write|all] [-o <out>]
 //
 // It parses the spec through umbra's opcore engine, projects one MCP tool
 // plus one POST /api/{tool-name} endpoint per grant, and binds one HTTP
@@ -66,7 +68,7 @@ func run(argv []string) error {
 
 func runContext(ctx context.Context, argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: mcp-beaver serve <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-ssm <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-s3 <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-upstream --upstream <mcp-url> --tool <name> [--tool <name> ...] | mcp-beaver lint <spec.mcp.kdl> | mcp-beaver lint-upstream --tool <name> [--read-only heuristic|strict] [--upstream <mcp-url>] | mcp-beaver flatten <spec.mcp.kdl> [-o <out>] [--check]")
+		return fmt.Errorf("usage: mcp-beaver serve <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-ssm <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-s3 <spec.mcp.kdl> [--http :8080] | mcp-beaver serve-upstream (<spec.mcp.kdl> | --upstream <mcp-url> --tool <name> [--tool <name> ...]) | mcp-beaver lint <spec.mcp.kdl> | mcp-beaver lint-upstream (<spec.mcp.kdl> | --tool <name>) [--read-only heuristic|strict] [--upstream <mcp-url>] | mcp-beaver pull <registry-name> [--scope read-only|read-write|all] [-o <out>] | mcp-beaver flatten <spec.mcp.kdl> [-o <out>] [--check]")
 	}
 	switch argv[0] {
 	case "serve":
@@ -83,8 +85,10 @@ func runContext(ctx context.Context, argv []string) error {
 		return runLintUpstream(ctx, os.Stdout, argv[1:])
 	case "flatten":
 		return runFlatten(os.Stdout, argv[1:])
+	case "pull":
+		return runPull(ctx, os.Stdout, argv[1:])
 	default:
-		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-s3, serve-upstream, lint, lint-upstream, flatten)", argv[0])
+		return fmt.Errorf("unknown command %q (want: serve, serve-ssm, serve-s3, serve-upstream, lint, lint-upstream, pull, flatten)", argv[0])
 	}
 }
 
@@ -110,16 +114,20 @@ func runLintUpstream(ctx context.Context, out io.Writer, argv []string) error {
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
 		return err
 	}
-	if fs.NArg() != 0 {
-		return fmt.Errorf("lint-upstream takes no positional arguments, only --tool entries")
+	if fs.NArg() > 1 {
+		return fmt.Errorf("lint-upstream takes at most one guardfile path, plus --tool entries when there is none")
 	}
-	mode, err := parseReadOnlyMode(*readOnly, *upstream)
+	inputs, err := resolveProxyInputs("lint-upstream", fs.Arg(0), upstreamFlagInputs{upstream: *upstream, tools: tools, headers: headerFlags, oauth2: oauth2Flags})
+	if err != nil {
+		return err
+	}
+	mode, err := parseReadOnlyMode(*readOnly, inputs.upstream)
 	if err != nil {
 		return err
 	}
 	// The same authority the serving path calls, so the offline check cannot
 	// drift from what serve-upstream will actually accept.
-	allowlist, err := mcpserver.ValidateAllowlist(tools)
+	allowlist, err := mcpserver.ValidateAllowlist(inputs.tools)
 	if err != nil {
 		return err
 	}
@@ -131,16 +139,11 @@ func runLintUpstream(ctx context.Context, out io.Writer, argv []string) error {
 			)
 		}
 	}
-	providers, err := upstreamProviders(oauth2Flags)
-	if err != nil {
-		return err
-	}
-	headers, err := parseUpstreamHeaders(headerFlags, providers)
-	if err != nil {
-		return err
-	}
-	if *upstream != "" {
-		if err := checkUpstreamAllowlist(ctx, *upstream, allowlist, headers, providers, mode, *connectTimeout); err != nil {
+	// A guardfile always names its upstream, so a file lint connects unless
+	// nothing asks it to: --read-only strict is the ask, and a bare file lint
+	// stays offline like `lint`.
+	if inputs.upstream != "" && (fs.Arg(0) == "" || mode == readOnlyStrict) {
+		if err := checkUpstreamAllowlist(ctx, inputs.upstream, allowlist, inputs.headers, inputs.providers, mode, *connectTimeout); err != nil {
 			return err
 		}
 	}
@@ -244,6 +247,14 @@ func runLintTo(out, warn io.Writer, argv []string) error {
 	if err != nil {
 		return fmt.Errorf("read spec %q: %w", specPath, err)
 	}
+	if *methods && *apps {
+		return fmt.Errorf("lint takes --methods or --apps, not both: each owns the second column")
+	}
+	if proxy, err := mcpserver.IsUpstreamSpec(src); err != nil {
+		return fmt.Errorf("invalid spec %q: %w", specPath, err)
+	} else if proxy {
+		return lintUpstreamSpec(out, specPath, src, *methods || *apps)
+	}
 	// "invalid spec" rather than serve's "parse spec": a failure here is just as
 	// often a projection failure (two grants minting one tool name) as a KDL
 	// parse failure, and this message is the whole product of the command.
@@ -259,9 +270,6 @@ func runLintTo(out, warn io.Writer, argv []string) error {
 	}
 	if err := lintWarnVacatedControls(warn, srv.VacatedControls()); err != nil {
 		return err
-	}
-	if *methods && *apps {
-		return fmt.Errorf("lint takes --methods or --apps, not both: each owns the second column")
 	}
 	if *methods {
 		return lintPrintMethods(out, srv)
@@ -421,12 +429,17 @@ func runServe(ctx context.Context, argv []string) error {
 	})
 }
 
+// defaultUpstreamName is the flag form's server name. A guardfile names the
+// server after its file instead, the way `serve` does.
+const defaultUpstreamName = "mcp-beaver-upstream"
+
 // runServeUpstream binds the HTTP listener for a proxy server that exposes a
-// selected subset of an upstream streamable-HTTP MCP server.
+// selected subset of an upstream streamable-HTTP MCP server, stated by flags
+// or by a `wrap mcp upstream` guardfile.
 func runServeUpstream(ctx context.Context, argv []string) error {
 	fs := flag.NewFlagSet("serve-upstream", flag.ContinueOnError)
 	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
-	name := fs.String("name", "mcp-beaver-upstream", "MCP server name")
+	name := fs.String("name", defaultUpstreamName, "MCP server name (a guardfile's own name when one is given)")
 	upstream := fs.String("upstream", "", "streamable-HTTP MCP upstream endpoint")
 	connectTimeout := fs.Duration("connect-timeout", 0, "retry upstream startup until this timeout (0 fails immediately)")
 	requestTimeout := fs.Duration("request-timeout", mcpserver.DefaultRequestTimeout, "bound one request end to end, including its upstream call (0 disables)")
@@ -441,44 +454,51 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
 		return err
 	}
-	if *upstream == "" {
-		return fmt.Errorf("serve-upstream needs --upstream <mcp-url>")
+	if fs.NArg() > 1 {
+		return fmt.Errorf("serve-upstream takes at most one guardfile path, plus flags when there is none")
 	}
-	if len(tools) == 0 {
-		return fmt.Errorf("serve-upstream needs at least one --tool allowlist entry")
+	specPath := fs.Arg(0)
+	inputs, err := resolveProxyInputs("serve-upstream", specPath, upstreamFlagInputs{upstream: *upstream, tools: tools, headers: headerFlags, oauth2: oauth2Flags})
+	if err != nil {
+		return err
+	}
+	if inputs.upstream == "" {
+		return fmt.Errorf("serve-upstream needs --upstream <mcp-url> or a `wrap mcp upstream` guardfile")
+	}
+	if len(inputs.tools) == 0 {
+		return fmt.Errorf("serve-upstream needs at least one allowlisted tool: a guardfile exposing nothing is a statement, not a server")
+	}
+	serverName := *name
+	if specPath != "" && serverName == defaultUpstreamName {
+		serverName = inputs.name
 	}
 	pins, err := parseArgPins(pinFlags)
-	if err != nil {
-		return err
-	}
-	providers, err := upstreamProviders(oauth2Flags)
-	if err != nil {
-		return err
-	}
-	headers, err := parseUpstreamHeaders(headerFlags, providers)
 	if err != nil {
 		return err
 	}
 	// Before the retry loop, not inside it: an unset secret is a configuration
 	// error, and --connect-timeout would otherwise spend minutes reporting it
 	// as an upstream that will not answer.
-	if err := mcpserver.PreflightUpstreamHeaders(ctx, headers, providers); err != nil {
+	if err := mcpserver.PreflightUpstreamHeaders(ctx, inputs.headers, inputs.providers); err != nil {
 		return err
 	}
-	return withTelemetry(ctx, *name, func() error {
+	return withTelemetry(ctx, serverName, func() error {
 		srv, err := connectProxyWithRetry(ctx, *connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
-			return mcpserver.NewProxyWithOptions(ctx, *name, "", *upstream, tools, mcpserver.ProxyOptions{Pins: pins, Headers: headers, Providers: providers})
+			return mcpserver.NewProxyWithOptions(ctx, serverName, specPath, inputs.upstream, inputs.tools, mcpserver.ProxyOptions{
+				Pins: pins, Headers: inputs.headers, Providers: inputs.providers, Instructions: inputs.instructions,
+			})
 		})
 		if err != nil {
-			return fmt.Errorf("connect upstream %q: %w", *upstream, err)
+			return fmt.Errorf("connect upstream %q: %w", inputs.upstream, err)
 		}
 		defer func() { _ = srv.Close() }()
 		srv.SetRequestTimeout(*requestTimeout)
 		mcpserver.Log().Info("serving upstream proxy",
 			"mode", "upstream",
-			"server", *name,
+			"server", serverName,
+			"spec", specPath,
 			"addr", *addr,
-			"tools", len(tools),
+			"tools", len(inputs.tools),
 			"request_timeout", requestTimeout.String())
 		return serveHTTP(ctx, *addr, srv.Handler())
 	})

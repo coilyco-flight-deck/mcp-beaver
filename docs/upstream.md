@@ -43,6 +43,29 @@ authenticated one.
 client that a header addresses as `{oauth2:<name>}`, for a hosted upstream whose
 token is fetched rather than stored. See [oauth2.md](oauth2.md).
 
-**From a registry entry.** [registry-pull.md](registry-pull.md) is the
-prototype that probes the official registry and writes an allowlist per server
-from `readOnlyHint`, the measured origin of mcp-beaver#119.
+**As a guardfile.** The same proxy is stated in one reviewable file, which
+`serve-upstream <spec.mcp.kdl>` serves and `lint` and `lint-upstream
+<spec.mcp.kdl>` validate. A file beside `--upstream` or `--tool` is refused:
+the file already states them.
+
+```kdl
+instructions { text "Search the published Tandem docs index." }
+
+wrap mcp upstream "ac.tandem/docs-mcp" {
+    url "https://tandem.ac/mcp"
+    transport streamable-http
+    annotation-coverage partial annotated=7 silent=6
+    auth header-token { header "Authorization"; prefix "Bearer "; value env "TOKEN" }
+    can "search_docs"
+    can "get_doc"
+}
+```
+
+`url` is `--upstream`, each `can` is a `--tool`, and `auth header-token` is
+spec mode's own shape lifted onto `--upstream-header`, resolving through the
+same registry. `annotation-coverage` is optional and checked against itself.
+Every other body node fails closed, `can` carries no schema, and beside the
+wrap only `instructions` and `oauth2-client` are projected: a proxy that
+silently ignored a `withhold` or `confirm` would serve wider than the file
+reads. A file that grants nothing lints clean and will not serve. `mcp-beaver
+pull` writes one from a registry entry, see [pull.md](pull.md).

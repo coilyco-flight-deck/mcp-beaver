@@ -64,6 +64,11 @@ func (s *Server) SetRequestTimeout(d time.Duration) {
 // and matching HTTP endpoint per grant, with opcore still owning the guardfile
 // parse, guard, and upstream request execution.
 func New(name, specPath string, src []byte) (*Server, error) {
+	if proxy, err := IsUpstreamSpec(src); err != nil {
+		return nil, err
+	} else if proxy {
+		return nil, fmt.Errorf("mcp-beaver: this guardfile opens `wrap mcp upstream`, which `serve-upstream <spec>` serves; `serve` renders REST grants")
+	}
 	descs, cfg, err := parseSource(specPath, src)
 	if err != nil {
 		return nil, err
@@ -315,6 +320,9 @@ type ProxyOptions struct {
 	// Providers is the value registry headers resolve through. The zero value
 	// is umbra's built-in readers, which is every caller that mints nothing.
 	Providers ProviderSet
+	// Instructions is the guardfile's own text under the shared policy
+	// sentence, which a `wrap mcp upstream` file can state and a flag cannot.
+	Instructions string
 }
 
 // NewProxyWithOptions is the full upstream-proxy constructor. NewProxy and
@@ -351,7 +359,7 @@ func NewProxyWithOptions(ctx context.Context, name, specPath, upstreamURL string
 		handlers:       make(map[string]mcp.ToolHandler, len(allowTools)),
 		upstreams:      []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http", Auth: upstreamAuthScheme(opts.Headers)}},
 		oauth2Clients:  opts.Providers.names,
-		sdk:            newSDKServer(name, nil, ""),
+		sdk:            newSDKServer(name, nil, opts.Instructions),
 		telemetry:      instrumentation,
 		requestTimeout: DefaultRequestTimeout,
 		closeFn:        proxy.Close,

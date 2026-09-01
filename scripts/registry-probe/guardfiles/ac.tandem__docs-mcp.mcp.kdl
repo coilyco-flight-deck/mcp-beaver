@@ -2,15 +2,15 @@
 // Generated from the MCP registry and a live tools/list.
 // 13 tools: 7 declared read-only, 0 declared mutating,
 // 6 undeclared. Only declared read-only tools are exposed.
+instructions {
+    text "Remote MCP server for Tandem docs, install guides, SDKs, workflows, and agent setup help."
+}
 wrap mcp upstream "ac.tandem/docs-mcp" {
     url "https://tandem.ac/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than
     // parse the comments above.
     annotation-coverage partial annotated=7 silent=6
-    instructions {
-        text "Remote MCP server for Tandem docs, install guides, SDKs, workflows, and agent setup help."
-    }
     // readOnlyHint: true, declared by the upstream
     can search_docs
     can get_doc

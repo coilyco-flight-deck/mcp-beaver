@@ -69,12 +69,13 @@ says so. All 30 files parse under `kdlfmt`.
 
 ## What it is not
 
-The `wrap mcp upstream` node and `annotation-coverage` marker are proposed
-grammar. They are valid KDL and not a valid guardfile, so the generated files
-live here rather than under `examples/`, where `just lint-examples` would
-reject them. `readOnlyHint` is self-declared, and nothing in this pipeline
-calls a tool to check it. Local `packages` upstreams over stdio, scheduling,
-and history are out of scope, as the spec says.
+It is not the shipped command. `mcp-beaver pull` in Go is, see
+[pull.md](pull.md), and the runtime parses `wrap mcp upstream` and
+`annotation-coverage` since that landed. The 30 generated files are the corpus
+that grammar was measured on, so `go test ./cmd/...` lints every one of them
+and expects the 14 that grant nothing to lint to nothing. `readOnlyHint` is
+self-declared, and nothing in this pipeline calls a tool to check it. Local
+`packages` upstreams over stdio, scheduling, and history are out of scope.
 
 ## See also
 

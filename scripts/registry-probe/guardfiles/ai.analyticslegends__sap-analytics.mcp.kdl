@@ -2,15 +2,15 @@
 // Generated from the MCP registry and a live tools/list.
 // 20 tools: 20 declared read-only, 0 declared mutating,
 // 0 undeclared. Only declared read-only tools are exposed.
+instructions {
+    text "AI agent for SAP analytics: firms, day rates, contract radar, news, concepts, studies"
+}
 wrap mcp upstream "ai.analyticslegends/sap-analytics" {
     url "https://analyticslegends.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than
     // parse the comments above.
     annotation-coverage declared annotated=20 silent=0
-    instructions {
-        text "AI agent for SAP analytics: firms, day rates, contract radar, news, concepts, studies"
-    }
     // readOnlyHint: true, declared by the upstream
     can search_firms
     can count_firms_by

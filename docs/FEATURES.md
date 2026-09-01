@@ -11,8 +11,10 @@ generic Helm chart.
 - [spec-mode.md](spec-mode.md) - swagger-resolved grants.
 - [inherit.md](inherit.md) - tiers that compose the sibling nodes as well as the
   grants, and `flatten`.
-- [upstream.md](upstream.md) - the guarded passthrough proxy, and the
-  credential it presents to an authenticated upstream.
+- [upstream.md](upstream.md) - the guarded passthrough proxy, as flags or as a
+  `wrap mcp upstream` guardfile, and the credential it presents upstream.
+- [pull.md](pull.md) - `pull`, a `wrap mcp upstream` guardfile written from a
+  registry entry and the upstream's own `readOnlyHint`.
 - [oauth2.md](oauth2.md) - `oauth2-client`, the one credential this runtime
   mints rather than reads.
 - [ssm.md](ssm.md) - the exact-parameter AWS reader.
