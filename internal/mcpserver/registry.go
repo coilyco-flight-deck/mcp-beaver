@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // registryPageSize is the registry's own maximum page, so a full enumeration
@@ -153,6 +155,11 @@ func readRegistryPage(ctx context.Context, client *http.Client, endpoint string)
 // is the refusal in the upstream's own terms.
 const SweepStateOK = "ok"
 
+// SweepStateTimeout marks a server that ran past the per-upstream deadline.
+// An upstream that answers `initialize` and then holds `tools/list` open
+// would otherwise pin a worker for the life of the sweep (mcp-beaver#123).
+const SweepStateTimeout = "timeout"
+
 // SweptServer is one registry entry after the sweep reached for it.
 type SweptServer struct {
 	RegistryEntry
@@ -175,11 +182,18 @@ func (s SweptServer) Pulled() *Pulled {
 type SweepOptions struct {
 	// Concurrency bounds the upstreams probed at once. Zero means 8.
 	Concurrency int
+	// Timeout bounds one upstream, handshake and list together. Zero means 30s.
+	Timeout time.Duration
+	// Progress receives one line per server as it settles, or is nil.
+	Progress io.Writer
 	// HTTPClient overrides the default client, for tests.
 	HTTPClient *http.Client
 }
 
-const defaultSweepConcurrency = 8
+const (
+	defaultSweepConcurrency = 8
+	defaultSweepTimeout     = 30 * time.Second
+)
 
 // Sweep probes every entry the way Pull does and records each answer or
 // refusal in place. One server refusing is that server's state rather than
@@ -190,23 +204,35 @@ func Sweep(ctx context.Context, entries []RegistryEntry, opts SweepOptions) []Sw
 	if workers <= 0 {
 		workers = defaultSweepConcurrency
 	}
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = defaultSweepTimeout
+	}
 	out := make([]SweptServer, len(entries))
 	sem := make(chan struct{}, workers)
 	var wg sync.WaitGroup
+	var progress sync.Mutex
 	for i, entry := range entries {
 		wg.Add(1)
 		go func(i int, entry RegistryEntry) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			out[i] = sweepOne(ctx, entry, opts.HTTPClient)
+			out[i] = sweepOne(ctx, entry, timeout, opts.HTTPClient)
+			if opts.Progress != nil {
+				progress.Lock()
+				fmt.Fprintf(opts.Progress, "%s\t%s\t%d\n", entry.Name, out[i].State, len(out[i].Tools))
+				progress.Unlock()
+			}
 		}(i, entry)
 	}
 	wg.Wait()
 	return out
 }
 
-func sweepOne(ctx context.Context, entry RegistryEntry, base *http.Client) SweptServer {
+func sweepOne(ctx context.Context, entry RegistryEntry, timeout time.Duration, base *http.Client) SweptServer {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	client := &http.Client{}
 	if base != nil {
 		copied := *base
@@ -218,6 +244,9 @@ func sweepOne(ctx context.Context, entry RegistryEntry, base *http.Client) Swept
 	pulled, err := Pull(ctx, entry.Name, PullOptions{Upstream: entry.URL, HTTPClient: client})
 	if err != nil {
 		swept.State = refusalState(status.last(), err)
+		if swept.State != SweepStateTimeout && status.last() == 0 && (errors.Is(err, context.DeadlineExceeded) || ctx.Err() == context.DeadlineExceeded) {
+			swept.State = SweepStateTimeout
+		}
 		return swept
 	}
 	swept.State = SweepStateOK

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/directory"
@@ -20,6 +21,7 @@ func runDirectory(ctx context.Context, out io.Writer, argv []string) error {
 	scopeFlag := fs.String("scope", "", "which tools each guardfile allows, as `scope`: read-only (the default), read-write, or all")
 	limit := fs.Int("limit", 0, "probe at most this many listed servers, in registry order; 0 means every one")
 	concurrency := fs.Int("concurrency", 0, "upstreams probed at once; 0 means 8")
+	timeout := fs.Duration("timeout", 0, "deadline per upstream, handshake and list together; 0 means 30s")
 	from := fs.String("from", "", "render from this earlier sweep.json instead of reaching the registry")
 	outDir := fs.String("o", "", "directory to write into (required)")
 	if err := fs.Parse(reorderFlagsFirst(argv)); err != nil {
@@ -54,7 +56,7 @@ func runDirectory(ctx context.Context, out io.Writer, argv []string) error {
 		if err != nil {
 			return err
 		}
-		swept := mcpserver.Sweep(ctx, entries, mcpserver.SweepOptions{Concurrency: *concurrency})
+		swept := mcpserver.Sweep(ctx, entries, mcpserver.SweepOptions{Concurrency: *concurrency, Timeout: *timeout, Progress: os.Stderr})
 		rec = directory.FromSweep(*registry, scope, swept, time.Now())
 	}
 	summary, err := directory.Write(*outDir, rec)

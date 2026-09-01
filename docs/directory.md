@@ -36,11 +36,13 @@ mcp-beaver directory -o out2 --from out/sweep.json   # re-render offline from an
    `isLatest` and `status: active` entries that publish a `streamable-http`
    remote, first remote wins, one entry per name. `--limit` caps the count in
    registry order.
-2. Probe each entry the way `pull` does, `--concurrency` at a time. A refusal
-   is that server's state, `HTTP 401` when the upstream answered a status and
-   the transport's own words otherwise, and never the sweep's failure. Half
-   the registry refuses anonymously, and a directory that stopped at the
-   first 401 would never be written.
+2. Probe each entry the way `pull` does, `--concurrency` at a time and
+   `--timeout` per upstream, 30s by default. A refusal is that server's state,
+   `HTTP 401` when the upstream answered a status, `timeout` when it ran past
+   the deadline, and the transport's own words otherwise, and never the
+   sweep's failure. Half the registry refuses anonymously, and a directory
+   that stopped at the first 401 would never be written. One line per server
+   goes to stderr as it settles, so a long sweep is visibly moving.
 3. Record, emit, and render from the record.
 
 No credential is presented. The refused half stays outside the corpus, which

@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/directory"
 )
@@ -172,4 +174,54 @@ func readString(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(data)
+}
+
+// hungUpstream answers the handshake and then holds `tools/list` open until
+// the client gives up, which is the shape that pinned a full sweep for an
+// hour (mcp-beaver#123).
+func hungUpstream(t *testing.T) *httptest.Server {
+	t.Helper()
+	inner := hintedUpstream(t)
+	t.Cleanup(inner.Close)
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		if bytes.Contains(body, []byte(`"tools/list"`)) {
+			<-r.Context().Done()
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		r.ContentLength = int64(len(body))
+		inner.Config.Handler.ServeHTTP(w, r)
+	}))
+}
+
+func TestDirectoryTimesOutAHungUpstreamWithoutHoldingTheSweep(t *testing.T) {
+	upstream := hintedUpstream(t)
+	defer upstream.Close()
+	hung := hungUpstream(t)
+	defer hung.Close()
+	registry := pagedRegistry(t, upstream.URL+"/mcp", hung.URL+"/mcp")
+	defer registry.Close()
+
+	dir := filepath.Join(t.TempDir(), "out")
+	started := time.Now()
+	var out bytes.Buffer
+	if err := runDirectory(context.Background(), &out, []string{"--registry", registry.URL, "--timeout", "500ms", "-o", dir}); err != nil {
+		t.Fatalf("runDirectory: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed > 10*time.Second {
+		t.Fatalf("the hung upstream held the sweep for %s", elapsed)
+	}
+	rec, err := directory.ReadRecord(filepath.Join(dir, directory.RecordFile))
+	if err != nil {
+		t.Fatalf("ReadRecord: %v", err)
+	}
+	states := map[string]string{}
+	for _, s := range rec.Servers {
+		states[s.Name] = s.State
+	}
+	if states["test/things"] != "ok" || states["test/locked"] != "timeout" {
+		t.Fatalf("states = %v", states)
+	}
 }
