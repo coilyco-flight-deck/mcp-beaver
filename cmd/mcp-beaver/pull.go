@@ -75,12 +75,17 @@ func runPull(ctx context.Context, out io.Writer, argv []string) error {
 // `serve-upstream` and `lint-upstream` always took, or an `mcp-upstream`
 // guardfile that carries the same facts in a reviewable file.
 type proxyInputs struct {
-	name         string
-	upstream     string
-	tools        []string
-	headers      []mcpserver.UpstreamHeader
-	providers    mcpserver.ProviderSet
-	instructions string
+	name      string
+	upstream  string
+	tools     []string
+	headers   []mcpserver.UpstreamHeader
+	providers mcpserver.ProviderSet
+	// options is everything the proxy constructor takes beyond the endpoint
+	// and the allowlist, carried whole rather than field by field: a
+	// guardfile states siblings (`withhold` among them) whose types belong to
+	// mcpserver, and copying the struct keeps them from leaking into a
+	// signature here.
+	options mcpserver.ProxyOptions
 }
 
 // upstreamFlagInputs is the flag half. The name is left for the caller.
@@ -104,7 +109,13 @@ func resolveProxyInputs(command, specPath string, flags upstreamFlagInputs) (pro
 		if err != nil {
 			return proxyInputs{}, err
 		}
-		return proxyInputs{upstream: flags.upstream, tools: flags.tools, headers: headers, providers: providers}, nil
+		return proxyInputs{
+			upstream:  flags.upstream,
+			tools:     flags.tools,
+			headers:   headers,
+			providers: providers,
+			options:   mcpserver.ProxyOptions{Headers: headers, Providers: providers},
+		}, nil
 	}
 	var stated []string
 	if flags.upstream != "" {
@@ -138,27 +149,37 @@ func resolveProxyInputs(command, specPath string, flags upstreamFlagInputs) (pro
 		return proxyInputs{}, fmt.Errorf("invalid spec %q: %w", specPath, err)
 	}
 	return proxyInputs{
-		name:         serverName(specPath),
-		upstream:     spec.URL,
-		tools:        spec.Tools,
-		headers:      spec.Headers,
-		providers:    spec.Providers,
-		instructions: spec.Instructions,
+		name:      serverName(specPath),
+		upstream:  spec.URL,
+		tools:     spec.Tools,
+		headers:   spec.Headers,
+		providers: spec.Providers,
+		options:   spec.Options(),
 	}, nil
 }
 
 // lintUpstreamSpec is `lint` for an `mcp-upstream` guardfile: the offline
-// parse plus the allowlist printed sorted, matching `lint-upstream`, and a
-// `-` in the second column because a proxied tool resolves no verb and
-// carries no widget.
-func lintUpstreamSpec(out io.Writer, specPath string, src []byte, second bool) error {
+// parse plus the served surface printed sorted, matching `lint-upstream`.
+//
+// The second column is `-` for a proxied tool, which resolves no verb and
+// carries no widget, and `WITHHELD` under --methods for a stub, matching what
+// a REST guardfile prints. A stub carries no widget either, so --apps prints
+// it `-` like everything else.
+func lintUpstreamSpec(out io.Writer, specPath string, src []byte, methods, apps bool) error {
 	spec, err := mcpserver.ParseUpstreamSpec(specPath, src)
 	if err != nil {
 		return fmt.Errorf("invalid spec %q: %w", specPath, err)
 	}
-	for _, name := range sortedCopy(spec.Tools) {
+	withheld := map[string]bool{}
+	for _, name := range spec.WithheldTools() {
+		withheld[name] = true
+	}
+	for _, name := range sortedCopy(append(append([]string{}, spec.Tools...), spec.WithheldTools()...)) {
 		line := name
-		if second {
+		switch {
+		case methods && withheld[name]:
+			line += "\tWITHHELD"
+		case methods || apps:
 			line += "\t-"
 		}
 		if _, err := fmt.Fprintln(out, line); err != nil {

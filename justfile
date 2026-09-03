@@ -71,10 +71,11 @@ release-impact *ARGS:
 directory *ARGS:
     @bash scripts/ward-command.sh directory "$@"
 
-# Lint the auth-neutral mcp-beaver chart, both without and with an `app` widget.
+# Lint the auth-neutral mcp-beaver chart across the spec, app-widget, and guardfile-stated upstream shapes.
 helm-lint-chart *ARGS:
     @helm lint chart --set-file spec=examples/skillsmp.mcp.kdl -f examples/skillsmp.values.yaml "$@"
     @helm lint chart --set-file spec=examples/guardfile-siblings.mcp.kdl --set-file widgets[0].content=examples/widgets/things.html --set widgets[0].path=widgets/things.html "$@"
+    @helm lint chart --set-file spec=examples/registry-upstream.mcp.kdl -f examples/registry-upstream.values.yaml "$@"
 
 # Render the app-bearing chart, materialize its mount, and lint it as the pod would.
 check-app-mount *ARGS:
@@ -95,6 +96,10 @@ helm-template-nodeport *ARGS:
 # Render the allowlisted upstream-proxy chart shape.
 helm-template-upstream *ARGS:
     @helm template mcp-beaver chart --namespace mcp-beaver -f examples/upstream.values.yaml "$@"
+
+# Render the upstream-proxy chart shape stated as a mounted guardfile.
+helm-template-upstream-spec *ARGS:
+    @helm template mcp-beaver chart --namespace mcp-beaver --set-file spec=examples/registry-upstream.mcp.kdl -f examples/registry-upstream.values.yaml "$@"
 
 # Render the authenticated hosted-upstream chart shape.
 helm-template-upstream-authed *ARGS:

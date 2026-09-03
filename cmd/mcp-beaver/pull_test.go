@@ -121,7 +121,7 @@ func TestPullWritesAGuardfileTheOtherVerbsAccept(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveProxyInputs: %v", err)
 	}
-	if inputs.name != "things" || inputs.upstream != upstream.URL+"/mcp" || strings.Join(inputs.tools, ",") != "get_thing" || inputs.instructions != "Things." {
+	if inputs.name != "things" || inputs.upstream != upstream.URL+"/mcp" || strings.Join(inputs.tools, ",") != "get_thing" || inputs.options.Instructions != "Things." {
 		t.Fatalf("inputs = %+v", inputs)
 	}
 }
@@ -201,5 +201,66 @@ func TestLintAcceptsThePrototypeCorpus(t *testing.T) {
 		if grants := strings.Count(string(src), "\n    can "); grants != strings.Count(out.String(), "\n") {
 			t.Fatalf("%s states %d grants and lints %q", filepath.Base(spec), grants, out.String())
 		}
+	}
+}
+
+// A stub is served, so every `lint` surface has to name it: absent from the
+// listing, the printed surface is narrower than the one the proxy mints, and
+// --methods has to say WITHHELD rather than the `-` a proxied grant gets.
+func TestLintNamesAnUpstreamGuardfilesWithheldStub(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "things.mcp.kdl")
+	spec := `withhold "delete_thing" {
+    reason "This surface is read-only by policy."
+    alternative "get_thing"
+}
+
+mcp-upstream "test/things" {
+    url "https://e.invalid/mcp"
+    can "get_thing"
+}
+`
+	if err := os.WriteFile(path, []byte(spec), 0o600); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	var out bytes.Buffer
+	if err := runLint(&out, []string{path}); err != nil {
+		t.Fatalf("runLint: %v", err)
+	}
+	if got := out.String(); got != "delete_thing\nget_thing\n" {
+		t.Fatalf("lint stdout = %q", got)
+	}
+	out.Reset()
+	if err := runLint(&out, []string{path, "--methods"}); err != nil {
+		t.Fatalf("runLint --methods: %v", err)
+	}
+	if got := out.String(); got != "delete_thing\tWITHHELD\nget_thing\t-\n" {
+		t.Fatalf("lint --methods stdout = %q", got)
+	}
+	// A stub carries no widget either, so the apps column stays the dash.
+	out.Reset()
+	if err := runLint(&out, []string{path, "--apps"}); err != nil {
+		t.Fatalf("runLint --apps: %v", err)
+	}
+	if got := out.String(); got != "delete_thing\t-\nget_thing\t-\n" {
+		t.Fatalf("lint --apps stdout = %q", got)
+	}
+	// lint-upstream prints the ALLOWLIST, which the stub is not part of: it
+	// is the list a `--read-only` screen runs over, and a withheld mutating
+	// verb must not fail that screen.
+	out.Reset()
+	if err := runLintUpstream(context.Background(), &out, []string{path, "--read-only", "heuristic"}); err != nil {
+		t.Fatalf("runLintUpstream: %v", err)
+	}
+	if got := out.String(); got != "get_thing\n" {
+		t.Fatalf("lint-upstream stdout = %q", got)
+	}
+	// serve-upstream reaches the stub through the same resolve, so a parse
+	// that read it and a constructor that never saw it would lint identically.
+	inputs, err := resolveProxyInputs("serve-upstream", path, upstreamFlagInputs{})
+	if err != nil {
+		t.Fatalf("resolveProxyInputs: %v", err)
+	}
+	if len(inputs.options.Withheld) != 1 {
+		t.Fatalf("options.Withheld = %+v, want the stub carried to the constructor", inputs.options.Withheld)
 	}
 }

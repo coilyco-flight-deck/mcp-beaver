@@ -12,7 +12,8 @@ generic Helm chart.
 - [inherit.md](inherit.md) - tiers that compose the sibling nodes as well as the
   grants, and `flatten`.
 - [upstream.md](upstream.md) - the guarded passthrough proxy, as flags or as a
-  `mcp-upstream` guardfile, and the credential it presents upstream.
+  `mcp-upstream` guardfile the chart mounts, the credential it presents
+  upstream, and the `withhold` stubs it states.
 - [pull.md](pull.md) - `pull`, an `mcp-upstream` guardfile written from a
   registry entry and the upstream's own `readOnlyHint`.
 - `version` - the release this binary was built from, stamped at build time and

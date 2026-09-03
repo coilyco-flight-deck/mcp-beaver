@@ -51,6 +51,11 @@ the file already states them.
 ```kdl
 instructions { text "Search the published Tandem docs index." }
 
+withhold "delete_doc" {
+    reason "This surface is read-only by policy."
+    alternative "get_doc"
+}
+
 mcp-upstream "ac.tandem/docs-mcp" {
     url "https://tandem.ac/mcp"
     transport streamable-http
@@ -65,11 +70,28 @@ mcp-upstream "ac.tandem/docs-mcp" {
 guardfile-wide credential grammar lifted onto `--upstream-header`, resolving
 through the same registry. `annotation-coverage` is optional and checked
 against itself. Every other body node fails closed, `can` carries no schema,
-and beside the node only `description` (umbra's own), `instructions` and
-`oauth2-client` are projected: a proxy that silently ignored a `withhold` or
+and beside the node only `description` (umbra's own), `instructions`,
+`oauth2-client` and `withhold` are projected: a proxy that silently ignored a
 `confirm` would serve wider than the file reads. A file that grants nothing
 lints clean and will not serve. `mcp-beaver pull` writes one from a registry
 entry, see [pull.md](pull.md).
+
+**`withhold` beside the node.** The same stub a REST guardfile mints, on the
+proxy: a tool that appears in `tools/list`, states why it is not offered, names
+a substitute, and refuses every call with a structured `verb_withheld` payload
+while reaching no upstream. It is the reason to hand-author one of these files
+rather than regenerate it, because the interesting thing about an allowlist is
+usually the neighbour it leaves out. The checks run offline, against the
+allowlist the file declares: a stub shadowing a `can` and a named alternative
+the file does not grant both fail `lint`. `lint --methods` prints the stub as
+`WITHHELD`, and `lint-upstream` prints only the allowlist, so a withheld
+mutating verb never fails a `--read-only` screen. See
+[guardfile-controls.md](guardfile-controls.md).
+
+**The chart mounts one.** `runtime.mode: upstream` plus a `spec` carrying this
+file mounts it at `/spec/<specName>.mcp.kdl` and runs `serve-upstream` against
+that path, so a guardfile-stated proxy deploys the way a REST guardfile does.
+The `upstream:` values block is refused beside it. See [chart.md](chart.md).
 
 **umbra owns the grammar.** `mcpverb.ParseUpstream` reads the node and
 `mcpverb.Classify` reports which shape a file carries before either parser

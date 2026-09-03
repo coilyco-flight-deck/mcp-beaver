@@ -1,0 +1,20 @@
+# The deployment half of examples/registry-upstream.mcp.kdl: the same proxy,
+# stated as a guardfile rather than as `upstream:` values.
+#
+# `spec` rides in exactly as it does in spec mode, and the runtime reads
+# `serve-upstream /spec/tandem-docs.mcp.kdl` from the mount. The `upstream:`
+# block stays empty on purpose - the file already names the endpoint, the
+# allowlist, the credential, and the server, and the chart refuses the pair the
+# way `serve-upstream` refuses a file beside `--upstream`.
+#
+#   helm upgrade --install tandem-docs mcp-beaver \
+#     -f registry-upstream.values.yaml \
+#     --set-file spec=registry-upstream.mcp.kdl \
+#     --set image.tag=<built-runtime-sha>
+runtime:
+  mode: upstream
+  # The guardfile names no `value env`, since this upstream needs no credential.
+  injectSecrets: false
+
+# The <name> in /spec/<name>.mcp.kdl, and the served MCP server name with it.
+specName: tandem-docs

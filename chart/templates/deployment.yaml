@@ -2,11 +2,26 @@
 {{- if not (has $mode (list "spec" "upstream")) -}}
 {{- fail (printf "mcp-beaver: unsupported runtime.mode %q (want spec or upstream)" $mode) -}}
 {{- end -}}
-{{- if and (eq $mode "upstream") (not .Values.upstream.url) -}}
-{{- fail "mcp-beaver: upstream mode needs .Values.upstream.url" -}}
+{{- $specMounted := include "mcp-beaver.mountsSpec" . -}}
+{{- if eq $mode "upstream" -}}
+{{- if $specMounted -}}
+{{- $stated := list -}}
+{{- if .Values.upstream.url -}}{{- $stated = append $stated "upstream.url" -}}{{- end -}}
+{{- if .Values.upstream.name -}}{{- $stated = append $stated "upstream.name" -}}{{- end -}}
+{{- if .Values.upstream.tools -}}{{- $stated = append $stated "upstream.tools" -}}{{- end -}}
+{{- if .Values.upstream.headers -}}{{- $stated = append $stated "upstream.headers" -}}{{- end -}}
+{{- if .Values.upstream.oauth2Clients -}}{{- $stated = append $stated "upstream.oauth2Clients" -}}{{- end -}}
+{{- if $stated -}}
+{{- fail (printf "mcp-beaver: upstream mode takes `spec` or %s, not both - the guardfile already states them, and serve-upstream refuses the same pair" (join ", " $stated)) -}}
 {{- end -}}
-{{- if and (eq $mode "upstream") (eq (len .Values.upstream.tools) 0) -}}
+{{- else -}}
+{{- if not .Values.upstream.url -}}
+{{- fail "mcp-beaver: upstream mode needs .Values.upstream.url, or a `spec` carrying an `mcp-upstream` guardfile" -}}
+{{- end -}}
+{{- if eq (len .Values.upstream.tools) 0 -}}
 {{- fail "mcp-beaver: upstream mode needs at least one .Values.upstream.tools entry" -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 apiVersion: apps/v1
 kind: Deployment
@@ -32,7 +47,7 @@ spec:
         {{- include "mcp-beaver.selectorLabels" . | nindent 8 }}
       annotations:
         checksum/runtime: {{ dict "mode" $mode "upstream" .Values.upstream "extraContainers" .Values.extraContainers | toJson | sha256sum }}
-        {{- if eq $mode "spec" }}
+        {{- if $specMounted }}
         # Roll the pod whenever the mounted guardfile changes - a ConfigMap
         # edit alone does not restart a running container.
         checksum/spec: {{ .Values.spec | sha256sum }}
@@ -65,6 +80,14 @@ spec:
           args:
             {{- if eq $mode "upstream" }}
             - serve-upstream
+            {{- if $specMounted }}
+            # A guardfile states the endpoint, the allowlist, the credential,
+            # and the server's own name, so the only flags left are the ones
+            # serve-upstream still takes beside a file.
+            - {{ include "mcp-beaver.specPath" . }}
+            - --connect-timeout
+            - {{ .Values.upstream.connectTimeout | quote }}
+            {{- else }}
             - --name
             - {{ default (include "mcp-beaver.fullname" .) .Values.upstream.name | quote }}
             - --upstream
@@ -82,6 +105,7 @@ spec:
             {{- range .Values.upstream.headers }}
             - --upstream-header
             - {{ . | quote }}
+            {{- end }}
             {{- end }}
             {{- else }}
             - serve
@@ -112,7 +136,7 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
-          {{- if eq $mode "spec" }}
+          {{- if $specMounted }}
           volumeMounts:
             - name: spec
               mountPath: /spec
@@ -135,7 +159,7 @@ spec:
         {{- with .Values.extraContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- if eq $mode "spec" }}
+      {{- if $specMounted }}
       volumes:
         - name: spec
           configMap:

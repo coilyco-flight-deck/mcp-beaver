@@ -326,17 +326,27 @@ type ProxyOptions struct {
 	// Instructions is the guardfile's own text under the shared policy
 	// sentence, which an `mcp-upstream` file can state and a flag cannot.
 	Instructions string
+	// Withheld are the `withhold` stubs an `mcp-upstream` guardfile states.
+	// They reach no upstream and hold no credential: the proxy mints them
+	// beside the allowlist so a deliberate omission is readable in
+	// tools/list. A flag states none, and ParseUpstreamSpec fills this.
+	Withheld []withheldStub
 }
 
 // NewProxyWithOptions is the full upstream-proxy constructor. NewProxy and
 // NewProxyWithPins are the shorthands that predate it.
 func NewProxyWithOptions(ctx context.Context, name, specPath, upstreamURL string, allowTools []string, opts ProxyOptions) (*Server, error) {
 	pins, httpClient := opts.Pins, opts.HTTPClient
-	declaredTools := make([]*mcp.Tool, 0, len(allowTools))
-	for _, tool := range allowTools {
-		declaredTools = append(declaredTools, &mcp.Tool{Name: tool})
+	declared := declaredTools(allowTools)
+	// Before the dial, so a stub that shadows a grant or names a missing
+	// alternative is a startup error rather than a connection attempt. The
+	// allowlist is the whole surface here: an absent upstream tool already
+	// fails the snapshot.
+	stubTools, err := withheldTools(opts.Withheld, declared)
+	if err != nil {
+		return nil, err
 	}
-	instrumentation, err := newInstrumentation("upstream", declaredTools)
+	instrumentation, err := newInstrumentation("upstream", append(append([]*mcp.Tool{}, declared...), stubTools...))
 	if err != nil {
 		return nil, fmt.Errorf("initialize telemetry: %w", err)
 	}
@@ -358,8 +368,8 @@ func NewProxyWithOptions(ctx context.Context, name, specPath, upstreamURL string
 	s := &Server{
 		name:           name,
 		specPath:       specPath,
-		tools:          proxy.selectedTools(),
-		handlers:       make(map[string]mcp.ToolHandler, len(allowTools)),
+		tools:          append(proxy.selectedTools(), stubTools...),
+		handlers:       make(map[string]mcp.ToolHandler, len(allowTools)+len(stubTools)),
 		upstreams:      []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http", Auth: upstreamAuthScheme(opts.Headers)}},
 		oauth2Clients:  opts.Providers.names,
 		sdk:            newSDKServer(name, nil, opts.Instructions),
@@ -371,8 +381,20 @@ func NewProxyWithOptions(ctx context.Context, name, specPath, upstreamURL string
 		t := cloneTool(tool)
 		s.registerTool(t, withArgPins(pinned[tool.Name], proxy.toolHandler(tool.Name)))
 	}
+	s.registerWithheld(opts.Withheld, stubTools)
 	s.installMiddleware()
 	return s, nil
+}
+
+// declaredTools is the allowlist as bare tool contracts, for the checks that
+// run before a dial: the surface is exactly these names, since a snapshot
+// fails closed on any the upstream does not serve.
+func declaredTools(names []string) []*mcp.Tool {
+	out := make([]*mcp.Tool, 0, len(names))
+	for _, name := range names {
+		out = append(out, &mcp.Tool{Name: name})
+	}
+	return out
 }
 
 // ToolNames returns the projected tool names in the order the runtime serves

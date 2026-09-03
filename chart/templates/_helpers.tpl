@@ -44,6 +44,20 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default .Release.Name .Values.specName -}}
 {{- end -}}
 
+{{/*
+Whether a spec ConfigMap renders and mounts. Spec mode always mounts one.
+Upstream mode mounts one when `spec` carries an `mcp-upstream` guardfile, which
+is how a proxy stated as a file rather than as flags gets a deployment path.
+Empty output is false to `if`.
+*/}}
+{{- define "mcp-beaver.mountsSpec" -}}
+{{- if eq (default "spec" .Values.runtime.mode) "spec" -}}
+true
+{{- else if .Values.spec -}}
+true
+{{- end -}}
+{{- end -}}
+
 {{/* The in-container path the runtime reads the guardfile from. */}}
 {{- define "mcp-beaver.specPath" -}}
 {{- printf "/spec/%s.mcp.kdl" (include "mcp-beaver.specName" .) -}}

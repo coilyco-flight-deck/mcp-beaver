@@ -6,15 +6,19 @@
 # The full reference lives in docs/chart.md; this header only summarizes the
 # non-obvious knobs so the keys below stay uncluttered.
 #
-# - runtime.mode: `spec` runs a mounted .mcp.kdl. `upstream` runs the exact
-#   passthrough allowlist under `upstream` and does not render a spec ConfigMap.
-# - spec / specName: in spec mode, `spec` is the .mcp.kdl body, supplied with
+# - runtime.mode: `spec` runs a mounted .mcp.kdl. `upstream` runs a passthrough
+#   proxy, stated either by the `upstream` block below or by a mounted
+#   `mcp-upstream` guardfile in `spec`. The two are refused together.
+# - spec / specName: `spec` is the .mcp.kdl body, supplied with
 #   `--set-file spec=<name>.mcp.kdl`. It is written to a ConfigMap and mounted
 #   at /spec/<specName>.mcp.kdl; the runtime ENTRYPOINT reads it from there,
-#   never baked. specName defaults to the release name.
+#   never baked. specName defaults to the release name. Required in spec mode,
+#   and the guardfile-stated alternative to the `upstream` block in upstream
+#   mode.
 # - upstream: streamable-HTTP endpoint, outward server name, exact tool
 #   allowlist, bounded startup-connect timeout, and any OAuth client whose
-#   token a header mints, for upstream mode.
+#   token a header mints, for upstream mode stated as values. A guardfile
+#   states all of those itself, so only connectTimeout applies beside one.
 # - extraContainers: optional co-located upstreams or support containers.
 # - image.tag defaults to .Chart.appVersion; a rollout sets it to the built
 #   mcp-beaver runtime sha. image.repository defaults to the canonical Forgejo
@@ -30,7 +34,8 @@
 
 # The .mcp.kdl guardfile body. Supplied at install time with
 # `--set-file spec=<name>.mcp.kdl`; empty here so a bare `helm template` fails
-# loud rather than shipping an MCP with no surface.
+# loud rather than shipping an MCP with no surface. In upstream mode this is
+# optional, and setting it selects the guardfile-stated proxy.
 spec: ""
 # The <name> in /spec/<name>.mcp.kdl. Defaults to the release name.
 specName: ""
@@ -52,6 +57,9 @@ runtime:
   mode: spec
   injectSecrets: true
 
+# Upstream mode stated as values. Every key but connectTimeout is refused when
+# `spec` carries an `mcp-upstream` guardfile, mirroring serve-upstream's own
+# refusal of a file beside --upstream.
 upstream:
   name: ""
   url: ""

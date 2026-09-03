@@ -149,11 +149,14 @@ func TestParseUpstreamSpecFailsClosed(t *testing.T) {
 		"auth value chain":              body("    auth bearer {\n        value { env \"A\"; literal \"b\" }\n    }"),
 		"auth missing value":            body(`auth header-token { header "Authorization" }`),
 		"auth brace in prefix":          body(`auth header-token { header "A"; prefix "{"; value env "T" }`),
-		"withhold beside the node":      body("") + "\nwithhold \"a\" { reason \"no\" }",
 		"confirm beside the node":       body("") + "\nconfirm \"a\" { message \"sure?\" }",
-		"property on the node":          `mcp-upstream "x/y" foo=1 { url "https://e.invalid/mcp" }`,
-		"two names":                     `mcp-upstream "x/y" "z" { url "https://e.invalid/mcp" }`,
-		"both shapes in one file":       `wrap ward mcp x { base-url "https://e.invalid" }` + "\n" + body(""),
+		"withhold with no reason":       body(`can "a"`) + "\nwithhold \"b\" { alternative \"a\" }",
+		"withhold shadowing a grant":    body(`can "a"`) + "\nwithhold \"a\" { reason \"no\" }",
+		"withhold naming a missing alternative": body(`can "a"`) +
+			"\nwithhold \"b\" { reason \"no\"; alternative \"c\" }",
+		"property on the node":    `mcp-upstream "x/y" foo=1 { url "https://e.invalid/mcp" }`,
+		"two names":               `mcp-upstream "x/y" "z" { url "https://e.invalid/mcp" }`,
+		"both shapes in one file": `wrap ward mcp x { base-url "https://e.invalid" }` + "\n" + body(""),
 	}
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -239,5 +242,81 @@ func TestUpstreamSpecServesItsInstructions(t *testing.T) {
 	}
 	if !strings.Contains(result.Instructions, "Tandem docs index") {
 		t.Fatalf("instructions = %q, want the guardfile's own text", result.Instructions)
+	}
+}
+
+// withheldUpstreamSpec grants one read-only tool the hinted upstream serves and
+// withholds the mutating one beside it, which is the whole hand-authoring case
+// #119 named: the allowlist says what is served, and the stub says why the
+// obvious neighbour is not.
+func withheldUpstreamSpec(url string) string {
+	return `withhold "delete_thing" {
+    reason "This surface is read-only by policy."
+    alternative "get_thing"
+}
+
+mcp-upstream "test/things" {
+    url "` + url + `"
+    can "get_thing"
+}
+`
+}
+
+func TestUpstreamSpecReadsWithhold(t *testing.T) {
+	spec, err := ParseUpstreamSpec("things.mcp.kdl", []byte(withheldUpstreamSpec("https://e.invalid/mcp")))
+	if err != nil {
+		t.Fatalf("ParseUpstreamSpec: %v", err)
+	}
+	if got := spec.WithheldTools(); len(got) != 1 || got[0] != "delete_thing" {
+		t.Fatalf("WithheldTools = %v", got)
+	}
+	// Carried on the options the serving path takes, not just parsed and
+	// dropped on the floor.
+	if len(spec.Options().Withheld) != 1 {
+		t.Fatalf("Options().Withheld = %+v", spec.Options().Withheld)
+	}
+}
+
+// The stub reaches the served surface a client sees, refuses every call, and
+// stays out of the allowlist that the read-only checks screen.
+func TestProxyServesWithheldStub(t *testing.T) {
+	ts := hintedUpstream(t)
+	defer ts.Close()
+	spec, err := ParseUpstreamSpec("things.mcp.kdl", []byte(withheldUpstreamSpec(ts.URL+"/mcp")))
+	if err != nil {
+		t.Fatalf("ParseUpstreamSpec: %v", err)
+	}
+	s, err := NewProxyWithOptions(context.Background(), "things", "things.mcp.kdl", spec.URL, spec.Tools, spec.Options())
+	if err != nil {
+		t.Fatalf("NewProxyWithOptions: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+	if got := strings.Join(s.ToolNames(), ","); got != "get_thing,delete_thing" {
+		t.Fatalf("ToolNames = %q, want the grant then the stub", got)
+	}
+	if got := s.WithheldTools(); len(got) != 1 || got[0] != "delete_thing" {
+		t.Fatalf("WithheldTools = %v", got)
+	}
+	// The upstream annotates delete_thing readOnlyHint:false, so a stub that
+	// borrowed the upstream contract would fail `--read-only strict` here. It
+	// mints its own instead, and reaches no upstream to borrow from.
+	if got := s.NotReadOnly(); len(got) != 0 {
+		t.Fatalf("NotReadOnly = %v, want the stub spared", got)
+	}
+
+	proxy := httptest.NewServer(s.Handler())
+	defer proxy.Close()
+	call := postToServer(t, proxy.Client(), proxy.URL+"/mcp", "",
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"delete_thing","arguments":{}}}`)
+	var result map[string]any
+	if err := json.Unmarshal(decodeRPCResponse(t, call).Result, &result); err != nil {
+		t.Fatalf("call result: %v", err)
+	}
+	if result["isError"] != true {
+		t.Fatalf("isError = %v, want the stub to refuse", result["isError"])
+	}
+	structured, _ := result["structuredContent"].(map[string]any)
+	if structured["error"] != withheldErrorCode || structured["alternative"] != "get_thing" {
+		t.Fatalf("structured = %v", structured)
 	}
 }

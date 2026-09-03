@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/guardfile"
@@ -28,11 +29,26 @@ type UpstreamSpec struct {
 	Providers ProviderSet
 	// Instructions is the sibling `instructions` text, empty when absent.
 	Instructions string
+	// Withheld is the sibling `withhold` stubs, validated against the
+	// allowlist above so a stub cannot shadow a granted tool.
+	Withheld []withheldStub
+}
+
+// WithheldTools names the stub tools this guardfile states, sorted. `lint`
+// prints them beside the allowlist, because a stub is a served tool: absent
+// from it, the printed surface is narrower than the one the proxy mints.
+func (u *UpstreamSpec) WithheldTools() []string {
+	out := make([]string, 0, len(u.Withheld))
+	for _, stub := range u.Withheld {
+		out = append(out, stub.tool)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Options is the proxy configuration this guardfile stands for.
 func (u *UpstreamSpec) Options() ProxyOptions {
-	return ProxyOptions{Headers: u.Headers, Providers: u.Providers, Instructions: u.Instructions}
+	return ProxyOptions{Headers: u.Headers, Providers: u.Providers, Instructions: u.Instructions, Withheld: u.Withheld}
 }
 
 // ClassifyGuardfile reports which shape a guardfile carries, before either
@@ -93,6 +109,16 @@ func ParseUpstreamSpec(specPath string, src []byte) (*UpstreamSpec, error) {
 	if err != nil {
 		return nil, err
 	}
+	spec.Withheld, err = parseWithheld(sources)
+	if err != nil {
+		return nil, err
+	}
+	// Against the DECLARED allowlist rather than the upstream's answer, so a
+	// stub shadowing a grant fails in `lint`, offline, rather than at connect.
+	// The proxy checks again against what it selected.
+	if _, err := withheldTools(spec.Withheld, declaredTools(up.Tools)); err != nil {
+		return nil, err
+	}
 	return spec, nil
 }
 
@@ -130,13 +156,14 @@ func upstreamAuthHeaders(auth guardfile.Auth, providers ProviderSet) ([]Upstream
 
 // upstreamSiblings names the sibling nodes projected onto a proxy surface.
 // The rest are parsed for a REST guardfile only, and a proxy that silently
-// ignored a `withhold` or `confirm` would serve WIDER than the file reads.
+// ignored a `confirm` would serve WIDER than the file reads.
 //
 // `description` is umbra's own, read by the parse above rather than here.
 var upstreamSiblings = map[string]bool{
 	"description":   true,
 	"instructions":  true,
 	"oauth2-client": true,
+	"withhold":      true,
 }
 
 func rejectUnprojectedSiblings(sources []guardSource) error {
@@ -146,7 +173,7 @@ func rejectUnprojectedSiblings(sources []guardSource) error {
 	}
 	for _, sn := range nodes {
 		if !upstreamSiblings[sn.node.Name()] {
-			return fmt.Errorf("mcp-beaver: `%s` is not yet projected beside `%s`; instructions and oauth2-client are (fail-closed)", sn.node.Name(), mcpverb.UpstreamNode)
+			return fmt.Errorf("mcp-beaver: `%s` is not yet projected beside `%s`; instructions, oauth2-client and withhold are (fail-closed)", sn.node.Name(), mcpverb.UpstreamNode)
 		}
 	}
 	return nil

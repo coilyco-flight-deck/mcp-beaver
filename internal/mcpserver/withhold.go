@@ -44,7 +44,8 @@ type withheldStub struct {
 	alternative string
 }
 
-// parseWithheld reads top-level `withhold` nodes, siblings of `wrap`:
+// parseWithheld reads top-level `withhold` nodes, siblings of `wrap` and of
+// `mcp-upstream` alike:
 //
 //	withhold "edit_issue-comment" {
 //	    reason "Comment edits are withheld here for audit-trail integrity."
@@ -126,7 +127,9 @@ func withheldChildren(n *kdl.Node, tool string) (withheldStub, error) {
 }
 
 // withheldTools builds one stub tool per declared node, after validating each
-// against the surface the spec actually mints.
+// against the surface the spec actually mints. On the proxy path `granted` is
+// the allowlist rather than a parsed grant set, because an allowlisted tool
+// the upstream does not serve never reaches a snapshot.
 func withheldTools(stubs []withheldStub, granted []*mcp.Tool) ([]*mcp.Tool, error) {
 	if len(stubs) == 0 {
 		return nil, nil

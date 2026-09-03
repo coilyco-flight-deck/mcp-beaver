@@ -1,4 +1,4 @@
-{{- if eq (default "spec" .Values.runtime.mode) "spec" }}
+{{- if include "mcp-beaver.mountsSpec" . }}
 {{- if not .Values.spec }}
 {{- fail "mcp-beaver: .Values.spec is empty - supply the guardfile with `--set-file spec=<name>.mcp.kdl`" }}
 {{- end }}

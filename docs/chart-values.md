@@ -9,17 +9,22 @@ The values reference for [chart.md](chart.md).
   container. Disable when only a co-located upstream needs them.
 - **`spec`** - the guardfile body, supplied with `--set-file`. Written to a
   ConfigMap at `/spec/<specName>.mcp.kdl`. Empty by default so a spec-mode
-  render fails loud. **`specName`** defaults to the release name.
+  render fails loud. **`specName`** defaults to the release name. In upstream
+  mode it is optional, and an `mcp-upstream` guardfile there selects the
+  guardfile-stated proxy.
 - **`widgets`** - one `{path, content}` per `app file=` an `app`-bearing
   guardfile names. `path` is spelled exactly as the guardfile spells it, and
   the chart lands the content back at `/spec/<path>`. A guardfile declaring an
   `app` with no matching entry fails at pod startup rather than at template
   time, because the chart never parses the guardfile. See [apps.md](apps.md).
-- **`upstream.url`** - required in upstream mode. **`upstream.tools`** is the
-  exact allowlist and needs at least one entry. **`upstream.name`** defaults to
-  the release fullname, **`upstream.connectTimeout`** is `2m`, and
+- **`upstream.url`** - required in upstream mode unless `spec` states it.
+  **`upstream.tools`** is the exact allowlist and needs at least one entry.
+  **`upstream.name`** defaults to the release fullname, and
   **`upstream.headers`** carries credentials to an authenticated upstream as
-  `<name>=<template>` resolved in the container. See [upstream.md](upstream.md).
+  `<name>=<template>` resolved in the container. All four, plus
+  **`upstream.oauth2Clients`**, are refused beside a `spec`, which states them
+  itself. **`upstream.connectTimeout`** is `2m` and applies either way. See
+  [upstream.md](upstream.md).
 - **`extraContainers`** - optional co-located containers, appended in **both**
   modes. A loopback-only upstream keeps its unfiltered surface off the network.
 

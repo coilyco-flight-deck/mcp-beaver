@@ -149,7 +149,7 @@ func runLintUpstream(ctx context.Context, out io.Writer, argv []string) error {
 	// nothing asks it to: --read-only strict is the ask, and a bare file lint
 	// stays offline like `lint`.
 	if inputs.upstream != "" && (fs.Arg(0) == "" || mode == readOnlyStrict) {
-		if err := checkUpstreamAllowlist(ctx, inputs.upstream, allowlist, inputs.headers, inputs.providers, mode, *connectTimeout); err != nil {
+		if err := checkUpstreamAllowlist(ctx, inputs.upstream, allowlist, inputs.options, mode, *connectTimeout); err != nil {
 			return err
 		}
 	}
@@ -168,13 +168,12 @@ func checkUpstreamAllowlist(
 	ctx context.Context,
 	upstream string,
 	allowlist []string,
-	headers []mcpserver.UpstreamHeader,
-	providers mcpserver.ProviderSet,
+	opts mcpserver.ProxyOptions,
 	mode readOnlyMode,
 	connectTimeout time.Duration,
 ) error {
 	srv, err := connectProxyWithRetry(ctx, connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
-		return mcpserver.NewProxyWithOptions(ctx, "mcp-beaver-lint", "", upstream, allowlist, mcpserver.ProxyOptions{Headers: headers, Providers: providers})
+		return mcpserver.NewProxyWithOptions(ctx, "mcp-beaver-lint", "", upstream, allowlist, opts)
 	})
 	if err != nil {
 		return fmt.Errorf("connect upstream %q: %w", upstream, err)
@@ -261,7 +260,7 @@ func runLintTo(out, warn io.Writer, argv []string) error {
 		return fmt.Errorf("invalid spec %q: %w", specPath, err)
 	}
 	if shape == mcpverb.ShapeUpstream {
-		return lintUpstreamSpec(out, specPath, src, *methods || *apps)
+		return lintUpstreamSpec(out, specPath, src, *methods, *apps)
 	}
 	// "invalid spec" rather than serve's "parse spec": a failure here is just as
 	// often a projection failure (two grants minting one tool name) as a KDL
@@ -491,10 +490,10 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 		return err
 	}
 	return withTelemetry(ctx, serverName, func() error {
+		opts := inputs.options
+		opts.Pins = pins
 		srv, err := connectProxyWithRetry(ctx, *connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
-			return mcpserver.NewProxyWithOptions(ctx, serverName, specPath, inputs.upstream, inputs.tools, mcpserver.ProxyOptions{
-				Pins: pins, Headers: inputs.headers, Providers: inputs.providers, Instructions: inputs.instructions,
-			})
+			return mcpserver.NewProxyWithOptions(ctx, serverName, specPath, inputs.upstream, inputs.tools, opts)
 		})
 		if err != nil {
 			return fmt.Errorf("connect upstream %q: %w", inputs.upstream, err)
