@@ -5,7 +5,7 @@
 instructions {
     text "Free US drug-price benchmarks from federal data (CMS NADAC): a benchmark, not a price anyone owes."
 }
-wrap mcp upstream "ai.agentlookups/counterscript" {
+mcp-upstream "ai.agentlookups/counterscript" {
     url "https://rx.agentlookups.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

@@ -5,7 +5,7 @@
 instructions {
     text "run any ai model. compose agents, stack knowledge, connect tools. one api, pay per run."
 }
-wrap mcp upstream "ac.inference.sh/mcp" {
+mcp-upstream "ac.inference.sh/mcp" {
     url "https://api.inference.sh/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

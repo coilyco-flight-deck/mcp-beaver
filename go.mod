@@ -3,7 +3,7 @@ module forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver
 go 1.25.5
 
 require (
-	forgejo.coilysiren.me/coilyco-flight-deck/umbra v0.181.0
+	forgejo.coilysiren.me/coilyco-flight-deck/umbra v0.195.0
 	github.com/aws/aws-sdk-go-v2 v1.43.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.2
 	github.com/dslipak/pdf v0.0.2

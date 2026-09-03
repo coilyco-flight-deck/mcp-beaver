@@ -46,13 +46,13 @@ def guardfile(s):
     L.append(f"// {len(tools)} tools: {len(allow)} declared read-only, {len(deny)} declared mutating,")
     L.append(f"// {len(unknown)} undeclared. Only declared read-only tools are exposed.")
     L.append("")
-    # `instructions` is a sibling of `wrap`, as in every other beaver guardfile.
+    # `instructions` is a sibling node, as in every other beaver guardfile.
     if s.get("description"):
         L.append("instructions {")
         L.append(f"    text {kdl_str(' '.join(s['description'].split())[:180])}")
         L.append("}")
         L.append("")
-    L.append(f"wrap mcp upstream {kdl_str(s['name'])} {{")
+    L.append(f"mcp-upstream {kdl_str(s['name'])} {{")
     L.append(f"    url {kdl_str(s['url'])}")
     L.append('    transport "streamable-http"')
     L.append("")

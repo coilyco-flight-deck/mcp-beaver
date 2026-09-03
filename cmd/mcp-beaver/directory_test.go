@@ -111,7 +111,7 @@ func TestDirectoryWritesRecordGuardfilesAndPages(t *testing.T) {
 		t.Fatalf("index.html lists an entry the sweep should have dropped")
 	}
 	pages := readString(t, filepath.Join(dir, "guardfiles.html"))
-	for _, want := range []string{`wrap mcp upstream &#34;test/things&#34;`, "can &#34;get_thing&#34;", "annotation-coverage partial annotated=2 silent=1"} {
+	for _, want := range []string{`mcp-upstream &#34;test/things&#34;`, "can &#34;get_thing&#34;", "annotation-coverage partial annotated=2 silent=1"} {
 		if !strings.Contains(pages, want) {
 			t.Fatalf("guardfiles.html lacks %q", want)
 		}

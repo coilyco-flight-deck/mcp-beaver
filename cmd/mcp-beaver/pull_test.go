@@ -82,7 +82,7 @@ func TestPullWritesAGuardfileTheOtherVerbsAccept(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read output: %v", err)
 	}
-	for _, want := range []string{`wrap mcp upstream "test/things"`, "annotation-coverage partial annotated=2 silent=1", `can "get_thing"`} {
+	for _, want := range []string{`mcp-upstream "test/things"`, "annotation-coverage partial annotated=2 silent=1", `can "get_thing"`} {
 		if !strings.Contains(string(text), want) {
 			t.Fatalf("output lacks %q:\n%s", want, text)
 		}

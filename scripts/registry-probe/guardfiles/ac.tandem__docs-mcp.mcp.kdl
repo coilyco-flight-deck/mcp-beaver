@@ -5,7 +5,7 @@
 instructions {
     text "Remote MCP server for Tandem docs, install guides, SDKs, workflows, and agent setup help."
 }
-wrap mcp upstream "ac.tandem/docs-mcp" {
+mcp-upstream "ac.tandem/docs-mcp" {
     url "https://tandem.ac/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

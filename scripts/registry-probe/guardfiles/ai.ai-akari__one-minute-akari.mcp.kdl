@@ -5,7 +5,7 @@
 instructions {
     text "A free one-minute reset for people, delivered by AI, with no account or personal data."
 }
-wrap mcp upstream "ai.ai-akari/one-minute-akari" {
+mcp-upstream "ai.ai-akari/one-minute-akari" {
     url "https://ai-akari.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

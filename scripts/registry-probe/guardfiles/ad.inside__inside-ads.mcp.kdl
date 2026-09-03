@@ -5,7 +5,7 @@
 instructions {
     text "Telegram ad exchange: estimate reach and cost with no account, then create and run campaigns."
 }
-wrap mcp upstream "ad.inside/inside-ads" {
+mcp-upstream "ad.inside/inside-ads" {
     url "https://app.inside.ad/api/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/mcpverb"
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/opcore"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -64,10 +65,12 @@ func (s *Server) SetRequestTimeout(d time.Duration) {
 // and matching HTTP endpoint per grant, with opcore still owning the guardfile
 // parse, guard, and upstream request execution.
 func New(name, specPath string, src []byte) (*Server, error) {
-	if proxy, err := IsUpstreamSpec(src); err != nil {
+	shape, err := ClassifyGuardfile(src)
+	if err != nil {
 		return nil, err
-	} else if proxy {
-		return nil, fmt.Errorf("mcp-beaver: this guardfile opens `wrap mcp upstream`, which `serve-upstream <spec>` serves; `serve` renders REST grants")
+	}
+	if shape == mcpverb.ShapeUpstream {
+		return nil, fmt.Errorf("mcp-beaver: this guardfile opens `%s`, which `serve-upstream <spec>` serves; `serve` renders REST grants", mcpverb.UpstreamNode)
 	}
 	descs, cfg, err := parseSource(specPath, src)
 	if err != nil {
@@ -321,7 +324,7 @@ type ProxyOptions struct {
 	// is umbra's built-in readers, which is every caller that mints nothing.
 	Providers ProviderSet
 	// Instructions is the guardfile's own text under the shared policy
-	// sentence, which a `wrap mcp upstream` file can state and a flag cannot.
+	// sentence, which an `mcp-upstream` file can state and a flag cannot.
 	Instructions string
 }
 

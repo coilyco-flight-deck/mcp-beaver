@@ -5,7 +5,7 @@
 instructions {
     text "A pixel wars MCP server: ask your agent to collaboratively draw pixels in a huge square"
 }
-wrap mcp upstream "ai.alpic.alpix/Alpix" {
+mcp-upstream "ai.alpic.alpix/Alpix" {
     url "https://alpix.alpic.ai"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

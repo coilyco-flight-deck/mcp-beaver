@@ -5,7 +5,7 @@
 instructions {
     text "Read-only service discovery, public-page checks, and request-link preparation."
 }
-wrap mcp upstream "ai.advisorsai/service-navigator" {
+mcp-upstream "ai.advisorsai/service-navigator" {
     url "https://advisorsai.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

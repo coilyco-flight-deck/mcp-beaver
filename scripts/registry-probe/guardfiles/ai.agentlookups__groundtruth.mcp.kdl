@@ -5,7 +5,7 @@
 instructions {
     text "Federal environmental records near any US location, with dates and provenance; never a safety score."
 }
-wrap mcp upstream "ai.agentlookups/groundtruth" {
+mcp-upstream "ai.agentlookups/groundtruth" {
     url "https://env.agentlookups.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

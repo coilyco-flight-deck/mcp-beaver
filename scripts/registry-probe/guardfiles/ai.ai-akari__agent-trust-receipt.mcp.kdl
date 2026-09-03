@@ -5,7 +5,7 @@
 instructions {
     text "Read-only Remote MCP for externally grounded AI agent trust receipts."
 }
-wrap mcp upstream "ai.ai-akari/agent-trust-receipt" {
+mcp-upstream "ai.ai-akari/agent-trust-receipt" {
     url "https://ai-akari.ai/mcp-trust"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

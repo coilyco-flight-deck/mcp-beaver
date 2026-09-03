@@ -5,7 +5,7 @@
 instructions {
     text "Ten machine-readable signals on one public page: the top miss if any, and a receipt we re-verify."
 }
-wrap mcp upstream "ai.advisorsai/store-readiness" {
+mcp-upstream "ai.advisorsai/store-readiness" {
     url "https://advisorsai.ai/store-readiness-mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

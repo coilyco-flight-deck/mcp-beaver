@@ -2,7 +2,7 @@
 // allowlist, stated as a guardfile rather than as `serve-upstream` flags.
 //
 // `mcp-beaver pull ac.tandem/docs-mcp` wrote the body from the registry entry
-// and a live tools/list on 2026-09-01, 18:17 UTC. The allowlist is the upstream's own
+// and a live tools/list on 2026-09-03, 07:27 UTC. The allowlist is the upstream's own
 // answer: only tools it declares `readOnlyHint: true` are granted, and the
 // `annotation-coverage` marker records that six of its thirteen tools declare
 // nothing. Nothing about the tools is restated here, because the proxy
@@ -12,7 +12,7 @@ instructions {
     text "Search the published Tandem docs index. Read-only: the cache tools this server also serves are not exposed."
 }
 
-wrap mcp upstream "ac.tandem/docs-mcp" {
+mcp-upstream "ac.tandem/docs-mcp" {
     url "https://tandem.ac/mcp"
     transport streamable-http
     annotation-coverage partial annotated=7 silent=6

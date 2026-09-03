@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/mcpverb"
 	kdl "github.com/calico32/kdl-go"
 )
 
@@ -139,7 +140,8 @@ func parseInlineNodes(sources []guardSource, what string) ([]sourceNode, error) 
 			return nil, err
 		}
 		for _, n := range doc.Nodes {
-			if n.Name() == "wrap" {
+			// Both top-level shapes are the file's subject, never a sibling of it.
+			if n.Name() == "wrap" || n.Name() == mcpverb.UpstreamNode {
 				continue
 			}
 			all = append(all, sourceNode{node: n, dir: source.dir, index: i})

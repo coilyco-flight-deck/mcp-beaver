@@ -64,7 +64,7 @@ curl -s -H 'Content-Type: application/json' \
 
 - **`serve`** reads a `.mcp.kdl` and guards an HTTP upstream. The general case.
 - **`serve-upstream`** wraps a private MCP behind an exact tool allowlist,
-  stated as flags or as a `wrap mcp upstream` guardfile, which `pull` writes
+  stated as flags or as an `mcp-upstream` guardfile, which `pull` writes
   from a registry entry and `directory` writes for the whole registry. See
   [docs/upstream.md](docs/upstream.md), [docs/pull.md](docs/pull.md), and
   [docs/directory.md](docs/directory.md).

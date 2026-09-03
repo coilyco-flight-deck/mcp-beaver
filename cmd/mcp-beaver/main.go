@@ -35,6 +35,7 @@ import (
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/mcpserver"
 	internaltelemetry "forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/telemetry"
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/mcpverb"
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/pkg/tokenmint"
 
 	// Registers the "pgx" database/sql driver a `database pgx { ... }` guardfile
@@ -255,9 +256,11 @@ func runLintTo(out, warn io.Writer, argv []string) error {
 	if *methods && *apps {
 		return fmt.Errorf("lint takes --methods or --apps, not both: each owns the second column")
 	}
-	if proxy, err := mcpserver.IsUpstreamSpec(src); err != nil {
+	shape, err := mcpserver.ClassifyGuardfile(src)
+	if err != nil {
 		return fmt.Errorf("invalid spec %q: %w", specPath, err)
-	} else if proxy {
+	}
+	if shape == mcpverb.ShapeUpstream {
 		return lintUpstreamSpec(out, specPath, src, *methods || *apps)
 	}
 	// "invalid spec" rather than serve's "parse spec": a failure here is just as
@@ -440,7 +443,7 @@ const defaultUpstreamName = "mcp-beaver-upstream"
 
 // runServeUpstream binds the HTTP listener for a proxy server that exposes a
 // selected subset of an upstream streamable-HTTP MCP server, stated by flags
-// or by a `wrap mcp upstream` guardfile.
+// or by an `mcp-upstream` guardfile.
 func runServeUpstream(ctx context.Context, argv []string) error {
 	fs := flag.NewFlagSet("serve-upstream", flag.ContinueOnError)
 	addr := fs.String("http", ":8080", "HTTP listen address for the MCP server (/mcp streamable HTTP)")
@@ -468,7 +471,7 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 		return err
 	}
 	if inputs.upstream == "" {
-		return fmt.Errorf("serve-upstream needs --upstream <mcp-url> or a `wrap mcp upstream` guardfile")
+		return fmt.Errorf("serve-upstream needs --upstream <mcp-url> or an `mcp-upstream` guardfile")
 	}
 	if len(inputs.tools) == 0 {
 		return fmt.Errorf("serve-upstream needs at least one allowlisted tool: a guardfile exposing nothing is a statement, not a server")

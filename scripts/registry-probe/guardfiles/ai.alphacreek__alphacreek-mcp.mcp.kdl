@@ -5,7 +5,7 @@
 instructions {
     text "Access SEC filings efficiently (10-K, 10-Q, etc), save time and tokens, and get cited answers."
 }
-wrap mcp upstream "ai.alphacreek/alphacreek-mcp" {
+mcp-upstream "ai.alphacreek/alphacreek-mcp" {
     url "https://mcp.alphacreek.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

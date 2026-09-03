@@ -2,7 +2,7 @@
 
 `scripts/registry-probe/` is the working prototype behind
 [mcp-beaver#119](https://forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/issues/119),
-the spec for a `wrap mcp upstream` guardfile node and a `mcp-beaver pull`
+the spec for an `mcp-upstream` guardfile node and a `mcp-beaver pull`
 command. It is Python beside the Go runtime on purpose. Nothing here ships in
 the image, the chart, or the binary, and beaver cannot parse what it emits
 today. It exists so the spec has a measured origin and a rebuildable dataset,
@@ -71,7 +71,7 @@ says so. All 30 files parse under `kdlfmt`.
 
 It is not the shipped command. `mcp-beaver pull` in Go is, see
 [pull.md](pull.md), `mcp-beaver directory` is the sweep and the index and
-guardfile pages in Go, see [directory.md](directory.md), and the runtime parses `wrap mcp upstream` and
+guardfile pages in Go, see [directory.md](directory.md), and the runtime parses `mcp-upstream` and
 `annotation-coverage` since that landed. The 30 generated files are the corpus
 that grammar was measured on, so `go test ./cmd/...` lints every one of them
 and expects the 14 that grant nothing to lint to nothing. `readOnlyHint` is

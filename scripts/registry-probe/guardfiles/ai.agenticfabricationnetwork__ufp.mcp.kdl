@@ -5,7 +5,7 @@
 instructions {
     text "Turn designs into shipped parts: quote 3D printing, CNC, and decals, then check out."
 }
-wrap mcp upstream "ai.agenticfabricationnetwork/ufp" {
+mcp-upstream "ai.agenticfabricationnetwork/ufp" {
     url "https://agenticfabricationnetwork.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

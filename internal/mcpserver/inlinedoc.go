@@ -13,20 +13,25 @@ import (
 // these siblings never touch the frozen wrap-body grammar or the umbra pin.
 // See docs/DESIGN.md for the rule and the nodes that use it.
 func parseInlineDoc(src []byte, what string) (*kdl.Document, error) {
-	// Mirror opcore's normalizeInlineBooleans: the wrap body spells booleans
-	// as `required=true` shorthand, which kdl-go alone rejects. A sibling node
-	// may not use booleans at all, but the document must parse as a whole.
+	doc, err := kdl.ParseString(string(normalizeInlineBooleans(src)))
+	if err != nil {
+		return nil, fmt.Errorf("mcp-beaver: parse KDL for %s: %w", what, err)
+	}
+	return doc, nil
+}
+
+// normalizeInlineBooleans mirrors opcore's own: the wrap body spells booleans
+// as `required=true` shorthand, which kdl-go alone rejects. Every reader of
+// these bytes goes through here, umbra's strict parsers included, because a
+// document that will not parse classifies as nothing rather than as itself.
+func normalizeInlineBooleans(src []byte) []byte {
 	repl := strings.NewReplacer(
 		"required=true", "required=#true",
 		"required=false", "required=#false",
 		"raw=true", "raw=#true",
 		"raw=false", "raw=#false",
 	)
-	doc, err := kdl.ParseString(repl.Replace(string(src)))
-	if err != nil {
-		return nil, fmt.Errorf("mcp-beaver: parse KDL for %s: %w", what, err)
-	}
-	return doc, nil
+	return []byte(repl.Replace(string(src)))
 }
 
 // oneStringArg reads the single required string argument a sibling node names

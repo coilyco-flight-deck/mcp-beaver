@@ -5,7 +5,7 @@
 instructions {
     text "Crypto market signals, technical indicators, and sentiment analysis for AI agents."
 }
-wrap mcp upstream "ai.aarna/atars-mcp" {
+mcp-upstream "ai.aarna/atars-mcp" {
     url "https://mcp.aarna.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

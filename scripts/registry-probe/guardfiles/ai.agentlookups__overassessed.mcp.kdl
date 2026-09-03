@@ -5,7 +5,7 @@
 instructions {
     text "Maryland property-assessment fairness checks vs similar homes, with appeal windows and links."
 }
-wrap mcp upstream "ai.agentlookups/overassessed" {
+mcp-upstream "ai.agentlookups/overassessed" {
     url "https://overassessed.agentlookups.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

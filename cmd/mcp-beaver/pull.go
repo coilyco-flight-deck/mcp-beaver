@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver/internal/mcpserver"
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/mcpverb"
 )
 
 // runPull writes the guardfile for one registry server: the entry's remote,
@@ -71,7 +72,7 @@ func runPull(ctx context.Context, out io.Writer, argv []string) error {
 }
 
 // proxyInputs is what a proxy needs, whichever surface stated it: the flags
-// `serve-upstream` and `lint-upstream` always took, or a `wrap mcp upstream`
+// `serve-upstream` and `lint-upstream` always took, or an `mcp-upstream`
 // guardfile that carries the same facts in a reviewable file.
 type proxyInputs struct {
 	name         string
@@ -125,10 +126,12 @@ func resolveProxyInputs(command, specPath string, flags upstreamFlagInputs) (pro
 	if err != nil {
 		return proxyInputs{}, fmt.Errorf("read spec %q: %w", specPath, err)
 	}
-	if proxy, err := mcpserver.IsUpstreamSpec(src); err != nil {
+	shape, err := mcpserver.ClassifyGuardfile(src)
+	if err != nil {
 		return proxyInputs{}, fmt.Errorf("invalid spec %q: %w", specPath, err)
-	} else if !proxy {
-		return proxyInputs{}, fmt.Errorf("spec %q does not open `wrap mcp upstream`; `serve` and `lint` render a REST guardfile", specPath)
+	}
+	if shape != mcpverb.ShapeUpstream {
+		return proxyInputs{}, fmt.Errorf("spec %q does not open `%s`; `serve` and `lint` render a REST guardfile", specPath, mcpverb.UpstreamNode)
 	}
 	spec, err := mcpserver.ParseUpstreamSpec(specPath, src)
 	if err != nil {
@@ -144,7 +147,7 @@ func resolveProxyInputs(command, specPath string, flags upstreamFlagInputs) (pro
 	}, nil
 }
 
-// lintUpstreamSpec is `lint` for a `wrap mcp upstream` guardfile: the offline
+// lintUpstreamSpec is `lint` for an `mcp-upstream` guardfile: the offline
 // parse plus the allowlist printed sorted, matching `lint-upstream`, and a
 // `-` in the second column because a proxied tool resolves no verb and
 // carries no widget.

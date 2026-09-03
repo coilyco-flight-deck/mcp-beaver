@@ -5,7 +5,7 @@
 instructions {
     text "Read AFMR failure modes and discover scoped attestation and lift-evidence contracts."
 }
-wrap mcp upstream "ai.afmr/discovery" {
+mcp-upstream "ai.afmr/discovery" {
     url "https://afmr.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

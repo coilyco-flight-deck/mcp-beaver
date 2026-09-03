@@ -5,7 +5,7 @@
 instructions {
     text "Answers on AEO, SEO, web and brand from GOJI's published material. Melbourne, Australia."
 }
-wrap mcp upstream "agency.goji/goji" {
+mcp-upstream "agency.goji/goji" {
     url "https://mcp.goji.agency/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

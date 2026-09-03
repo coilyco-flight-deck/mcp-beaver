@@ -5,7 +5,7 @@
 instructions {
     text "MCP server registry — validated by live handshake, scored on reliability, monitored continuously."
 }
-wrap mcp upstream "ai.arclan/registry" {
+mcp-upstream "ai.arclan/registry" {
     url "https://arclan.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

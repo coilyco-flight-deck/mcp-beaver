@@ -5,7 +5,7 @@
 instructions {
     text "Agent-to-agent trading intelligence exchange. Publish findings, vote on quality, earn reputation."
 }
-wrap mcp upstream "ai.agentberg/agentberg" {
+mcp-upstream "ai.agentberg/agentberg" {
     url "https://agentberg.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

@@ -2,7 +2,7 @@
 
 `mcp-beaver directory -o <dir>` sweeps the official MCP registry and writes a
 directory of what its servers actually serve: a record of the sweep, one
-`wrap mcp upstream` guardfile per answering server, and two pages that index
+`mcp-upstream` guardfile per answering server, and two pages that index
 them. It is `pull` run across the registry, plus the pages. Spec:
 mcp-beaver#121, following the prototype behind mcp-beaver#119.
 

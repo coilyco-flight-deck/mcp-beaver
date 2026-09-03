@@ -13,6 +13,7 @@ import (
 	"sync"
 	"unicode"
 
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/mcpverb"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -170,11 +171,25 @@ func lookupRegistry(ctx context.Context, client *http.Client, registry, name str
 		return registryEntry{}, fmt.Errorf("mcp-beaver: registry entry %q is %q, not %s", name, body.Meta.Official.Status, registryStatusActive)
 	}
 	for _, remote := range body.Server.Remotes {
-		if remote.Type == upstreamTransport && remote.URL != "" {
+		if remote.Type == mcpverb.UpstreamTransport && remote.URL != "" {
 			return registryEntry{url: remote.URL, description: strings.TrimSpace(body.Server.Description)}, nil
 		}
 	}
-	return registryEntry{}, fmt.Errorf("mcp-beaver: registry entry %q publishes no %s remote; a packages-only server is out of scope", name, upstreamTransport)
+	return registryEntry{}, fmt.Errorf("mcp-beaver: registry entry %q publishes no %s remote; a packages-only server is out of scope", name, mcpverb.UpstreamTransport)
+}
+
+// validateUpstreamURL refuses an endpoint the proxy could not dial. umbra runs
+// the same check inside `mcp-upstream`; this covers the `--upstream` flag,
+// which reaches no guardfile.
+func validateUpstreamURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("mcp-beaver: `url %q` does not parse: %w", raw, err)
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("mcp-beaver: `url %q` must be an absolute http or https URL", raw)
+	}
+	return nil
 }
 
 // probeUpstream connects the way the proxy connects and lists tools once,
@@ -404,9 +419,9 @@ func RenderUpstreamGuardfile(p *Pulled, scope Scope) (string, error) {
 	if text := instructionsText(p.Description); text != "" {
 		fmt.Fprintf(&b, "\ninstructions {\n    text %s\n}\n", kdlQuote(text))
 	}
-	fmt.Fprintf(&b, "\nwrap mcp upstream %s {\n", kdlQuote(p.Name))
+	fmt.Fprintf(&b, "\n%s %s {\n", mcpverb.UpstreamNode, kdlQuote(p.Name))
 	fmt.Fprintf(&b, "    url %s\n", kdlQuote(p.URL))
-	fmt.Fprintf(&b, "    transport %s\n", upstreamTransport)
+	fmt.Fprintf(&b, "    transport %s\n", mcpverb.UpstreamTransport)
 	fmt.Fprintf(&b, "    annotation-coverage %s annotated=%d silent=%d\n", coverage.Kind, coverage.Annotated, coverage.Silent)
 	if len(p.Headers) > 0 {
 		auth, err := renderUpstreamAuth(p.Headers)

@@ -51,7 +51,7 @@ the file already states them.
 ```kdl
 instructions { text "Search the published Tandem docs index." }
 
-wrap mcp upstream "ac.tandem/docs-mcp" {
+mcp-upstream "ac.tandem/docs-mcp" {
     url "https://tandem.ac/mcp"
     transport streamable-http
     annotation-coverage partial annotated=7 silent=6
@@ -61,11 +61,33 @@ wrap mcp upstream "ac.tandem/docs-mcp" {
 }
 ```
 
-`url` is `--upstream`, each `can` is a `--tool`, and `auth header-token` is
-spec mode's own shape lifted onto `--upstream-header`, resolving through the
-same registry. `annotation-coverage` is optional and checked against itself.
-Every other body node fails closed, `can` carries no schema, and beside the
-wrap only `instructions` and `oauth2-client` are projected: a proxy that
-silently ignored a `withhold` or `confirm` would serve wider than the file
-reads. A file that grants nothing lints clean and will not serve. `mcp-beaver
-pull` writes one from a registry entry, see [pull.md](pull.md).
+`url` is `--upstream`, each `can` is a `--tool`, and `auth` is the
+guardfile-wide credential grammar lifted onto `--upstream-header`, resolving
+through the same registry. `annotation-coverage` is optional and checked
+against itself. Every other body node fails closed, `can` carries no schema,
+and beside the node only `description` (umbra's own), `instructions` and
+`oauth2-client` are projected: a proxy that silently ignored a `withhold` or
+`confirm` would serve wider than the file reads. A file that grants nothing
+lints clean and will not serve. `mcp-beaver pull` writes one from a registry
+entry, see [pull.md](pull.md).
+
+**umbra owns the grammar.** `mcpverb.ParseUpstream` reads the node and
+`mcpverb.Classify` reports which shape a file carries before either parser
+runs, so beaver states policy about a hosted MCP in the same dialect every
+other consumer does. What stays here is the wiring: the `oauth2-client`
+registry a credential addresses, the headers the proxy presents, and which
+siblings this server can honour.
+
+`auth` gained by moving. umbra parses `header-token`, `bearer`, `query-param`
+and `none` through a value chain, where the hand-rolled parser took
+`header-token` with one provider and address. The proxy presents headers, so
+`header-token`, `bearer` and `none` serve; `query-param` refuses rather than
+dropping a secret the file says to send, and a chain naming a second source
+refuses because a header resolves one and never falls back.
+
+**The node used to be `wrap mcp upstream`.** `wrap` reads every argument as a
+command path, so that spelling parses as the command path `["mcp", "upstream",
+"<name>"]` rather than failing, which is why the node became a sibling of
+`wrap` instead of a form of it. A `pull`-generated file is cheap to regenerate.
+A hand-authored one is a one-line edit: rename the top-level node, and change
+nothing inside it.

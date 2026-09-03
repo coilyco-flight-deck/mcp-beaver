@@ -5,7 +5,7 @@
 instructions {
     text "AI-native beauty ads, sponsored product discovery, and brand recommendations."
 }
-wrap mcp upstream "ai.adoraads/beauty" {
+mcp-upstream "ai.adoraads/beauty" {
     url "https://mcp.adoraads.ai/beauty"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

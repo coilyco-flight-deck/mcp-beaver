@@ -5,7 +5,7 @@
 instructions {
     text "Resolve .hood names on Robinhood Chain — forward/reverse, text records, availability & pricing."
 }
-wrap mcp upstream "ag.hood/name-service" {
+mcp-upstream "ag.hood/name-service" {
     url "https://www.hood.ag/api/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

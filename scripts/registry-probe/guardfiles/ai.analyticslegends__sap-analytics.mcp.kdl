@@ -5,7 +5,7 @@
 instructions {
     text "AI agent for SAP analytics: firms, day rates, contract radar, news, concepts, studies"
 }
-wrap mcp upstream "ai.analyticslegends/sap-analytics" {
+mcp-upstream "ai.analyticslegends/sap-analytics" {
     url "https://analyticslegends.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

@@ -1,6 +1,6 @@
 # Pulling a guardfile from the registry
 
-`mcp-beaver pull <registry-name>` writes a `wrap mcp upstream` guardfile for
+`mcp-beaver pull <registry-name>` writes an `mcp-upstream` guardfile for
 one server in the official MCP registry: the entry's remote, the tool surface
 it serves right now, and an allowlist decided by the upstream's own
 `readOnlyHint`. The file is what `serve-upstream`, `lint`, and

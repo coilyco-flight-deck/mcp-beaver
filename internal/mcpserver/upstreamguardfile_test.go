@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/mcpverb"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -15,7 +16,7 @@ const upstreamSpecFull = `instructions {
     text "Search the published Tandem docs index."
 }
 
-wrap mcp upstream "ac.tandem/docs-mcp" {
+mcp-upstream "ac.tandem/docs-mcp" {
     url "https://tandem.ac/mcp"
     transport streamable-http
     annotation-coverage partial annotated=7 silent=6
@@ -55,7 +56,7 @@ func TestParseUpstreamSpecReadsEveryNode(t *testing.T) {
 }
 
 func TestParseUpstreamSpecAllowsAnEmptyAllowlist(t *testing.T) {
-	spec, err := ParseUpstreamSpec("", []byte(`wrap mcp upstream "x/y" {
+	spec, err := ParseUpstreamSpec("", []byte(`mcp-upstream "x/y" {
     url "https://example.invalid/mcp"
     annotation-coverage undeclared annotated=0 silent=3
 }`))
@@ -67,29 +68,71 @@ func TestParseUpstreamSpecAllowsAnEmptyAllowlist(t *testing.T) {
 	}
 }
 
-func TestIsUpstreamSpecTellsTheKindsApart(t *testing.T) {
-	for src, want := range map[string]bool{
-		`wrap mcp upstream "x/y" { url "https://e.invalid/mcp" }`: true,
-		`wrap ward mcp forgejo { base-url "https://e.invalid" }`:  false,
+func TestClassifyGuardfileTellsTheShapesApart(t *testing.T) {
+	for src, want := range map[string]mcpverb.Shape{
+		`mcp-upstream "x/y" { url "https://e.invalid/mcp" }`:     mcpverb.ShapeUpstream,
+		`wrap ward mcp forgejo { base-url "https://e.invalid" }`: mcpverb.ShapeCommand,
 		`instructions { text "hi" }
-wrap mcp upstream "x/y" { url "https://e.invalid/mcp" }`: true,
+mcp-upstream "x/y" { url "https://e.invalid/mcp" }`: mcpverb.ShapeUpstream,
+		// The boolean shorthand opcore accepts and strict KDL does not. A
+		// guardfile that will not parse classifies as nothing, so the
+		// normalization has to happen before umbra sees the bytes.
+		`wrap ward mcp things {
+    base-url "https://e.invalid"
+    can list things { path "/things"; query "q" required=true }
+}`: mcpverb.ShapeCommand,
 	} {
-		got, err := IsUpstreamSpec([]byte(src))
+		got, err := ClassifyGuardfile([]byte(src))
 		if err != nil {
-			t.Fatalf("IsUpstreamSpec(%q): %v", src, err)
+			t.Fatalf("ClassifyGuardfile(%q): %v", src, err)
 		}
 		if got != want {
-			t.Fatalf("IsUpstreamSpec(%q) = %v, want %v", src, got, want)
+			t.Fatalf("ClassifyGuardfile(%q) = %v, want %v", src, got, want)
 		}
+	}
+	// Neither node is not a default, it is an error.
+	if _, err := ClassifyGuardfile([]byte(`instructions { text "hi" }`)); err == nil {
+		t.Fatal("a guardfile carrying neither shape must refuse rather than pick one")
+	}
+}
+
+// The guardfile-wide auth grammar is umbra's now, so `bearer` and `none`
+// reach the proxy where the hand-rolled parser took header-token alone.
+func TestParseUpstreamSpecServesTheWiderAuthGrammar(t *testing.T) {
+	spec, err := ParseUpstreamSpec("", []byte(`description "Docs."
+
+mcp-upstream "x/y" {
+    url "https://e.invalid/mcp"
+    auth bearer {
+        value literal "unused"
+    }
+}`))
+	if err != nil {
+		t.Fatalf("ParseUpstreamSpec: %v", err)
+	}
+	if len(spec.Headers) != 1 || spec.Headers[0].Name != "Authorization" {
+		t.Fatalf("headers = %+v, want the bearer shorthand's Authorization", spec.Headers)
+	}
+	// umbra owns `description` beside the node, so it parses rather than
+	// meeting the unprojected-sibling refusal.
+	if spec.Description != "Docs." {
+		t.Fatalf("description = %q", spec.Description)
+	}
+	none, err := ParseUpstreamSpec("", []byte(`mcp-upstream "x/y" { url "https://e.invalid/mcp"; auth none }`))
+	if err != nil {
+		t.Fatalf("`auth none` is a statement, not an omission: %v", err)
+	}
+	if len(none.Headers) != 0 {
+		t.Fatalf("headers = %+v, want none", none.Headers)
 	}
 }
 
 func TestParseUpstreamSpecFailsClosed(t *testing.T) {
 	body := func(inner string) string {
-		return "wrap mcp upstream \"x/y\" {\n    url \"https://e.invalid/mcp\"\n" + inner + "\n}"
+		return "mcp-upstream \"x/y\" {\n    url \"https://e.invalid/mcp\"\n" + inner + "\n}"
 	}
 	cases := map[string]string{
-		"no url":                        `wrap mcp upstream "x/y" { can "a" }`,
+		"no url":                        `mcp-upstream "x/y" { can "a" }`,
 		"relative url":                  body(`url "e.invalid/mcp"`),
 		"other transport":               body(`transport stdio`),
 		"duplicate can":                 body("    can \"a\"\n    can \"a\""),
@@ -102,13 +145,15 @@ func TestParseUpstreamSpecFailsClosed(t *testing.T) {
 		"coverage partial zero":         body(`annotation-coverage partial annotated=0 silent=2`),
 		"coverage missing count":        body(`annotation-coverage declared annotated=3`),
 		"coverage not a number":         body(`annotation-coverage declared annotated="3" silent=0`),
-		"auth other scheme":             body(`auth bearer { value literal "x" }`),
+		"auth query-param":              body("    auth query-param {\n        param key { value literal \"x\" }\n    }"),
+		"auth value chain":              body("    auth bearer {\n        value { env \"A\"; literal \"b\" }\n    }"),
 		"auth missing value":            body(`auth header-token { header "Authorization" }`),
 		"auth brace in prefix":          body(`auth header-token { header "A"; prefix "{"; value env "T" }`),
-		"withhold beside wrap":          body("") + "\nwithhold \"a\" { reason \"no\" }",
-		"confirm beside wrap":           body("") + "\nconfirm \"a\" { message \"sure?\" }",
-		"property on wrap":              `wrap mcp upstream "x/y" foo=1 { url "https://e.invalid/mcp" }`,
-		"two names":                     `wrap mcp upstream "x/y" "z" { url "https://e.invalid/mcp" }`,
+		"withhold beside the node":      body("") + "\nwithhold \"a\" { reason \"no\" }",
+		"confirm beside the node":       body("") + "\nconfirm \"a\" { message \"sure?\" }",
+		"property on the node":          `mcp-upstream "x/y" foo=1 { url "https://e.invalid/mcp" }`,
+		"two names":                     `mcp-upstream "x/y" "z" { url "https://e.invalid/mcp" }`,
+		"both shapes in one file":       `wrap ward mcp x { base-url "https://e.invalid" }` + "\n" + body(""),
 	}
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -122,7 +167,7 @@ func TestParseUpstreamSpecFailsClosed(t *testing.T) {
 // New serves REST grants and must not swallow a proxy guardfile into an
 // opcore parse error nobody can act on.
 func TestNewPointsAProxyGuardfileAtServeUpstream(t *testing.T) {
-	_, err := New("x", "x.mcp.kdl", []byte(`wrap mcp upstream "x/y" { url "https://e.invalid/mcp" }`))
+	_, err := New("x", "x.mcp.kdl", []byte(`mcp-upstream "x/y" { url "https://e.invalid/mcp" }`))
 	if err == nil || !strings.Contains(err.Error(), "serve-upstream") {
 		t.Fatalf("New error = %v, want it to name serve-upstream", err)
 	}

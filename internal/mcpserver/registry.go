@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/mcpverb"
 )
 
 // registryPageSize is the registry's own maximum page, so a full enumeration
@@ -72,7 +74,7 @@ func EnumerateRegistry(ctx context.Context, opts EnumerateOptions) ([]RegistryEn
 			}
 			remote := ""
 			for _, r := range item.Server.Remotes {
-				if r.Type == upstreamTransport && r.URL != "" {
+				if r.Type == mcpverb.UpstreamTransport && r.URL != "" {
 					remote = r.URL
 					break
 				}

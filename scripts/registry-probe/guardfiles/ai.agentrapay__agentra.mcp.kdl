@@ -5,7 +5,7 @@
 instructions {
     text "Identity oracle and trust layer for autonomous AI agents. Bidirectional KYA and trust scoring."
 }
-wrap mcp upstream "ai.agentrapay/agentra" {
+mcp-upstream "ai.agentrapay/agentra" {
     url "https://api.agentrapay.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

@@ -5,7 +5,7 @@
 instructions {
     text "Verify Seal AI decision receipts: signed evidence anyone can check, no account needed."
 }
-wrap mcp upstream "ai.aqta/seal" {
+mcp-upstream "ai.aqta/seal" {
     url "https://app.aqta.ai/api/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

@@ -5,7 +5,7 @@
 instructions {
     text "Search Argus HQ public FDA enforcement data: warning letters, recalls, approvals, 483s."
 }
-wrap mcp upstream "ai.argushq/enforcement-database" {
+mcp-upstream "ai.argushq/enforcement-database" {
     url "https://argushq.ai/api/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than

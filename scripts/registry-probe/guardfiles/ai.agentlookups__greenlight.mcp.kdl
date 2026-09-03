@@ -5,7 +5,7 @@
 instructions {
     text "US plug-in solar (balcony solar) law registry with a daily UL 3700 certification watch."
 }
-wrap mcp upstream "ai.agentlookups/greenlight" {
+mcp-upstream "ai.agentlookups/greenlight" {
     url "https://solar.agentlookups.ai/mcp"
     transport streamable-http
     // Machine-readable, so a consumer can filter on it rather than
