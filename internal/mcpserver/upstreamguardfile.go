@@ -8,6 +8,7 @@ import (
 
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/guardfile"
 	"forgejo.coilysiren.me/coilyco-flight-deck/umbra/http/mcpverb"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // AnnotationCoverage is umbra's marker, aliased so the renderer below and the
@@ -32,6 +33,17 @@ type UpstreamSpec struct {
 	// Withheld is the sibling `withhold` stubs, validated against the
 	// allowlist above so a stub cannot shadow a granted tool.
 	Withheld []withheldStub
+	// Icons is the sibling `icon` nodes, for `serverInfo.icons`.
+	Icons []mcp.Icon
+	// ServerInfo is the sibling `server-info` node, nil when it opts out.
+	ServerInfo *serverInfoConfig
+	// Confirmations is the sibling `confirm` nodes, keyed by tool name.
+	Confirmations confirmConfig
+	// Pins is the sibling `pin` nodes as argument pins, the same shape
+	// `serve-upstream --pin` states.
+	Pins []ArgPin
+	// RateLimit is the sibling `rate-limit` node, nil when absent.
+	RateLimit *rateLimitConfig
 }
 
 // WithheldTools names the stub tools this guardfile states, sorted. `lint`
@@ -46,9 +58,29 @@ func (u *UpstreamSpec) WithheldTools() []string {
 	return out
 }
 
+// ServerInfoTool names the info tool this guardfile mints, empty when
+// `server-info disabled` opts out. `lint` prints it beside the allowlist,
+// because it is a served tool like any other.
+func (u *UpstreamSpec) ServerInfoTool() string {
+	if u.ServerInfo == nil {
+		return ""
+	}
+	return u.ServerInfo.toolName
+}
+
 // Options is the proxy configuration this guardfile stands for.
 func (u *UpstreamSpec) Options() ProxyOptions {
-	return ProxyOptions{Headers: u.Headers, Providers: u.Providers, Instructions: u.Instructions, Withheld: u.Withheld}
+	return ProxyOptions{
+		Headers:       u.Headers,
+		Providers:     u.Providers,
+		Instructions:  u.Instructions,
+		Withheld:      u.Withheld,
+		Icons:         u.Icons,
+		ServerInfo:    u.ServerInfo,
+		Confirmations: u.Confirmations,
+		Pins:          u.Pins,
+		RateLimit:     u.RateLimit,
+	}
 }
 
 // ClassifyGuardfile reports which shape a guardfile carries, before either
@@ -113,10 +145,45 @@ func ParseUpstreamSpec(specPath string, src []byte) (*UpstreamSpec, error) {
 	if err != nil {
 		return nil, err
 	}
+	spec.Icons, err = parseIcons(sources)
+	if err != nil {
+		return nil, err
+	}
+	spec.ServerInfo, err = parseServerInfo(sources)
+	if err != nil {
+		return nil, err
+	}
+	spec.Confirmations, err = parseConfirmations(sources)
+	if err != nil {
+		return nil, err
+	}
+	spec.Pins, err = parseArgPins(sources, spec.Providers)
+	if err != nil {
+		return nil, err
+	}
+	spec.RateLimit, err = parseRateLimit(sources)
+	if err != nil {
+		return nil, err
+	}
 	// Against the DECLARED allowlist rather than the upstream's answer, so a
-	// stub shadowing a grant fails in `lint`, offline, rather than at connect.
-	// The proxy checks again against what it selected.
-	if _, err := withheldTools(spec.Withheld, declaredTools(up.Tools)); err != nil {
+	// control naming a tool nobody serves fails in `lint`, offline, rather
+	// than at connect. The proxy checks each again against what it selected.
+	declared := declaredTools(up.Tools)
+	info, err := serverInfoTool(spec.ServerInfo, declared)
+	if err != nil {
+		return nil, err
+	}
+	if info != nil {
+		declared = append(declared, info)
+	}
+	stubs, err := withheldTools(spec.Withheld, declared)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateConfirmations(spec.Confirmations, append(declared, stubs...)); err != nil {
+		return nil, err
+	}
+	if err := ValidatePins(spec.Pins, up.Tools); err != nil {
 		return nil, err
 	}
 	return spec, nil
@@ -156,7 +223,14 @@ func upstreamAuthHeaders(auth guardfile.Auth, providers ProviderSet) ([]Upstream
 
 // upstreamSiblings names the sibling nodes projected onto a proxy surface.
 // The rest are parsed for a REST guardfile only, and a proxy that silently
-// ignored a `confirm` would serve WIDER than the file reads.
+// ignored one would serve WIDER than the file reads.
+//
+// What is absent is what has no proxy meaning rather than what is unfinished:
+// `resource`, `prompt` and `app` are content a REST guardfile serves beside
+// its grants and a passthrough proxy mints none of, and `cache`, `extract`,
+// `reject-empty`, `reject-empty-argument` and `set` all shape a request or a
+// response opcore assembles from a grant, which a proxy forwards verbatim
+// instead. See docs/upstream-controls.md.
 //
 // `description` is umbra's own, read by the parse above rather than here.
 var upstreamSiblings = map[string]bool{
@@ -164,6 +238,11 @@ var upstreamSiblings = map[string]bool{
 	"instructions":  true,
 	"oauth2-client": true,
 	"withhold":      true,
+	"icon":          true,
+	"server-info":   true,
+	"confirm":       true,
+	"pin":           true,
+	"rate-limit":    true,
 }
 
 func rejectUnprojectedSiblings(sources []guardSource) error {
@@ -173,8 +252,26 @@ func rejectUnprojectedSiblings(sources []guardSource) error {
 	}
 	for _, sn := range nodes {
 		if !upstreamSiblings[sn.node.Name()] {
-			return fmt.Errorf("mcp-beaver: `%s` is not yet projected beside `%s`; instructions, oauth2-client and withhold are (fail-closed)", sn.node.Name(), mcpverb.UpstreamNode)
+			return fmt.Errorf(
+				"mcp-beaver: `%s` is not projected beside `%s`; %s are (fail-closed)",
+				sn.node.Name(), mcpverb.UpstreamNode, strings.Join(projectedSiblingNames(), ", "),
+			)
 		}
 	}
 	return nil
+}
+
+// projectedSiblingNames lists what a refusal may name, read off the map rather
+// than restated, so a node added above cannot leave the message stale.
+// `description` is left out because umbra parses it rather than this file, so
+// naming it here would advertise a node beaver does not own.
+func projectedSiblingNames() []string {
+	out := make([]string, 0, len(upstreamSiblings))
+	for name := range upstreamSiblings {
+		if name != "description" {
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

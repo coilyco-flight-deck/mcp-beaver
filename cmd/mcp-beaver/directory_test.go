@@ -97,7 +97,7 @@ func TestDirectoryWritesRecordGuardfilesAndPages(t *testing.T) {
 		t.Fatalf("guardfiles = %v", guardfiles)
 	}
 	var lint bytes.Buffer
-	if err := runLint(&lint, []string{guardfiles[0]}); err != nil || lint.String() != "get_thing\n" {
+	if err := runLint(&lint, []string{guardfiles[0]}); err != nil || lint.String() != "get_thing\nmcp_beaver_info\n" {
 		t.Fatalf("lint = %q, %v", lint.String(), err)
 	}
 

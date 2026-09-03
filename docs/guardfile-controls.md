@@ -35,7 +35,9 @@ by default. Empty is no content, whitespace, `null`, `""`, `[]`, or `{}` past th
 `withhold "<tool-name>" { reason ...; alternative ... }` mints a discoverable stub for a
 verb left out on purpose: it appears in `tools/list`, states why, names a substitute, and
 refuses every call with a structured `verb_withheld` payload while reaching no upstream. A
-`coilyco.io/withheld` marker in `_meta` separates stubs from live tools. It rides beside
-`mcp-upstream` as well as beside `wrap`, checked there against the allowlist the file
-declares. `confirm "<tool-name>"` gates one tool behind a Multi Round-Trip Request, running
-only on a retry carrying an explicit accept, and stays a `wrap` sibling alone.
+`coilyco.io/withheld` marker in `_meta` separates stubs from live tools.
+`confirm "<tool-name>"` gates one tool behind a Multi Round-Trip Request, running only on a
+retry carrying an explicit accept. Both ride beside `mcp-upstream` as well as beside
+`wrap`, along with `pin`, `rate-limit`, `icon`, and `server-info`, checked there against
+the allowlist the file declares. What each does to a passthrough surface, and which
+siblings stay REST-only: [upstream-controls.md](upstream-controls.md).

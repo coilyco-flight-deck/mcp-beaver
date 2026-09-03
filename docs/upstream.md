@@ -70,9 +70,11 @@ mcp-upstream "ac.tandem/docs-mcp" {
 guardfile-wide credential grammar lifted onto `--upstream-header`, resolving
 through the same registry. `annotation-coverage` is optional and checked
 against itself. Every other body node fails closed, `can` carries no schema,
-and beside the node only `description` (umbra's own), `instructions`,
-`oauth2-client` and `withhold` are projected: a proxy that silently ignored a
-`confirm` would serve wider than the file reads. A file that grants nothing
+and beside the node `description` (umbra's own), `instructions`,
+`oauth2-client`, `withhold`, `icon`, `server-info`, `confirm`, `pin` and
+`rate-limit` are projected - see [upstream-controls.md](upstream-controls.md).
+Every other sibling fails closed too: a proxy that silently ignored one would
+serve wider than the file reads. A file that grants nothing
 lints clean and will not serve. `mcp-beaver pull` writes one from a registry
 entry, see [pull.md](pull.md).
 

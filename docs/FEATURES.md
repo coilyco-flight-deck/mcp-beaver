@@ -35,6 +35,8 @@ generic Helm chart.
   withheld verbs, confirmations.
 - [extraction.md](extraction.md) - reading a PDF or feed an upstream returns.
 - [upstream-pins.md](upstream-pins.md) - server-side argument pinning.
+- [upstream-controls.md](upstream-controls.md) - the sibling nodes a proxy
+  guardfile projects, and which stay REST-only.
 
 ## Runtime
 

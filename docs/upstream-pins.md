@@ -20,6 +20,29 @@ a parameter.
   query language, and a wrong conjunction silently widens rather than failing
   loudly. Exact-value pinning either matches or refuses.
 
+## As a guardfile node
+
+```kdl
+pin "get_author_feed" {
+    argument "actor" env "BSKY_ACTOR"
+}
+```
+
+The same `pin` node a REST guardfile states, and the child says which surface
+the pin lands on: `query` fixes an outgoing query parameter opcore builds into
+a URL, `argument` fixes a named argument the proxy forwards. A `query` child
+beside `mcp-upstream` is refused rather than parsed and dropped, and the same
+node in a REST guardfile refuses `argument`.
+
+The value is a chain of one - `env`, `file`, `literal`, or a minted `oauth2`
+client - resolved at **call time** the way `auth` resolves, so nothing is
+baked into the image and a rotated variable takes effect on the next call. A
+`--pin` flag states `literal` and reaches the same resolver; stating both a
+`pin` node and a `--pin` flag is refused, since the two have no reviewable
+answer between them. The refusal a caller sees names the argument and their
+own value, never the resolved one: an `env`-sourced pin holds a secret, and a
+refusal is exactly when a payload gets logged.
+
 ## Reading a pin out of a URL
 
 `from="query:<parameter>"` reads one query parameter out of a URL the resolved
@@ -35,4 +58,5 @@ fails the call, and the error names the parameter rather than echoing the
 value.
 
 See also: [upstream.md](upstream.md),
+[upstream-controls.md](upstream-controls.md),
 [guardfile-controls.md](guardfile-controls.md).

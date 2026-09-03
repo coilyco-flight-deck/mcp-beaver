@@ -114,7 +114,11 @@ func resolveProxyInputs(command, specPath string, flags upstreamFlagInputs) (pro
 			tools:     flags.tools,
 			headers:   headers,
 			providers: providers,
-			options:   mcpserver.ProxyOptions{Headers: headers, Providers: providers},
+			// The flag form has no guardfile to state `server-info`, so it
+			// takes the same default the node resolves to when absent. An
+			// info tool that is present on some proxies and not others is
+			// worse than either extreme, since absence then reads as nothing.
+			options: mcpserver.ProxyOptions{Headers: headers, Providers: providers, ServerInfo: mcpserver.DefaultServerInfo()},
 		}, nil
 	}
 	var stated []string
@@ -174,7 +178,13 @@ func lintUpstreamSpec(out io.Writer, specPath string, src []byte, methods, apps 
 	for _, name := range spec.WithheldTools() {
 		withheld[name] = true
 	}
-	for _, name := range sortedCopy(append(append([]string{}, spec.Tools...), spec.WithheldTools()...)) {
+	served := append(append([]string{}, spec.Tools...), spec.WithheldTools()...)
+	// The info tool is part of the surface the runtime serves, so `lint` has
+	// to print it or a reader takes the printed list for the whole one.
+	if info := spec.ServerInfoTool(); info != "" {
+		served = append(served, info)
+	}
+	for _, name := range sortedCopy(served) {
 		line := name
 		switch {
 		case methods && withheld[name]:

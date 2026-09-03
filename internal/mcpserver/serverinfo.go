@@ -43,6 +43,16 @@ type serverInfoConfig struct {
 	toolName string
 }
 
+// DefaultServerInfo is what a source that states no `server-info` node
+// resolves to: the default tool name, on.
+//
+// It is exported for the flag-form proxy, which has no guardfile to parse and
+// would otherwise be the one deployment shape without an info tool. Absence
+// only carries a meaning an agent can read while it is uniform.
+func DefaultServerInfo() *serverInfoConfig {
+	return &serverInfoConfig{toolName: defaultServerInfoTool}
+}
+
 // parseServerInfo reads the optional top-level `server-info` node:
 //
 //	(no node)                         // mints `mcp_beaver_info` - the default
@@ -68,7 +78,7 @@ func parseServerInfo(sources []guardSource) (*serverInfoConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg := &serverInfoConfig{toolName: defaultServerInfoTool}
+	cfg := DefaultServerInfo()
 	seen := false
 	for _, sn := range nodes {
 		n := sn.node

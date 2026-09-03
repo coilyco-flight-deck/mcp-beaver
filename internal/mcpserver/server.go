@@ -331,22 +331,52 @@ type ProxyOptions struct {
 	// beside the allowlist so a deliberate omission is readable in
 	// tools/list. A flag states none, and ParseUpstreamSpec fills this.
 	Withheld []withheldStub
+	// Icons are the `icon` nodes, projected into `serverInfo.icons` on the
+	// initialize response exactly as spec mode projects them.
+	Icons []mcp.Icon
+	// ServerInfo is the resolved `server-info` node, or nil for no info tool.
+	//
+	// Nil rather than a default, because a struct literal cannot tell "left
+	// unset" from "`server-info disabled`". Both CLI paths state one -
+	// DefaultServerInfo for the flag form, the parsed node for a guardfile -
+	// so what a deployment serves is uniform and only a direct library caller
+	// gets nothing.
+	ServerInfo *serverInfoConfig
+	// Confirmations gate a proxied tool behind an elicitation. A stub or the
+	// info tool may be named and is not wrapped: neither reaches an upstream,
+	// so there is nothing to confirm.
+	Confirmations confirmConfig
+	// RateLimit is the `rate-limit` node. The bucket is built here rather than
+	// passed in, because the server name is its default key.
+	RateLimit *rateLimitConfig
 }
 
 // NewProxyWithOptions is the full upstream-proxy constructor. NewProxy and
 // NewProxyWithPins are the shorthands that predate it.
 func NewProxyWithOptions(ctx context.Context, name, specPath, upstreamURL string, allowTools []string, opts ProxyOptions) (*Server, error) {
 	pins, httpClient := opts.Pins, opts.HTTPClient
+	// The whole surface, resolved before the dial: the allowlist is exactly
+	// what the proxy will serve, since a snapshot fails closed on any tool the
+	// upstream does not, so every check below runs offline and a misstated
+	// control is a startup error rather than a connection attempt.
 	declared := declaredTools(allowTools)
-	// Before the dial, so a stub that shadows a grant or names a missing
-	// alternative is a startup error rather than a connection attempt. The
-	// allowlist is the whole surface here: an absent upstream tool already
-	// fails the snapshot.
-	stubTools, err := withheldTools(opts.Withheld, declared)
+	infoTool, err := serverInfoTool(opts.ServerInfo, declared)
 	if err != nil {
 		return nil, err
 	}
-	instrumentation, err := newInstrumentation("upstream", append(append([]*mcp.Tool{}, declared...), stubTools...))
+	surface := append([]*mcp.Tool{}, declared...)
+	if infoTool != nil {
+		surface = append(surface, infoTool)
+	}
+	stubTools, err := withheldTools(opts.Withheld, surface)
+	if err != nil {
+		return nil, err
+	}
+	surface = append(surface, stubTools...)
+	if err := validateConfirmations(opts.Confirmations, surface); err != nil {
+		return nil, err
+	}
+	instrumentation, err := newInstrumentation("upstream", surface)
 	if err != nil {
 		return nil, fmt.Errorf("initialize telemetry: %w", err)
 	}
@@ -356,7 +386,16 @@ func NewProxyWithOptions(ctx context.Context, name, specPath, upstreamURL string
 	if err := ValidatePins(pins, allowTools); err != nil {
 		return nil, err
 	}
+	if err := ValidatePinSources(pins, opts.Providers); err != nil {
+		return nil, err
+	}
 	if err := ValidateUpstreamHeaders(opts.Headers); err != nil {
+		return nil, err
+	}
+	// The server name is the default bucket key, so two pods rendering the
+	// same guardfile charge one budget rather than one each (deploy#549).
+	limiter, err := newRateBucket(opts.RateLimit, name)
+	if err != nil {
 		return nil, err
 	}
 	proxy, err := newProxyBackend(ctx, upstreamURL, allowTools, opts.Headers, opts.Providers, httpClient, instrumentation)
@@ -365,22 +404,45 @@ func NewProxyWithOptions(ctx context.Context, name, specPath, upstreamURL string
 	}
 	pinned := pinsByTool(pins)
 
+	selected := proxy.selectedTools()
+	served := append([]*mcp.Tool{}, selected...)
+	if infoTool != nil {
+		served = append(served, infoTool)
+	}
 	s := &Server{
 		name:           name,
 		specPath:       specPath,
-		tools:          append(proxy.selectedTools(), stubTools...),
-		handlers:       make(map[string]mcp.ToolHandler, len(allowTools)+len(stubTools)),
+		tools:          append(served, stubTools...),
+		handlers:       make(map[string]mcp.ToolHandler, len(allowTools)+len(stubTools)+1),
 		upstreams:      []adminUpstreamResponse{{Kind: "mcp", Mode: "streamable-http", Auth: upstreamAuthScheme(opts.Headers)}},
 		oauth2Clients:  opts.Providers.names,
-		sdk:            newSDKServer(name, nil, opts.Instructions),
+		sdk:            newSDKServer(name, opts.Icons, opts.Instructions),
 		telemetry:      instrumentation,
 		requestTimeout: DefaultRequestTimeout,
 		closeFn:        proxy.Close,
 	}
-	for _, tool := range proxy.selectedTools() {
+	for _, tool := range selected {
 		t := cloneTool(tool)
-		s.registerTool(t, withArgPins(pinned[tool.Name], proxy.toolHandler(tool.Name)))
+		handler := proxy.toolHandler(tool.Name)
+		// Inside the confirmation gate, matching spec mode: a call awaiting a
+		// human's accept must not hold an upstream slot, and a declined call
+		// must not have spent one.
+		handler = withRateLimit(limiter, handler)
+		if message, gated := opts.Confirmations[tool.Name]; gated {
+			handler = withConfirmation(message, handler)
+		}
+		// Outermost, matching where spec mode puts its argument refusals: a
+		// call contradicting the pin is refused whatever else it says, so it
+		// spends no slot and asks no human to confirm what was going to be
+		// refused anyway. The scoped argument map is what everything below
+		// sees, so the upstream still receives it.
+		handler = withArgPins(pinned[tool.Name], opts.Providers, handler)
+		s.registerTool(t, handler)
 	}
+	// After the proxied tools, and outside the bucket: the info tool reaches
+	// no upstream, so charging it would throttle a liveness probe on behalf of
+	// a service it never calls.
+	s.registerServerInfo(infoTool)
 	s.registerWithheld(opts.Withheld, stubTools)
 	s.installMiddleware()
 	return s, nil

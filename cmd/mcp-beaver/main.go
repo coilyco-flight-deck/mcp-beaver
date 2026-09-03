@@ -483,6 +483,12 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 	if err != nil {
 		return err
 	}
+	// A guardfile states its own `pin` nodes now, and two allowlists with no
+	// reviewable answer is the shape resolveProxyInputs already refuses for
+	// --upstream and --tool.
+	if len(pins) > 0 && len(inputs.options.Pins) > 0 {
+		return fmt.Errorf("serve-upstream takes a guardfile's `pin` nodes or --pin, not both: the file already states them")
+	}
 	// Before the retry loop, not inside it: an unset secret is a configuration
 	// error, and --connect-timeout would otherwise spend minutes reporting it
 	// as an upstream that will not answer.
@@ -491,7 +497,9 @@ func runServeUpstream(ctx context.Context, argv []string) error {
 	}
 	return withTelemetry(ctx, serverName, func() error {
 		opts := inputs.options
-		opts.Pins = pins
+		if len(pins) > 0 {
+			opts.Pins = pins
+		}
 		srv, err := connectProxyWithRetry(ctx, *connectTimeout, time.Second, func(ctx context.Context) (*mcpserver.Server, error) {
 			return mcpserver.NewProxyWithOptions(ctx, serverName, specPath, inputs.upstream, inputs.tools, opts)
 		})

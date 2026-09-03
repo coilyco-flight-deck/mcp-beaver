@@ -95,11 +95,11 @@ func TestPullWritesAGuardfileTheOtherVerbsAccept(t *testing.T) {
 	if err := runLint(&out, []string{path}); err != nil {
 		t.Fatalf("runLint: %v", err)
 	}
-	if got := out.String(); got != "get_thing\n" {
+	if got := out.String(); got != "get_thing\nmcp_beaver_info\n" {
 		t.Fatalf("lint stdout = %q", got)
 	}
 	out.Reset()
-	if err := runLint(&out, []string{path, "--methods"}); err != nil || out.String() != "get_thing\t-\n" {
+	if err := runLint(&out, []string{path, "--methods"}); err != nil || out.String() != "get_thing\t-\nmcp_beaver_info\t-\n" {
 		t.Fatalf("lint --methods = %q, %v", out.String(), err)
 	}
 
@@ -195,10 +195,12 @@ func TestLintAcceptsThePrototypeCorpus(t *testing.T) {
 		if err := runLint(&out, []string{spec}); err != nil {
 			t.Fatalf("%s: %v", filepath.Base(spec), err)
 		}
-		// A file that states grants lints to them, and one that states none
-		// lints to nothing rather than failing: exposing nothing is the
-		// correct output for an upstream that declares nothing.
-		if grants := strings.Count(string(src), "\n    can "); grants != strings.Count(out.String(), "\n") {
+		// A file that states grants lints to them plus the info tool, and one
+		// that states none lints to the info tool alone rather than failing:
+		// exposing no upstream verb is the correct output for an upstream
+		// that declares nothing.
+		grants := strings.Count(string(src), "\n    can ")
+		if want := grants + 1; want != strings.Count(out.String(), "\n") {
 			t.Fatalf("%s states %d grants and lints %q", filepath.Base(spec), grants, out.String())
 		}
 	}
@@ -226,14 +228,14 @@ mcp-upstream "test/things" {
 	if err := runLint(&out, []string{path}); err != nil {
 		t.Fatalf("runLint: %v", err)
 	}
-	if got := out.String(); got != "delete_thing\nget_thing\n" {
+	if got := out.String(); got != "delete_thing\nget_thing\nmcp_beaver_info\n" {
 		t.Fatalf("lint stdout = %q", got)
 	}
 	out.Reset()
 	if err := runLint(&out, []string{path, "--methods"}); err != nil {
 		t.Fatalf("runLint --methods: %v", err)
 	}
-	if got := out.String(); got != "delete_thing\tWITHHELD\nget_thing\t-\n" {
+	if got := out.String(); got != "delete_thing\tWITHHELD\nget_thing\t-\nmcp_beaver_info\t-\n" {
 		t.Fatalf("lint --methods stdout = %q", got)
 	}
 	// A stub carries no widget either, so the apps column stays the dash.
@@ -241,7 +243,7 @@ mcp-upstream "test/things" {
 	if err := runLint(&out, []string{path, "--apps"}); err != nil {
 		t.Fatalf("runLint --apps: %v", err)
 	}
-	if got := out.String(); got != "delete_thing\t-\nget_thing\t-\n" {
+	if got := out.String(); got != "delete_thing\t-\nget_thing\t-\nmcp_beaver_info\t-\n" {
 		t.Fatalf("lint --apps stdout = %q", got)
 	}
 	// lint-upstream prints the ALLOWLIST, which the stub is not part of: it
@@ -262,5 +264,35 @@ mcp-upstream "test/things" {
 	}
 	if len(inputs.options.Withheld) != 1 {
 		t.Fatalf("options.Withheld = %+v, want the stub carried to the constructor", inputs.options.Withheld)
+	}
+}
+
+// A guardfile states `pin` now, so a flag beside it is the same unreviewable
+// mix `--upstream` and `--tool` already refuse: two answers, no third that
+// says which one the deployment runs on.
+func TestServeUpstreamRefusesAPinFlagBesideAGuardfilePin(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "things.mcp.kdl")
+	spec := `pin "get_thing" {
+    argument "scope" literal "sirens-deep"
+}
+
+mcp-upstream "test/things" {
+    url "https://e.invalid/mcp"
+    can "get_thing"
+}
+`
+	if err := os.WriteFile(path, []byte(spec), 0o600); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+	inputs, err := resolveProxyInputs("serve-upstream", path, upstreamFlagInputs{})
+	if err != nil {
+		t.Fatalf("resolveProxyInputs: %v", err)
+	}
+	if len(inputs.options.Pins) != 1 || inputs.options.Pins[0].Arg != "scope" {
+		t.Fatalf("options.Pins = %+v, want the guardfile's own pin carried to the constructor", inputs.options.Pins)
+	}
+	err = runServeUpstream(context.Background(), []string{path, "--pin", "get_thing.scope=kube-system"})
+	if err == nil || !strings.Contains(err.Error(), "not both") {
+		t.Fatalf("serve-upstream error = %v, want the mix refused", err)
 	}
 }
