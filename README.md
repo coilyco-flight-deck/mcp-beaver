@@ -1,11 +1,11 @@
 # mcp-beaver
 
-A MCP server generator with a natural flow
+A guarded MCP generator, natural flow
 
 ![mcp-beaver // .mcp.kdl - A MCP server generator with a natural flow](assets/banner/mcp-beaver-banner.jpg)
 
 mcp-beaver turns one [umbra](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra)
-guardfile into a running MCP server. Write a grant, get a tool.
+guardfile into a running, guarded MCP server. Write a grant, get a tool.
 
 ```kdl
 can get issue {

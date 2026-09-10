@@ -14,7 +14,7 @@ LINUX_ARM64="$(sha dist/mcp-beaver-linux-arm64)"
 
 cat > dist/mcp-beaver.rb <<FORMULA
 class McpBeaver < Formula
-  desc "A MCP server generator with a natural flow"
+  desc "Guarded MCP generator, natural flow"
   homepage "https://forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver"
   version "${BARE}"
   license "MIT"
