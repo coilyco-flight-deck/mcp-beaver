@@ -1,6 +1,6 @@
 # mcp-beaver
 
-A guarded MCP generator, natural flow
+A MCP server generator with a natural flow
 
 ![mcp-beaver // .mcp.kdl - A MCP server generator with a natural flow](assets/banner/mcp-beaver-banner.jpg)
 
