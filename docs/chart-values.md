@@ -36,7 +36,7 @@ The values reference for [chart.md](chart.md).
   its read-only credential in **`imagePullSecrets`**.
 - **`secret`** maps `ENV_VAR` to a source, one per `value env <VAR>` the
   guardfile names. A string is an SSM parameter path and the chart mints an
-  ExternalSecret; a map `{secretName, key}` references an existing Secret.
+  ExternalSecret. A map `{secretName, key}` references an existing Secret.
   **`externalSecret.refreshInterval`** and **`.secretStoreRef`** pick the store,
   `aws-parameter-store` by default.
 - **`service.type`** is `ClusterIP`. Setting **`service.nodePort`** binds a

@@ -29,7 +29,7 @@ they are most of the bytes this exists to remove.
 Bounds: an 8MB size gate, an item bound defaulting to 25 and ceilinged at 250,
 and coverage gaining `entries: {shown, total}`. A feed carries its whole item
 set in one document, so that total is measured rather than guessed. A non-feed
-is a clean tool error; an empty feed is not, and returns `0 of 0`.
+is a clean tool error. An empty feed is not, and returns `0 of 0`.
 
 stdlib `encoding/xml` rather than a feed library, because this runtime carries
 one parser dependency total and #60 treated that footprint as deciding. Verified

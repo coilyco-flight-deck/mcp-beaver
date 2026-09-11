@@ -3,7 +3,7 @@
 Tracking: coilysiren/inbox#164 (concept), coilyco-bridge/deploy#40 (first
 consumer).
 
-**A umbra Guardfile, no handwritten code, becomes a Docker image that serves a
+**An umbra Guardfile, no handwritten code, becomes a Docker image that serves a
 working MCP and matching HTTP tool API.** The `.mcp.kdl` is the whole contract:
 every `can` grant becomes one MCP tool and one `POST /api/{tool-name}`
 endpoint, with method, path template, and typed params authored inline. No
@@ -31,7 +31,7 @@ binds one HTTP listener. There is no transport fork to decide.
 
 mcp-beaver shares no code with ward, whose name it used to carry. The `ward` in
 `wrap ward mcp <name>` is umbra's inline grammar, not a dependency, and it
-moves when umbra moves. cli-mcp is read as a code reference only; transport and
+moves when umbra moves. cli-mcp is read as a code reference only. Transport and
 session plumbing is the official MCP Go SDK. umbra turns a Guardfile into a
 guarded surface in three layers: the upstream spec (here, the `.mcp.kdl`
 itself), the compiled policy IR, and the human KDL authoring layer, parsed and

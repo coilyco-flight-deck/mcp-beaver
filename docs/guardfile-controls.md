@@ -25,10 +25,10 @@ a window. Off by default. Keyed on the tool plus canonicalised arguments, and ou
 rate limiter so a hit spends no slot. Failed calls are never stored, and caching a
 destructive or `confirm`-gated grant is a build error.
 
-**Reject empty.** `reject-empty "<tool>"` makes an empty result a tool error; `reject-
+**Reject empty.** `reject-empty "<tool>"` makes an empty result a tool error. `reject-
 empty-argument "<tool>" field="<name>"` refuses a write carrying a blank field. Both off
 by default. Empty is no content, whitespace, `null`, `""`, `[]`, or `{}` past the
-`coverage` envelope; **`false` and `0` are answers**.
+`coverage` envelope. **`false` and `0` are answers**.
 
 ## Withheld verbs and confirmations
 

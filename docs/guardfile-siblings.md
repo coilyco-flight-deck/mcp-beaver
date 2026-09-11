@@ -66,9 +66,9 @@ The grant half is in [inherit.md](inherit.md).
 
 ## OAuth2 clients
 
-`oauth2-client "<name>" { token-url ...; client-id ...; client-secret <provider>
-"<address>" }` declares a `client_credentials` client, and `value oauth2
-"<name>"` presents its token. The one value this runtime mints rather than
+`oauth2-client "<name>" { token-url ...; client-id ...; client-secret <provider> "<address>" }`
+declares a `client_credentials` client, and `value oauth2 "<name>"` presents its
+token. The one value this runtime mints rather than
 reads. See [oauth2.md](oauth2.md).
 
 ## Server info

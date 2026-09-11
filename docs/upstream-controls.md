@@ -2,7 +2,7 @@
 
 The sibling nodes an `mcp-upstream` guardfile states, and what each one does to
 a passthrough surface. The REST half is
-[guardfile-controls.md](guardfile-controls.md); the parse and the credential
+[guardfile-controls.md](guardfile-controls.md). The parse and the credential
 are [upstream.md](upstream.md).
 
 Every node here is checked **offline**, against the allowlist the file
@@ -47,6 +47,6 @@ Absence here is a statement rather than a backlog. `resource`, `prompt` and
 `app` are content a REST guardfile serves beside its grants, and a passthrough
 proxy mints none of it. `cache`, `extract`, `reject-empty`,
 `reject-empty-argument` and `set` all shape a request or a response opcore
-assembles from a grant; a proxy forwards the upstream's own contract verbatim
+assembles from a grant. A proxy forwards the upstream's own contract verbatim
 instead, which is the property the drift check exists to hold. Stating one
 beside `mcp-upstream` fails closed, and the refusal names the set that works.

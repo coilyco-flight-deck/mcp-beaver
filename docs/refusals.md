@@ -8,11 +8,9 @@ dropped and never forwarded to an upstream that will ignore it.
 `signoz_aggregate_logs` was called with a `searchText` its schema never declared
 and returned the count of every log in the window, with `status: success`.
 
-| call | result | rows scanned |
-| --- | --- | --- |
-| no filter | 8,759,997 | 6,525,190 |
-| `searchText='zzzzz-nonexistent-string-qqqq'` | **8,760,201** | 6,525,483 |
-| `filter="body CONTAINS 'zzzzz-nonexistent-string-qqqq'"` | 0 | 0 |
+- no filter - 8,759,997 returned, 6,525,190 rows scanned
+- `searchText='zzzzz-nonexistent-string-qqqq'` - **8,760,201** returned, 6,525,483 rows scanned
+- `filter="body CONTAINS 'zzzzz-nonexistent-string-qqqq'"` - 0 returned, 0 rows scanned
 
 A string that cannot appear in any log returned the unfiltered total, and the
 scan count is the tell: the dropped filter scanned everything. An error is
@@ -24,7 +22,7 @@ before a negative control caught it (mcp-beaver#94).
 ## Where it is enforced
 
 Both paths could produce it. `splitArgs` skipped a name the schema did not carry,
-with *"the tool surface is exactly the schema"* given as the reason: the claim
+with "the tool surface is exactly the schema" given as the reason: the claim
 was right and the enforcement was a silent drop. The passthrough proxy forwarded
 the argument map verbatim to an upstream that ignored it, and now reads the
 declared names off the startup snapshot, the contract this runtime accepted.

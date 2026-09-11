@@ -1,6 +1,6 @@
 # Features
 
-What mcp-beaver ships today. It turns a umbra Guardfile into a guarded MCP
+What mcp-beaver ships today. It turns an umbra Guardfile into a guarded MCP
 server with a matching HTTP tool API, distributed as one runtime image plus a
 generic Helm chart.
 

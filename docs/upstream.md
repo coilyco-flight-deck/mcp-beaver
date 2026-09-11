@@ -105,7 +105,7 @@ siblings this server can honour.
 `auth` gained by moving. umbra parses `header-token`, `bearer`, `query-param`
 and `none` through a value chain, where the hand-rolled parser took
 `header-token` with one provider and address. The proxy presents headers, so
-`header-token`, `bearer` and `none` serve; `query-param` refuses rather than
+`header-token`, `bearer` and `none` serve. `query-param` refuses rather than
 dropping a secret the file says to send, and a chain naming a second source
 refuses because a header resolves one and never falls back.
 

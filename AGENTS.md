@@ -6,7 +6,7 @@ ward:
 
 ## Scope
 
-`mcp-beaver` turns a umbra Guardfile into a guarded MCP server with an
+`mcp-beaver` turns an umbra Guardfile into a guarded MCP server with an
 automatic matching HTTP tool API, and ships the generic runtime as an OCI
 image plus Helm chart. The module, the binary, the chart, and the served
 `mcp_beaver_info` tool all carry that name.

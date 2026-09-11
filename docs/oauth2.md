@@ -80,7 +80,7 @@ request and stampede the endpoint the cache exists to protect.
 
 `/admin/describe` reports `oauth2Clients` as **names only**: never a token, never
 a client secret, never the token endpoint. A mint that fails names the endpoint
-in its error with the credential redacted, which is umbra's behaviour and is
+in its error with the credential redacted, which is umbra's behavior and is
 tested there.
 
 ## Not this

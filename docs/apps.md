@@ -79,7 +79,7 @@ declaring one narrows nothing that was open.
 
 `permission` takes `camera`, `microphone`, `geolocation`, or `clipboardWrite`,
 and a host MAY honour them, so a widget still needs feature detection. `domain`
-asks for a dedicated sandbox origin, worth stating only when a widget needs a
+asks for a dedicated sandbox origin, which only matters when a widget needs a
 stable one for OAuth callbacks or an API-key allowlist.
 
 ## Deploying one

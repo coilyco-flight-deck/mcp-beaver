@@ -37,7 +37,7 @@ node in a REST guardfile refuses `argument`.
 The value is a chain of one - `env`, `file`, `literal`, or a minted `oauth2`
 client - resolved at **call time** the way `auth` resolves, so nothing is
 baked into the image and a rotated variable takes effect on the next call. A
-`--pin` flag states `literal` and reaches the same resolver; stating both a
+`--pin` flag states `literal` and reaches the same resolver. Stating both a
 `pin` node and a `--pin` flag is refused, since the two have no reviewable
 answer between them. The refusal a caller sees names the argument and their
 own value, never the resolved one: an `env`-sourced pin holds a secret, and a

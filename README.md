@@ -1,8 +1,8 @@
 # mcp-beaver
 
-A MCP server generator with a natural flow
+An MCP server generator with a natural flow
 
-![mcp-beaver // .mcp.kdl - A MCP server generator with a natural flow](assets/banner/mcp-beaver-banner.jpg)
+![mcp-beaver // .mcp.kdl - An MCP server generator with a natural flow](assets/banner/mcp-beaver-banner.jpg)
 
 mcp-beaver turns one [umbra](https://forgejo.coilysiren.me/coilyco-flight-deck/umbra)
 guardfile into a running MCP server. Write a grant, get a tool.
@@ -99,7 +99,7 @@ meaning is what changes an answer. See [docs/DESIGN.md](docs/DESIGN.md).
 
 An `oauth2-client` node declares a `client_credentials` client, and
 `value oauth2 "<name>"` presents a token this runtime **mints** rather than
-reads. Every other credential is read from somewhere holding it already; an
+reads. Every other credential is read from somewhere holding it already. An
 OAuth upstream holds nothing until one is fetched. See
 [docs/oauth2.md](docs/oauth2.md).
 
