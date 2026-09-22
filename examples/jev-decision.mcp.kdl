@@ -1,0 +1,108 @@
+// jev-decision.mcp.kdl - Jev (TypeSafe System One) as three MCP tools, one
+// per question primitive, fronting Agent Proxy's decision shim rather than
+// TypeSafe directly, so the span, cost and trajectory telemetry on
+// teable:coilyco-flight-deck/agent-proxy#7903 stay the single observation
+// surface. Decision and shape: teable:coilyco-flight-deck/agent-proxy#7987.
+//
+// One tool per case rather than one tool taking any of the three, so a
+// caller sees the exact shape it needs without reading a union first. Each
+// tool's `questions` is still TypeSafe's own map, keyed by caller-chosen
+// question names - multiple questions of that same type batch in one call,
+// exactly as a direct `/v1/systemone` caller would - but mixing types in
+// one call now costs two tool calls instead of one. umbra#8032's `keyed`
+// (a body object whose keys are the caller's) and `variant` (a
+// discriminated union, here with the single case each tool answers, so the
+// schema still states `type`'s exact literal) replace `raw=true`: a wrong
+// `type`, a `choice` missing `criteria`, or a `score` with the wrong number
+// of levels fails before the request leaves the process. Shapes verified
+// against docs.typesafe.ai/primitives/{noul,choice,score}.md.
+//
+// Base URL is Agent Proxy's own reach, not TypeSafe's directly, and not
+// in-cluster: Agent Proxy runs on the separate ser8 cluster.
+instructions {
+    text "Ask Jev (TypeSafe System One) a typed decision question through Agent Proxy."
+    text "Pick the tool for the question shape: noul is yes/no, choice picks one option with why, score is an ordered level."
+    text "Not for computer use or freeform generation. Jev takes no images and answers only the typed shape it was asked."
+}
+
+wrap ward mcp jev {
+    // Agent Proxy runs on the separate ser8 cluster, not this one - the
+    // in-cluster Service DNS below does not resolve from kai-server
+    // (confirmed live, agent-proxy#7987 evidence comment 19373).
+    base-url "http://ser8:8080"
+
+    // Agent Proxy takes no inbound caller credential today (grep across
+    // app/main.py finds none), so the boundary is the caller's own network
+    // reach, not a token this spec would carry.
+    auth none
+
+    can create noul_decision {
+        path "/v1/systemone"   // POST -> tool `create_noul_decision`
+        body {
+            // Confirmed live: jev-latest, jev-1.13.0, jev-preview. "decide"
+            // and "default" are not real model ids and 404. umbra's `field`
+            // grammar has no enum, so this is documentation, not enforcement.
+            field "model" type="string" required=#true
+            // Free-form program state TypeSafe conditions its answer on.
+            // Confirmed live: Jev 422s without it.
+            object "state" raw=true required=#true
+            // One or more yes/no questions, keyed by caller-chosen names.
+            object "questions" required=#true keyed=true {
+                entry {
+                    variant on="type" {
+                        case "noul" {
+                            field "instructions" type="string" required=#true
+                            // Optional: what "true"/"false" means for this question.
+                            object "criteria" {
+                                field "true" type="string"
+                                field "false" type="string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    can create choice_decision {
+        path "/v1/systemone"   // POST -> tool `create_choice_decision`
+        body {
+            field "model" type="string" required=#true
+            object "state" raw=true required=#true
+            // One or more pick-one questions, keyed by caller-chosen names.
+            object "questions" required=#true keyed=true {
+                entry {
+                    variant on="type" {
+                        case "choice" {
+                            field "instructions" type="string" required=#true
+                            // Required: option name -> description, arbitrary keys, up to 255.
+                            object "criteria" required=#true keyed=true {
+                                entry type="string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    can create score_decision {
+        path "/v1/systemone"   // POST -> tool `create_score_decision`
+        body {
+            field "model" type="string" required=#true
+            object "state" raw=true required=#true
+            // One or more rubric questions, keyed by caller-chosen names.
+            object "questions" required=#true keyed=true {
+                entry {
+                    variant on="type" {
+                        case "score" {
+                            field "instructions" type="string" required=#true
+                            // Required: ordered levels low to high, 2-10 entries.
+                            array "criteria" items="string" min-items=2 max-items=10 required=#true
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

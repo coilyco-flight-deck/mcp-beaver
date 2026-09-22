@@ -3,7 +3,7 @@ module forgejo.coilysiren.me/coilyco-flight-deck/mcp-beaver
 go 1.25.5
 
 require (
-	forgejo.coilysiren.me/coilyco-flight-deck/umbra v0.210.0
+	forgejo.coilysiren.me/coilyco-flight-deck/umbra v0.222.1-0.20260922071819-5a5d839e3522
 	github.com/aws/aws-sdk-go-v2 v1.43.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.2
 	github.com/dslipak/pdf v0.0.2
@@ -21,6 +21,7 @@ require (
 )
 
 require (
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.18 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.7 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.17 // indirect

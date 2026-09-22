@@ -5,3 +5,6 @@
 reprot = "reprot"
 audiance = "audiance"
 unparseable = "unparseable"
+# ser / SER: the ser8 host (machine-kai-ser8), not a misspelling of `set`.
+ser = "ser"
+SER = "SER"

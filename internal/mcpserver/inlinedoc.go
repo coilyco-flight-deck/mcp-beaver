@@ -30,6 +30,8 @@ func normalizeInlineBooleans(src []byte) []byte {
 		"required=false", "required=#false",
 		"raw=true", "raw=#true",
 		"raw=false", "raw=#false",
+		"keyed=true", "keyed=#true",
+		"keyed=false", "keyed=#false",
 	)
 	return []byte(repl.Replace(string(src)))
 }
